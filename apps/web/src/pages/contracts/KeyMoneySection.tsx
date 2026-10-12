@@ -1,25 +1,28 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { recordKeyMoney, type Contract, type KeyMoneyDirection } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
+import i18n from '../../i18n';
 
 const DIRECTION_LABEL: Record<KeyMoneyDirection, string> = {
-  RECEIVED: 'مقبوض من المستأجر',
-  PAID: 'مدفوع للحصول على الموقع',
+  get RECEIVED() { return i18n.t('contracts.key_money.direction.received'); },
+  get PAID() { return i18n.t('contracts.key_money.direction.paid'); },
 };
 
 /** Says where each direction lands, because "key money" alone doesn't tell the
  * user that one is income and the other an asset. */
 const DIRECTION_EFFECT: Record<KeyMoneyDirection, string> = {
-  RECEIVED: 'يُسجَّل نقداً وارداً ضمن إيرادات أخرى — غير مسترد، فهو ليس تأميناً.',
-  PAID: 'يُسجَّل أصلاً في حساب «تقبيل وحقوق انتفاع» لا مصروفاً — منفعته تمتد طوال مدة الإيجار.',
+  get RECEIVED() { return i18n.t('contracts.key_money.effect.received'); },
+  get PAID() { return i18n.t('contracts.key_money.effect.paid'); },
 };
 
 /**
- * التقبيل — the third kind of money a lease can carry, alongside rent and
+ * Key money: the third kind of money a lease can carry, alongside rent and
  * deposit. Unlike a deposit it is never refunded, and unlike rent it is paid
  * once for the right to the location itself.
  */
 export function KeyMoneySection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [direction, setDirection] = useState<KeyMoneyDirection>('RECEIVED');
   const [amount, setAmount] = useState('');
@@ -38,7 +41,7 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
       setNote('');
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تسجيل التقبيل'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.key_money.record_failed')));
     } finally {
       setBusy(false);
     }
@@ -51,10 +54,10 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
   return (
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>التقبيل ({contract.keyMoney.length})</span>
+        <span>{t('contracts.key_money.title', { n: contract.keyMoney.length })}</span>
         {contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'إلغاء' : '+ تسجيل تقبيل'}
+            {adding ? t('contracts.key_money.cancel') : t('contracts.key_money.add')}
           </button>
         )}
       </div>
@@ -65,7 +68,7 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
         <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
-              <label>الاتجاه</label>
+              <label>{t('contracts.key_money.direction_label')}</label>
               <select value={direction} onChange={(e) => setDirection(e.target.value as KeyMoneyDirection)}>
                 {(Object.keys(DIRECTION_LABEL) as KeyMoneyDirection[]).map((d) => (
                   <option key={d} value={d}>
@@ -76,23 +79,23 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
               <p className="hint">{DIRECTION_EFFECT[direction]}</p>
             </div>
             <div className="field">
-              <label>المبلغ</label>
+              <label>{t('contracts.key_money.amount')}</label>
               <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
           </div>
           <div className="two-col">
             <div className="field">
-              <label>التاريخ</label>
+              <label>{t('contracts.key_money.date')}</label>
               <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} />
             </div>
             <div className="field">
-              <label>ملاحظة</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثال: تقبيل موقع تجاري" />
+              <label>{t('contracts.key_money.note')}</label>
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('contracts.key_money.note_placeholder')} />
             </div>
           </div>
           <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
             <button className="btn btn-primary" disabled={busy || !(Number(amount) > 0)} onClick={submit}>
-              حفظ
+              {t('contracts.key_money.save')}
             </button>
           </div>
         </div>
@@ -102,10 +105,10 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
         <table>
           <thead>
             <tr>
-              <th>الاتجاه</th>
-              <th>المبلغ</th>
-              <th>التاريخ</th>
-              <th>ملاحظة</th>
+              <th>{t('contracts.key_money.direction_label')}</th>
+              <th>{t('contracts.key_money.amount')}</th>
+              <th>{t('contracts.key_money.date')}</th>
+              <th>{t('contracts.key_money.note')}</th>
             </tr>
           </thead>
           <tbody>

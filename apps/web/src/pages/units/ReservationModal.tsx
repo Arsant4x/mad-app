@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ReservationInput } from '../../api/reservations';
-import i18n from '../../i18n';
 
 export function ReservationModal({
   unitLabel,
@@ -11,6 +11,7 @@ export function ReservationModal({
   onCancel: () => void;
   onSave: (data: Omit<ReservationInput, 'unitId'>) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [deposit, setDeposit] = useState('');
@@ -21,7 +22,7 @@ export function ReservationModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim() || !expiryDate) {
-      setError(i18n.t('err_reservation_fields'));
+      setError(t('err_reservation_fields'));
       return;
     }
     setSaving(true);
@@ -34,7 +35,7 @@ export function ReservationModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? i18n.t('err_reservation_save'));
+      setError(message ?? t('err_reservation_save'));
     } finally {
       setSaving(false);
     }
@@ -44,40 +45,40 @@ export function ReservationModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">حجز الوحدة بعربون</div>
+          <div className="modal-title">{t('units.reservation.title')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>الوحدة</label>
+          <label>{t('units.reservation.unit')}</label>
           <p style={{ fontSize: 'calc(12.5px * var(--font-scale))', padding: '9px 0' }}>{unitLabel}</p>
         </div>
         <div className="field">
-          <label>اسم صاحب الحجز</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: خالد المطيري" />
+          <label>{t('units.reservation.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('units.reservation.name_placeholder')} />
         </div>
         <div className="field">
-          <label>رقم الجوال</label>
-          <input className="num" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XXXXXXXX" />
+          <label>{t('units.reservation.phone')}</label>
+          <input className="num" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('units.reservation.phone_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>مبلغ العربون</label>
+            <label>{t('units.reservation.deposit')}</label>
             <input className="num" value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder="0.00" />
           </div>
           <div className="field">
-            <label>الحجز ساري حتى تاريخ</label>
+            <label>{t('units.reservation.expiry')}</label>
             <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
           </div>
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('units.reservation.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            تأكيد الحجز
+            {t('units.reservation.confirm')}
           </button>
         </div>
       </div>

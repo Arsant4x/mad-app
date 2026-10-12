@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBanks, type Bank } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
@@ -8,14 +9,16 @@ import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 import { lineTaxDraftError, lineTaxPayload, TAX_CATEGORY_OPTIONS, type DeclarableTaxCategory, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
+import i18n from '../../i18n';
 
 /**
- * تسجيل سند قبض وتوزيعه على فواتير العميل المفتوحة.
+ * Records a receipt voucher and allocates it to the customer's open invoices.
  *
- * المتبقي المعروض لكل فاتورة يأتي **محسوباً من الخادم** (من التخصيصات)، ولا
- * تحسبه الشاشة من حقل مخزَّن — والتحقق النهائي على الخادم دائماً.
+ * The remaining amount shown per invoice is computed by the server (from allocations), never from a stored
+ * field on screen, and the server always does the final check.
  */
 export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => Promise<void> }) {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -30,13 +33,13 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [alloc, setAlloc] = useState<Record<string, string>>({});
-  // ④A1: مصيرُ الفائض — يُسأل حين يظهر، ولا يُفترض (`ق-٨٩٨`)؛ والخادمُ يرفض المعلَنَ على الحساب بلا فواتيرَ تغطّيه.
+  // What happens to any surplus is asked when it appears, never assumed; the server rejects "on account" without invoices that cover it.
   const [fate, setFate] = useState<UnallocatedFate | ''>('');
-  // ④A1 (`ق-١٢٦٤`/②): فئةُ ما يُدفع مقدَّماً عنه — تُختار ولا تبدأ بقيمة (إيجارٌ سكنيٌّ معفى لا يُفوتَر بالنسبة الأساسية).
+  // Tax category of what is paid in advance: chosen, with no starting value (exempt residential rent is not billed at the standard rate).
   const [prepaymentTax, setPrepaymentTax] = useState<LineTaxDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // ⚖️ مفتاحُ هذه النافذة (توجيه ٢٧٦ · ق-١٦٠٩/ب): كلُّ محاولةِ حفظٍ منها طلبٌ واحد — فلا يُكتب سندان لنقرةٍ مزدوجة أو إعادة.
+  // One key per modal: every save attempt from it is one request, so a double click or retry never writes two vouchers.
   const [requestKey] = useState(newRequestKey);
 
   useEffect(() => {
@@ -58,13 +61,13 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   const paymentAmount = parseFloat(amount) || 0;
   const unallocated = round2(paymentAmount - allocatedSum);
 
-  /** توزيع تلقائي: الأقدم فالأقدم حتى ينفد المبلغ — يوفّر نقرات المحاسب. */
+  /** Auto allocation: oldest first until the amount runs out, saving the accountant clicks. */
   function autoAllocate() {
     let left = paymentAmount;
     const next: Record<string, string> = {};
     for (const inv of open) {
       if (left <= 0) break;
-      // ② المتبقّي يصل نصّاً (`ق-١٢٣٥`) — يُقرأ رقماً قبل المقارنة.
+      // The remaining amount arrives as text; read it as a number before comparing.
       const take = Math.min(left, num0(inv.remaining));
       if (take > 0) {
         next[inv.id] = String(round2(take));
@@ -77,25 +80,25 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   async function handleSave() {
     setError(null);
     if (!customerId || paymentAmount <= 0) {
-      setError('العميل ومبلغ موجب مطلوبان.');
+      setError(i18n.t('payments.modal.err_required'));
       return;
     }
     if (method === 'BANK' && !bankId) {
-      setError('اختر الحساب البنكي للتحويل.');
+      setError(i18n.t('payments.modal.err_bank'));
       return;
     }
     if (allocatedSum - paymentAmount > 0.005) {
-      setError('مجموع التخصيصات يتجاوز مبلغ السند.');
+      setError(i18n.t('payments.modal.err_over'));
       return;
     }
     const mustDeclare = unallocated > UNALLOCATED_DECLARATION_MIN;
     if (mustDeclare && !fate) {
-      setError(`في السند ${fmt(unallocated)} فوق المخصَّص — أعلن ما يكون: دفعةً مقدَّمة (تصدر لها فاتورة 386 الآن) أو مبلغاً على الحساب.`);
+      setError(i18n.t('payments.modal.err_declare', { amount: fmt(unallocated) }));
       return;
     }
     if (mustDeclare && fate === 'PREPAYMENT') {
       if (!prepaymentTax) {
-        setError('الدفعة المقدَّمة تحمل فئة ما يُدفع عنه — اخترها (خاضع · صفر بسببه · معفى بسببه · خارج النطاق بسببه)؛ تُعلَن ولا تُفترض.');
+        setError(i18n.t('payments.modal.err_prepayment_tax'));
         return;
       }
       const taxProblem = lineTaxDraftError(prepaymentTax);
@@ -124,7 +127,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
       await onSaved();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(d?.message) ? d.message.join(' — ') : (d?.message ?? 'تعذّر تسجيل السند'));
+      setError(Array.isArray(d?.message) ? d.message.join(' — ') : (d?.message ?? i18n.t('payments.modal.err_save')));
     } finally {
       setSaving(false);
     }
@@ -134,7 +137,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
         <div className="modal-head">
-          <div className="modal-title">سند قبض جديد</div>
+          <div className="modal-title">{t('payments.modal.title')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
@@ -142,9 +145,9 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
 
         <div className="two-col">
           <div className="field">
-            <label>العميل</label>
+            <label>{t('payments.modal.customer')}</label>
             <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <option value="">— اختر —</option>
+              <option value="">{t('payments.modal.choose')}</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -153,9 +156,9 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
             </select>
           </div>
           <div className="field">
-            <label>الفرع (يحدّد الصندوق المستلِم)</label>
+            <label>{t('payments.modal.branch')}</label>
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">— بلا فرع —</option>
+              <option value="">{t('payments.modal.no_branch')}</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -167,42 +170,42 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
 
         <div className="two-col">
           <div className="field">
-            <label>التاريخ</label>
+            <label>{t('payments.modal.date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>المبلغ</label>
+            <label>{t('payments.modal.amount')}</label>
             <input className="num" type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
           </div>
         </div>
 
         <div className="two-col">
           <div className="field">
-            <label>طريقة القبض</label>
+            <label>{t('payments.modal.method')}</label>
             <select
               value={method}
               onChange={(e) => {
                 const next = e.target.value as PaymentMethod;
                 setMethod(next);
-                // الشبكةُ ذمّةٌ على المستحوذ (1251) لا نقدٌ في بنك — فلا بنكَ يُرسَل معها.
+                // A card sale is a receivable from the acquirer (1251), not cash in a bank, so no bank is sent with it.
                 if (next === 'CARD') setBankId('');
               }}
             >
-              <option value="CASH">نقداً</option>
-              <option value="BANK">تحويل بنكي</option>
-              <option value="CARD">شبكة (جهاز البنك)</option>
+              <option value="CASH">{t('payments.modal.method_cash')}</option>
+              <option value="BANK">{t('payments.modal.method_bank')}</option>
+              <option value="CARD">{t('payments.modal.method_card')}</option>
             </select>
           </div>
           {method === 'CARD' ? (
             <div className="field">
-              <label>الحساب</label>
-              <div className="muted">مدينو شبكة المدفوعات (1251) حتى يحوّلها المستحوذ — تدخل البنك من «تسويات الشبكة»</div>
+              <label>{t('payments.modal.account')}</label>
+              <div className="muted">{t('payments.modal.card_account')}</div>
             </div>
           ) : (
             <div className="field">
-              <label>{method === 'BANK' ? 'الحساب البنكي' : 'الصندوق المستلِم (اختياري)'}</label>
+              <label>{method === 'BANK' ? t('payments.modal.bank_account') : t('payments.modal.cash_box')}</label>
               <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
-                <option value="">— بلا تحديد —</option>
+                <option value="">{t('payments.modal.unspecified')}</option>
                 {banks.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
@@ -215,11 +218,11 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
 
         <div className="two-col">
           <div className="field">
-            <label>المرجع (رقم الشيك/الحوالة)</label>
+            <label>{t('payments.modal.reference')}</label>
             <input value={reference} onChange={(e) => setReference(e.target.value)} />
           </div>
           <div className="field">
-            <label>ملاحظات</label>
+            <label>{t('payments.modal.notes')}</label>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
@@ -227,26 +230,26 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
         {customerId && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <b>توزيع السند على الفواتير المفتوحة</b>
-              <button className="btn btn-ghost btn-sm" style={{ marginRight: 'auto' }} onClick={autoAllocate} disabled={paymentAmount <= 0}>
-                توزيع تلقائي (الأقدم أولاً)
+              <b>{t('payments.modal.allocate_title')}</b>
+              <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto' }} onClick={autoAllocate} disabled={paymentAmount <= 0}>
+                {t('payments.modal.auto_allocate')}
               </button>
             </div>
             <table>
               <thead>
                 <tr>
-                  <th>الفاتورة</th>
-                  <th>التاريخ</th>
-                  <th>الإجمالي</th>
-                  <th>المتبقي</th>
-                  <th>المخصَّص</th>
+                  <th>{t('payments.modal.col_invoice')}</th>
+                  <th>{t('payments.modal.date')}</th>
+                  <th>{t('payments.modal.col_total')}</th>
+                  <th>{t('payments.modal.col_remaining')}</th>
+                  <th>{t('payments.modal.col_allocated')}</th>
                 </tr>
               </thead>
               <tbody>
                 {open.length === 0 && (
                   <tr>
                     <td colSpan={5}>
-                      <div className="empty-state">لا فواتير مفتوحة لهذا العميل — ما يُقبض قبل التوريد دفعةٌ مقدَّمة تُصدَر لها فاتورة 386 بتاريخ السند</div>
+                      <div className="empty-state">{t('payments.modal.no_open')}</div>
                     </td>
                   </tr>
                 )}
@@ -272,31 +275,31 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
               </tbody>
             </table>
             <p className="hint">
-              المخصَّص: <b className="num">{fmt(allocatedSum)}</b> · غير المخصَّص:{' '}
+              {t('payments.modal.allocated')} <b className="num">{fmt(allocatedSum)}</b> {t('payments.modal.unallocated')}{' '}
               <b className="num" style={{ color: unallocated < 0 ? 'var(--rose)' : undefined }}>
                 {fmt(unallocated)}
               </b>
             </p>
           </>
         )}
-        {/* ④A1: فائضٌ فوق هللات التدوير يُعلَن مصيرُه — لا افتراضَ صامتاً. والخادمُ يرفض «على الحساب» بلا فواتيرَ مفتوحةٍ تغطّيه (م٥٣). */}
+        {/* A surplus above rounding cents must have its fate declared, never assumed silently. */}
         {customerId && paymentAmount > 0 && unallocated > UNALLOCATED_DECLARATION_MIN && (
           <fieldset className="field" data-testid="unallocated-fate" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-            <legend>ما مصيرُ {fmt(unallocated)} فوق المخصَّص؟</legend>
+            <legend>{t('payments.modal.fate_legend', { amount: fmt(unallocated) })}</legend>
             <label style={{ display: 'block' }}>
-              <input type="radio" name="unallocated-fate" value="PREPAYMENT" checked={fate === 'PREPAYMENT'} onChange={() => setFate('PREPAYMENT')} /> دفعة مقدَّمة — تصدر لها فاتورة دفعة مقدَّمة (386) بتاريخ السند وتُخصم من فاتورة التوريد لاحقاً
+              <input type="radio" name="unallocated-fate" value="PREPAYMENT" checked={fate === 'PREPAYMENT'} onChange={() => setFate('PREPAYMENT')} /> {t('payments.modal.fate_prepayment')}
             </label>
             <label style={{ display: 'block' }}>
-              <input type="radio" name="unallocated-fate" value="ON_ACCOUNT" checked={fate === 'ON_ACCOUNT'} onChange={() => setFate('ON_ACCOUNT')} /> على الحساب — يُخصَّص لاحقاً على فواتيرَ مفتوحةٍ قائمة تغطّيه
+              <input type="radio" name="unallocated-fate" value="ON_ACCOUNT" checked={fate === 'ON_ACCOUNT'} onChange={() => setFate('ON_ACCOUNT')} /> {t('payments.modal.fate_on_account')}
             </label>
             {fate === 'PREPAYMENT' && (
               <div className="field" data-testid="prepayment-tax" style={{ marginTop: 8 }}>
-                <label>فئةُ ما يُدفع مقدَّماً عنه — تُعلَن ولا تُفترض (إيجارٌ سكنيّ معفى · خدمةٌ خاضعة · …)</label>
+                <label>{t('payments.modal.prepayment_category')}</label>
                 {prepaymentTax ? (
                   <LineTaxPicker value={prepaymentTax} onChange={setPrepaymentTax} />
                 ) : (
-                  <select aria-label="فئة الدفعة المقدَّمة" value="" onChange={(e) => e.target.value && setPrepaymentTax({ taxCategory: e.target.value as DeclarableTaxCategory })}>
-                    <option value="">— اختر الفئة —</option>
+                  <select aria-label={t('payments.modal.prepayment_category_aria')} value="" onChange={(e) => e.target.value && setPrepaymentTax({ taxCategory: e.target.value as DeclarableTaxCategory })}>
+                    <option value="">{t('payments.modal.choose_category')}</option>
                     {TAX_CATEGORY_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -312,10 +315,10 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('payments.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            تسجيل السند
+            {t('payments.modal.save')}
           </button>
         </div>
       </div>

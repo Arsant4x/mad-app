@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listCustomers, type Customer } from '../../api/customers';
 import { listBranches, type Branch } from '../../api/branches';
 import { createQuote, updateQuote, type Quote, type QuoteLineInput } from '../../api/quotes';
@@ -6,7 +7,7 @@ import { fmt, today } from '../../lib/format';
 import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
 
-/** ⑧ البندُ يحمل الفئةَ بسببها لا نسبةً تُكتب — كان هنا حقلُ رقمٍ حرّ (`'15'`) يقبل أيَّ نسبة. */
+/** A line carries its tax category with its reason, not a free-typed rate. */
 interface LineDraft {
   description: string;
   quantity: string;
@@ -16,8 +17,9 @@ interface LineDraft {
 
 const EMPTY_LINE: LineDraft = { description: '', quantity: '1', unitPrice: '', tax: STANDARD_LINE_TAX };
 
-/** منشئ عرض السعر — نسخة مبسطة من منشئ الفاتورة: بنود بنفس شكلها حرفياً. */
+/** Quote builder: a simpler invoice builder, with lines of exactly the same shape. */
 export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | null; onCancel: () => void; onSaved: () => Promise<void> }) {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [customerId, setCustomerId] = useState(editing?.customerId ?? '');
@@ -40,7 +42,7 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
     listBranches().then(setBranches);
   }, []);
 
-  // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم.
+  // Preview with the rate derived from the category; the server's totals are authoritative.
   const totals = (() => {
     const subtotal = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0);
     const tax = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0) * (rateForCategory(l.tax.taxCategory) / 100), 0);
@@ -56,16 +58,16 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
     const kept = lines.filter((l) => l.description.trim());
     const taxProblem = kept.map((l, i) => ({ i, msg: lineTaxDraftError(l.tax) })).find((x) => x.msg);
     if (taxProblem) {
-      setError(`البند ${taxProblem.i + 1}: ${taxProblem.msg}`);
+      setError(t('quotes.modal.line_error', { n: taxProblem.i + 1, msg: taxProblem.msg }));
       return;
     }
     const parsed: QuoteLineInput[] = kept.map((l) => ({ description: l.description.trim(), quantity: parseFloat(l.quantity) || 0, unitPrice: parseFloat(l.unitPrice) || 0, ...lineTaxPayload(l.tax) }));
     if (!customerId || parsed.length === 0 || parsed.some((l) => l.quantity <= 0)) {
-      setError('العميل وبند واحد على الأقل (بكمية موجبة) مطلوبان.');
+      setError(t('quotes.modal.required'));
       return;
     }
     if (validUntil < issueDate) {
-      setError('تاريخ الصلاحية قبل تاريخ الإصدار.');
+      setError(t('quotes.modal.valid_before_issue'));
       return;
     }
     setSaving(true);
@@ -76,7 +78,7 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
       await onSaved();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر حفظ العرض');
+      setError(d?.message ?? t('quotes.modal.save_failed'));
     } finally {
       setSaving(false);
     }
@@ -86,7 +88,7 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? `تعديل ${editing.no}` : 'عرض سعر جديد'}</div>
+          <div className="modal-title">{editing ? t('quotes.modal.edit_title', { no: editing.no }) : t('quotes.modal.new_title')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
@@ -94,9 +96,9 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
 
         <div className="two-col">
           <div className="field">
-            <label>العميل</label>
+            <label>{t('quotes.modal.customer')}</label>
             <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <option value="">— اختر —</option>
+              <option value="">{t('quotes.modal.choose')}</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -105,9 +107,9 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
             </select>
           </div>
           <div className="field">
-            <label>الفرع (يُورَث للفاتورة عند التحويل)</label>
+            <label>{t('quotes.modal.branch')}</label>
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">— بلا فرع —</option>
+              <option value="">{t('quotes.modal.no_branch')}</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -118,11 +120,11 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
         </div>
         <div className="two-col">
           <div className="field">
-            <label>تاريخ الإصدار</label>
+            <label>{t('quotes.modal.issue_date')}</label>
             <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>صالح حتى</label>
+            <label>{t('quotes.modal.valid_until')}</label>
             <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
           </div>
         </div>
@@ -130,11 +132,11 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
         <table>
           <thead>
             <tr>
-              <th style={{ width: '45%' }}>البند</th>
-              <th>الكمية</th>
-              <th>سعر الوحدة</th>
-              <th style={{ width: 210 }}>الفئة الضريبية</th>
-              <th>النسبة</th>
+              <th style={{ width: '45%' }}>{t('quotes.modal.col_item')}</th>
+              <th>{t('quotes.modal.col_qty')}</th>
+              <th>{t('quotes.modal.col_unit_price')}</th>
+              <th style={{ width: 210 }}>{t('quotes.modal.col_tax_category')}</th>
+              <th>{t('quotes.modal.col_rate')}</th>
               <th></th>
             </tr>
           </thead>
@@ -142,7 +144,7 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
             {lines.map((l, i) => (
               <tr key={i}>
                 <td>
-                  <input value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="وصف البند" />
+                  <input value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder={t('quotes.modal.item_placeholder')} />
                 </td>
                 <td>
                   <input className="num" type="number" min="0" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
@@ -153,7 +155,7 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
                 <td>
                   <LineTaxPicker compact value={l.tax} onChange={(tax) => setLine(i, { tax })} />
                 </td>
-                <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
+                <td className="num">{t('quotes.modal.rate_pct', { n: rateForCategory(l.tax.taxCategory) })}</td>
                 <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} disabled={lines.length === 1}>
                     ✕
@@ -164,25 +166,26 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
           </tbody>
         </table>
         <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => setLines((ls) => [...ls, { ...EMPTY_LINE }])}>
-          + بند
+          {t('quotes.modal.add_line')}
         </button>
 
         <div className="field" style={{ marginTop: 8 }}>
-          <label>ملاحظات (تنتقل للفاتورة)</label>
+          <label>{t('quotes.modal.notes')}</label>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
 
-        <p className="num" style={{ textAlign: 'left', fontWeight: 700 }}>
-          الإجمالي: {fmt(totals.total)} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(قبل الضريبة {fmt(totals.subtotal)} · الضريبة {fmt(totals.tax)})</span>
+        <p className="num" style={{ textAlign: 'end', fontWeight: 700 }}>
+          {t('quotes.modal.total', { total: fmt(totals.total) })}{' '}
+          <span style={{ color: 'var(--muted)', fontWeight: 400 }}>{t('quotes.modal.breakdown', { subtotal: fmt(totals.subtotal), tax: fmt(totals.tax) })}</span>
         </p>
 
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('quotes.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إنشاء العرض'}
+            {editing ? t('quotes.modal.save_edit') : t('quotes.modal.create')}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   getDueReminders,
   sendReminder,
@@ -10,17 +11,10 @@ import {
 import { listCompanyUsers, type CompanyUser } from '../../api/companyUsers';
 import { dfmt, fmt } from '../../lib/format';
 
-const CHANNEL_LABEL: Record<ReminderChannel, string> = {
-  WHATSAPP: 'واتساب',
-  SMS: 'رسالة نصية',
-  CALL: 'اتصال',
-  EMAIL: 'بريد إلكتروني',
-  OTHER: 'أخرى',
-};
-
-const CHANNELS = Object.keys(CHANNEL_LABEL) as ReminderChannel[];
+const CHANNELS: ReminderChannel[] = ['WHATSAPP', 'SMS', 'CALL', 'EMAIL', 'OTHER'];
 
 export function RemindersPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<DueReminders | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -53,7 +47,7 @@ export function RemindersPage() {
       after?.();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(d?.message) ? d.message.join(' — ') : (d?.message ?? 'تعذّر إتمام العملية'));
+      setError(Array.isArray(d?.message) ? d.message.join(' — ') : (d?.message ?? t('reminders.page.err_failed')));
     } finally {
       setBusy(false);
     }
@@ -82,8 +76,8 @@ export function RemindersPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">تذكيرات التحصيل</div>
-          <div className="page-sub">من يحتاج تذكيراً اليوم، ونص الرسالة جاهزاً</div>
+          <div className="page-title">{t('reminders.page.title')}</div>
+          <div className="page-sub">{t('reminders.page.sub')}</div>
         </div>
       </div>
 
@@ -91,8 +85,7 @@ export function RemindersPage() {
           send anything. Saying otherwise would be discovered the first time
           rent goes uncollected. */}
       <p className="hint" style={{ marginBottom: 12 }}>
-        ⚠️ المنصة لا ترسل الرسائل بنفسها — لا يوجد مزوّد رسائل مربوط بعد. ما تفعله هنا: تحدّد من يستحق تذكيراً اليوم، وتجهّز النص من قالب
-        الرسائل الخاص بك، وتسجّل ما أرسلتَه فعلاً.
+        {t('reminders.page.notice')}
       </p>
 
       {error && <p className="error-text">{error}</p>}
@@ -100,7 +93,7 @@ export function RemindersPage() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="two-col">
           <div className="field">
-            <label>التذكير قبل الاستحقاق بـ</label>
+            <label>{t('reminders.page.days_before')}</label>
             <input
               type="number"
               min="0"
@@ -108,10 +101,10 @@ export function RemindersPage() {
               value={data.policy.daysBefore}
               onChange={(e) => run(() => updateReminderPolicy({ daysBefore: Number(e.target.value) }))}
             />
-            <p className="hint">يوم. الصفر يعني التذكير يوم الاستحقاق نفسه.</p>
+            <p className="hint">{t('reminders.page.days_before_hint')}</p>
           </div>
           <div className="field">
-            <label>إعادة التذكير كل</label>
+            <label>{t('reminders.page.repeat')}</label>
             <input
               type="number"
               min="1"
@@ -120,37 +113,37 @@ export function RemindersPage() {
               onChange={(e) => run(() => updateReminderPolicy({ repeatEveryDays: Number(e.target.value) }))}
             />
             {/* Explains the floor of 1 rather than letting it look arbitrary. */}
-            <p className="hint">يوم بعد التأخر. تذكير يومي هو أسرع طريق لأن يتجاهله المستأجر.</p>
+            <p className="hint">{t('reminders.page.repeat_hint')}</p>
           </div>
         </div>
         <div className="field">
           <label>
             <input type="checkbox" checked={data.policy.enabled} onChange={(e) => run(() => updateReminderPolicy({ enabled: e.target.checked }))} />{' '}
-            تفعيل التذكيرات
+            {t('reminders.page.enable')}
           </label>
         </div>
 
         {/* Escalation: when an arrear stops being the collector's problem. */}
         <div className="two-col" style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginTop: 4 }}>
           <div className="field">
-            <label>تصعيد المتأخر بعد</label>
+            <label>{t('reminders.page.escalate_after')}</label>
             <input
               type="number"
               min="1"
               max="365"
-              placeholder="بدون تصعيد"
+              placeholder={t('reminders.page.escalate_placeholder')}
               value={data.policy.escalateAfterDays ?? ''}
               onChange={(e) => run(() => updateReminderPolicy({ escalateAfterDays: e.target.value === '' ? null : Number(e.target.value) }))}
             />
-            <p className="hint">يوم من تاريخ الاستحقاق. اتركه فارغاً لإيقاف التصعيد.</p>
+            <p className="hint">{t('reminders.page.escalate_hint')}</p>
           </div>
           <div className="field">
-            <label>يصل التصعيد إلى</label>
+            <label>{t('reminders.page.escalate_to')}</label>
             <select
               value={data.policy.escalateToUserId ?? ''}
               onChange={(e) => run(() => updateReminderPolicy({ escalateToUserId: e.target.value === '' ? null : e.target.value }))}
             >
-              <option value="">صاحب الحساب</option>
+              <option value="">{t('reminders.page.account_owner')}</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
@@ -158,25 +151,25 @@ export function RemindersPage() {
               ))}
             </select>
             {/* Says plainly where it arrives, so nobody waits for an SMS. */}
-            <p className="hint">إشعار داخل المنصة على شاشة الإشعارات — لا رسالة ولا بريد.</p>
+            <p className="hint">{t('reminders.page.escalate_to_hint')}</p>
           </div>
         </div>
       </div>
 
-      {!data.enabled && <div className="empty-state">التذكيرات موقوفة — فعّلها أعلاه لعرض القائمة.</div>}
+      {!data.enabled && <div className="empty-state">{t('reminders.page.disabled')}</div>}
 
       {data.enabled && (
         <>
           <div className="chip-group" style={{ marginBottom: 10 }}>
-            <span className="chip">متأخرة: {overdue.length}</span>
-            <span className="chip">قادمة: {upcoming.length}</span>
+            <span className="chip">{t('reminders.page.overdue_count', { n: overdue.length })}</span>
+            <span className="chip">{t('reminders.page.upcoming_count', { n: upcoming.length })}</span>
           </div>
 
           {data.truncated && (
             // Says the list is a queue, not the whole picture — otherwise the
             // count and the rows disagree and the user trusts neither.
             <p className="hint" style={{ marginBottom: 8 }}>
-              معروض {data.reminders.length} من {data.total} مستحقة تذكيراً — الأقدم أولاً. عالِج هذه ثم حدّث الصفحة.
+              {t('reminders.page.truncated', { shown: data.reminders.length, total: data.total })}
             </p>
           )}
 
@@ -184,12 +177,12 @@ export function RemindersPage() {
             <table>
               <thead>
                 <tr>
-                  <th>المستأجر</th>
-                  <th>الموقع</th>
-                  <th>الاستحقاق</th>
-                  <th>المبلغ</th>
-                  <th>الحالة</th>
-                  <th>آخر تذكير</th>
+                  <th>{t('reminders.page.col_tenant')}</th>
+                  <th>{t('reminders.page.col_location')}</th>
+                  <th>{t('reminders.page.col_due')}</th>
+                  <th>{t('reminders.page.col_amount')}</th>
+                  <th>{t('reminders.page.col_status')}</th>
+                  <th>{t('reminders.page.col_last')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -197,7 +190,7 @@ export function RemindersPage() {
                 {data.reminders.length === 0 && (
                   <tr>
                     <td colSpan={7}>
-                      <div className="empty-state">لا أحد يحتاج تذكيراً اليوم</div>
+                      <div className="empty-state">{t('reminders.page.empty')}</div>
                     </td>
                   </tr>
                 )}
@@ -207,47 +200,47 @@ export function RemindersPage() {
                       {r.tenant}
                       <div className="hint">
                         {r.contractNo}
-                        {r.phone ? ` — ${r.phone}` : ' — لا يوجد جوال'}
+                        {r.phone ? ` — ${r.phone}` : t('reminders.page.no_phone')}
                       </div>
                     </td>
                     <td>
                       {r.propertyName}
-                      <div className="hint">وحدة {r.unitNo}</div>
+                      <div className="hint">{t('reminders.page.unit_no', { unit: r.unitNo })}</div>
                     </td>
                     <td className="num">{dfmt(r.dueDate)}</td>
                     <td className="num">{fmt(r.amount)}</td>
                     <td>
                       {r.overdueDays > 0 ? (
-                        <span className="badge overdue">متأخر {r.overdueDays} يوم</span>
+                        <span className="badge overdue">{t('reminders.page.overdue_days', { n: r.overdueDays })}</span>
                       ) : (
-                        <span className="badge due">بعد {Math.abs(r.overdueDays)} يوم</span>
+                        <span className="badge due">{t('reminders.page.due_in', { n: Math.abs(r.overdueDays) })}</span>
                       )}
                     </td>
-                    <td className="num">{r.lastSentAt ? `${dfmt(r.lastSentAt)} (${r.daysSinceLast} يوم)` : '—'}</td>
+                    <td className="num">{r.lastSentAt ? t('reminders.page.last_sent', { date: dfmt(r.lastSentAt), n: r.daysSinceLast }) : '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-ghost" onClick={() => copy(r)}>
-                          {copiedId === r.installmentId ? '✓ نُسخ' : 'نسخ النص'}
+                          {copiedId === r.installmentId ? t('reminders.page.copied') : t('reminders.page.copy')}
                         </button>
                         <button className="btn btn-ghost" onClick={() => openFor(r)}>
-                          تسجيل الإرسال
+                          {t('reminders.page.record_send')}
                         </button>
                       </div>
 
                       {openId === r.installmentId && (
                         <div className="card" style={{ background: '#faf9f5', marginTop: 6 }}>
                           <div className="field">
-                            <label>القناة</label>
+                            <label>{t('reminders.page.channel')}</label>
                             <select value={channel} onChange={(e) => setChannel(e.target.value as ReminderChannel)}>
                               {CHANNELS.map((c) => (
                                 <option key={c} value={c}>
-                                  {CHANNEL_LABEL[c]}
+                                  {t(`reminders.channel.${c}`)}
                                 </option>
                               ))}
                             </select>
                           </div>
                           <div className="field">
-                            <label>نص الرسالة</label>
+                            <label>{t('reminders.page.message')}</label>
                             <textarea
                               value={message}
                               onChange={(e) => setMessage(e.target.value)}
@@ -255,18 +248,18 @@ export function RemindersPage() {
                               style={{ width: '100%', fontFamily: 'inherit', fontSize: 12.5, padding: 9, border: '1px solid var(--line)', borderRadius: 8 }}
                             />
                             {/* Stored as sent, not regenerated later. */}
-                            <p className="hint">يُحفظ النص كما أرسلتَه — القوالب تتغيّر، والمهم لاحقاً ما قيل فعلاً.</p>
+                            <p className="hint">{t('reminders.page.message_hint')}</p>
                           </div>
                           <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
                             <button className="btn btn-ghost" onClick={() => setOpenId(null)}>
-                              تراجع
+                              {t('reminders.page.back')}
                             </button>
                             <button
                               className="btn btn-primary"
                               disabled={busy || !message.trim()}
                               onClick={() => run(() => sendReminder(r.installmentId, { channel, message: message.trim() }), () => setOpenId(null))}
                             >
-                              تسجيل
+                              {t('reminders.page.record')}
                             </button>
                           </div>
                         </div>

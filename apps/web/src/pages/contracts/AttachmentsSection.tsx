@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import {
   deleteContractAttachment,
@@ -9,11 +10,12 @@ import {
 } from '../../api/contracts';
 import { ACCEPTED_FILE_TYPES, MAX_FILE_BYTES } from '../../api/files';
 import { dfmt } from '../../lib/format';
+import i18n from '../../i18n';
 
 function humanSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} ب`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} كب`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} مب`;
+  if (bytes < 1024) return i18n.t('contracts.attachments.size_b', { n: bytes });
+  if (bytes < 1024 * 1024) return i18n.t('contracts.attachments.size_kb', { n: Math.round(bytes / 1024) });
+  return i18n.t('contracts.attachments.size_mb', { n: (bytes / (1024 * 1024)).toFixed(1) });
 }
 
 /**
@@ -25,6 +27,7 @@ function humanSize(bytes: number): string {
  * short-lived signed URL only when someone actually opens one.
  */
 export function AttachmentsSection({ contractId }: { contractId: string }) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<ContractAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -35,7 +38,7 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
   useEffect(() => {
     listContractAttachments(contractId)
       .then(setItems)
-      .catch(() => setError('تعذّر تحميل المرفقات'))
+      .catch(() => setError(i18n.t('contracts.attachments.load_failed')))
       .finally(() => setLoading(false));
   }, [contractId]);
 
@@ -45,7 +48,7 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
     if (!file) return;
     setError(null);
     if (file.size > MAX_FILE_BYTES) {
-      setError('الملف أكبر من الحد المسموح (10 ميغابايت).');
+      setError(t('contracts.attachments.too_large'));
       return;
     }
     setBusy(true);
@@ -54,7 +57,7 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
       setItems((xs) => [created, ...xs]);
     } catch (err) {
       const data = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر رفع الملف'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.attachments.upload_failed')));
     } finally {
       setBusy(false);
     }
@@ -63,10 +66,10 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
   async function open(att: ContractAttachment) {
     setError(null);
     try {
-      // ق-١٣٦٥ — عبر الخادم مفكوكاً، لا رابطَ موقَّعاً.
+      // Streamed decrypted through the server, never as a signed link.
       await downloadContractAttachment(att.id, att.filename);
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر فتح الملف'));
+      setError(apiErrorMessage(e, t('contracts.attachments.open_failed')));
     }
   }
 
@@ -77,7 +80,7 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
       await deleteContractAttachment(att.id);
       setItems((xs) => xs.filter((x) => x.id !== att.id));
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر حذف الملف'));
+      setError(apiErrorMessage(e, t('contracts.attachments.delete_failed')));
     } finally {
       setBusy(false);
       setConfirmingId(null);
@@ -87,38 +90,39 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
   return (
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>المرفقات ({items.length})</span>
+        <span>{t('contracts.attachments.title', { n: items.length })}</span>
         <>
           <input ref={inputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={onPick} style={{ display: 'none' }} />
           <button className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? 'جارٍ الرفع…' : '+ إرفاق ملف'}
+            {busy ? t('contracts.attachments.uploading') : t('contracts.attachments.attach')}
           </button>
         </>
       </div>
 
-      <p className="hint" style={{ marginBottom: 6 }}>PDF أو صورة (JPG/PNG/WebP)، حتى 10 ميغابايت. تُحفظ خاصة ولا تُشارك إلا برابط مؤقّت عند الفتح.</p>
+      <p className="hint" style={{ marginBottom: 6 }}>{t('contracts.attachments.hint')}</p>
 
-      {/* تحذير نظامي لا تنسيقي: لائحة مرفق الضيافة السياحي (2289) م.٢٨/١٤ تُلزم
-          المرفق المرخَّص بالتحقق من الهوية من أصلها وتسجيل بياناتها فقط «دون طلب
-          أو أخذ نسخة منها». الإلزام على عميلنا لا علينا — لكن رفع الصورة هنا
-          يضعه في المخالفة، والمنع غير ممكن تقنياً (الصور مسموحة لأسباب مشروعة:
-          صور التسليم، مرفقات المطالبات). فالتحذير هو الأداة المتاحة.
-          ولا يُحذف هذا التحذير إلا بعد وجود حقل رقم الهوية — انظر بند ③. */}
-      <p className="warn-text" style={{ marginBottom: 10 }}>⚠️ لا ترفع صور الهويات — سجّل الرقم في حقله.</p>
+      {/* A regulatory warning, not styling: the tourist hospitality facility
+          regulation (2289) art. 28/14 requires the licensed facility to check an ID
+          from the original and record its data only, without taking a copy. The
+          duty is our customer's, but uploading the image here puts them in breach,
+          and blocking images is not possible (photos are allowed for handovers and
+          claims). So the warning is the available tool. Keep it until an ID number
+          field exists. */}
+      <p className="warn-text" style={{ marginBottom: 10 }}>{t('contracts.attachments.id_warning')}</p>
 
       {error && <p className="error-text">{error}</p>}
 
       {loading ? (
-        <p className="hint">جارٍ التحميل…</p>
+        <p className="hint">{t('contracts.attachments.loading')}</p>
       ) : items.length === 0 ? (
-        <p className="hint">لا مرفقات بعد.</p>
+        <p className="hint">{t('contracts.attachments.empty')}</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>الملف</th>
-              <th>الحجم</th>
-              <th>التاريخ</th>
+              <th>{t('contracts.attachments.col_file')}</th>
+              <th>{t('contracts.attachments.col_size')}</th>
+              <th>{t('contracts.attachments.col_date')}</th>
               <th></th>
             </tr>
           </thead>
@@ -128,7 +132,7 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
                 <td>
                   <button
                     onClick={() => open(att)}
-                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent, #2b6cb0)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit', textAlign: 'right' }}
+                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent, #2b6cb0)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit', textAlign: 'start' }}
                   >
                     {att.filename}
                   </button>
@@ -139,15 +143,15 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
                   {confirmingId === att.id ? (
                     <>
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => remove(att)}>
-                        تأكيد الحذف
+                        {t('contracts.attachments.confirm_delete')}
                       </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => setConfirmingId(null)}>
-                        إلغاء
+                        {t('contracts.attachments.cancel')}
                       </button>
                     </>
                   ) : (
                     <button className="btn btn-ghost btn-sm" onClick={() => setConfirmingId(att.id)}>
-                      حذف
+                      {t('contracts.attachments.delete')}
                     </button>
                   )}
                 </td>

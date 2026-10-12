@@ -1,0 +1,173 @@
+{
+  "title": "Cashier",
+  "attempt": {
+    "created": "Not sent",
+    "charging": "Waiting for the terminal…",
+    "approved": "Approved by the provider: completing the invoice",
+    "completed": "Completed",
+    "declined": "Declined",
+    "unknown": "No answer from the provider: do not charge again",
+    "cancelled": "Cancelled"
+  },
+  "errors": {
+    "sync_failed": "Could not sync a queued sale",
+    "sale_failed": "Could not complete the sale",
+    "attempt_start_failed": "Could not start the card payment",
+    "connection_lost_charging": "Connection lost while charging. Do not charge again; check the payment status when the connection returns.",
+    "charge_failed": "Could not charge the card",
+    "card_declined": "Card declined: {{reason}}",
+    "card_declined_split": ". Return the cash to the customer; nothing from the sale was recorded.",
+    "query_failed": "Could not check the payment status",
+    "resolve_failed": "Could not resolve the payment",
+    "device_ref_required": "Enter the terminal reference number from its receipt. A card sale is not accepted on your confirmation alone.",
+    "verifications_failed": "Could not load card payments",
+    "split_invalid": "Enter a cash amount above zero and below the total.",
+    "open_shift_failed": "Could not open the shift",
+    "unsynced_sales": "There are unsynced sales. Wait for the connection to return and the queue to empty, then close.",
+    "close_shift_failed": "Could not close the shift"
+  },
+  "stock_not_deducted": "Stock was not deducted automatically: no warehouse is linked to the shift's branch",
+  "open": {
+    "sub": "Open a shift to start selling",
+    "card_title": "Open a shift",
+    "float_label": "Opening float (drawer cash)",
+    "branch_label": "Shift branch (sets the warehouse stock is deducted from)",
+    "button": "🧾 Open shift"
+  },
+  "closed": {
+    "title": "Closed shift summary",
+    "sales_count": "Number of sales",
+    "cash": "Cash",
+    "card": "Card",
+    "expected": "Expected in drawer",
+    "counted": "Actually counted",
+    "match": "Balanced",
+    "over": "Over",
+    "short": "Short",
+    "pending_title": "Unresolved card payments ({{n}})",
+    "pending_body": ". The shift was closed with them open; they move to the settlement matching list until the provider's answer or evidence resolves them:",
+    "status_unknown": "Pending",
+    "status_charging": "Charging",
+    "status_approved": "Approved, not completed"
+  },
+  "shift": {
+    "sub": "Shift of {{name}} · {{n}} sales · expected drawer {{expected}}",
+    "branch_fallback": "Branch",
+    "offline_badge": "⚠ Offline: selling continues",
+    "queue_badge": "Waiting to sync: {{n}}",
+    "unverified_cards": "💳 Unverified cards",
+    "close_button": "Close shift"
+  },
+  "search_placeholder": "Search by name or scan the barcode, then Enter...",
+  "no_match": "No matching item",
+  "cart": {
+    "title": "Cart",
+    "empty": "Tap an item to add it",
+    "discount_aria": "Discount on {{name}}",
+    "discount_title": "Line discount (amount)",
+    "discount_placeholder": "Discount",
+    "subtotal": "Total before VAT",
+    "tax": "VAT 15%",
+    "total": "Total"
+  },
+  "pending": {
+    "deadline": " · timeout {{n}} seconds",
+    "query": "🔎 Check status",
+    "evidence": "Resolve with evidence"
+  },
+  "pay": {
+    "cash": "💵 Cash",
+    "card": "💳 Card",
+    "split": "✂ Split cash + card"
+  },
+  "open_attempts": {
+    "title": "Unresolved card payments",
+    "query": "Check",
+    "evidence": "Evidence"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "print": "🖨 Print"
+  },
+  "split": {
+    "title": "Split payment",
+    "cash_label": "Cash amount",
+    "card_rest": "Card pays the rest: ",
+    "confirm": "Confirm split"
+  },
+  "device_ref": {
+    "title_offline": "Card while offline",
+    "title_standalone": "Card on a standalone terminal",
+    "intro_offline": "The connection is down and the payment gateway is linked: charge on the terminal directly, then enter ",
+    "intro_standalone": "No payment gateway is linked: charge on the card terminal, then enter ",
+    "ref_bold": "the reference number printed on its receipt",
+    "outro": ". The sale is recorded as unverified until the card settlement matches it.",
+    "label": "Terminal reference number",
+    "submit": "Record sale"
+  },
+  "evidence": {
+    "title": "Resolve a pending payment with evidence",
+    "intro": "{{amount}} · The provider is asked first; if it answers, its answer resolves the payment. A resolution by evidence is not final until the card settlement matches it.",
+    "device_ref": "Terminal reference number (from its receipt)",
+    "approval_code": "Approval code (from its receipt)",
+    "note": "Note",
+    "submit": "Resolve with evidence"
+  },
+  "verifications": {
+    "title": "Unverified card payments: settlement period {{n}} days",
+    "filter_open": "Unmatched",
+    "filter_overdue": "Past the deadline",
+    "filter_matched": "Matched by a settlement",
+    "empty": "Nothing here",
+    "col_invoice": "Invoice",
+    "col_day": "Date",
+    "col_amount": "Amount",
+    "col_cashier": "Cashier",
+    "col_device_ref": "Terminal reference",
+    "col_proof": "Verified by",
+    "col_status": "Status",
+    "col_started": "Started",
+    "proof_evidence": "Evidence",
+    "proof_evidence_by": "Evidence ({{name}})",
+    "proof_device_ref": "Terminal reference number",
+    "matched": "Matched by {{ref}}",
+    "settlement": "a settlement",
+    "overdue": "Past the deadline ({{n}} days)",
+    "waiting": "Waiting ({{n}} days)",
+    "unresolved_title": "Unresolved card payments from closed shifts ({{n}})",
+    "status_unknown": "Pending: waiting for the provider's answer or evidence",
+    "status_charging": "Charging",
+    "status_approved": "Approved, not completed"
+  },
+  "offline_receipt": {
+    "title": "Sale recorded offline ✓",
+    "temp_ref": "Temporary reference: {{ref}}",
+    "total_incl": "Total (incl. VAT)",
+    "notice": "Temporary receipt: the compliant invoice is issued automatically, dated this sale, as soon as the connection returns",
+    "no_qr": "Receipt without the ZATCA code: the legal name and VAT number were not cached before the outage. Complete them in the company profile when the connection returns."
+  },
+  "receipt": {
+    "title": "Sale completed ✓",
+    "invoice_no": "Invoice {{no}}",
+    "total_incl": "Total (incl. VAT)",
+    "paid_cash": "Paid in cash",
+    "paid_card": "Paid by card",
+    "split_cash": "Cash {{amount}}",
+    "split_card": "Card {{amount}}",
+    "clearance_fallback": "Full tax invoice: it must be cleared by ZATCA before it is handed over; print it from the invoices screen after clearance.",
+    "no_qr": "Receipt without the ZATCA code: complete the legal name and VAT number in the company profile.",
+    "stamp_error": "Not stamped at the time of sale: the receipt was issued with the five tags; stamping and reporting retry automatically. Reason: {{reason}}",
+    "negative_stock": "Warning: resulting stock is negative: {{items}}. Check the stock count",
+    "list_sep": ", "
+  },
+  "close": {
+    "title": "Close shift",
+    "opening_float": "Opening float",
+    "cash_sales": "Cash sales",
+    "card_sales": "Card sales",
+    "expected": "Expected in drawer",
+    "counted_label": "Cash actually counted",
+    "submit": "Close and compute the difference"
+  }
+}

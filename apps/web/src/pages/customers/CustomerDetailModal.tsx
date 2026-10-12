@@ -1,5 +1,6 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getCustomerSummary, type Customer, type CustomerSummary } from '../../api/customers';
 import type { Invoice } from '../../api/invoices';
 import { dfmt, fmt } from '../../lib/format';
@@ -9,15 +10,16 @@ import { usePermissions } from '../../auth/PermissionsContext';
 import { MarketingConsentPanel } from './MarketingConsentPanel';
 
 /**
- * نافذةُ العميل — **الأرقامُ الثلاثة من الخادم** (`ق-١٢٤٣`): كانت تُجمع هنا من إجماليات الفواتير، فعُدّ
- * المقبوضُ من فواتيرَ ختمُها `PAID` وحدَها (المسدَّدُ جزئياً لا يُحسب) والرصيدُ من غير `PAID` بكامله.
- * صارت من `GET /customers/:id/summary`: المفوتَرُ صافياً، والمقبوضُ من التخصيصات، والرصيدُ من التعرّض.
+ * The customer card. Its three figures come from the server (`GET /customers/:id/summary`):
+ * billed net, collected from allocations, and the balance from exposure. They used to be
+ * summed here from invoice totals, which miscounted partly paid invoices.
  */
 export function CustomerDetailModal({ customer, invoices, onClose }: { customer: Customer; invoices: Invoice[]; onClose: () => void }) {
+  const { t } = useTranslation();
   const customerInvoices = invoices.filter((v) => v.customerId === customer.id).sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
   const { can } = usePermissions();
   const [summary, setSummary] = useState<CustomerSummary | null>(null);
-  // الملخّصُ رقمُ المنشأة كلِّها: يُرفض للمقيَّد بفرع (`ق-١٥٨١`)، فيُقال ذلك بدل «…» لا ينتهي.
+  // The summary is a company-wide figure and is refused to a branch-restricted user; say so instead of an endless "…".
   const [refused, setRefused] = useState(false);
   useEffect(() => {
     getCustomerSummary(customer.id)
@@ -38,13 +40,13 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
 
         <div className="two-col" style={{ marginBottom: 6 }}>
           <div className="field">
-            <label>الرقم الضريبي</label>
+            <label>{t('customers.detail.vat')}</label>
             <p className="num" style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {customer.vatNumber || '—'}
             </p>
           </div>
           <div className="field">
-            <label>الجوال</label>
+            <label>{t('customers.detail.phone')}</label>
             <p className="num" style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {customer.phone || '—'}
             </p>
@@ -53,46 +55,46 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
 
         {refused ? (
           <p className="hint" style={{ marginBottom: 16 }}>
-            أرقامُ العميل في المنشأة كلِّها تُقرأ لمن يرى فروعَها كلَّها.
+            {t('customers.detail.refused')}
           </p>
         ) : (
           <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
             <div className="kpi-card neu">
-              <div className="kpi-label">إجمالي الفواتير المصدَرة</div>
-              <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
-              <div className="kpi-delta">{customerInvoices.length} فاتورة</div>
+              <div className="kpi-label">{t('customers.detail.billed')}</div>
+              <div className="kpi-value num">{summary ? t('customers.detail.amount_sar', { amount: fmt(summary.billed) }) : '…'}</div>
+              <div className="kpi-delta">{t('customers.detail.invoice_count', { n: customerInvoices.length })}</div>
             </div>
             <div className="kpi-card pos">
-              <div className="kpi-label">المُحصَّل</div>
-              <div className="kpi-value num">{summary ? `${fmt(summary.collected)} ر.س` : '…'}</div>
+              <div className="kpi-label">{t('customers.detail.collected')}</div>
+              <div className="kpi-value num">{summary ? t('customers.detail.amount_sar', { amount: fmt(summary.collected) }) : '…'}</div>
             </div>
             <div className={`kpi-card ${balance > 0 ? 'neg' : 'pos'}`}>
-              <div className="kpi-label">الرصيد المستحق</div>
-              <div className="kpi-value num">{summary ? `${fmt(summary.outstanding)} ر.س` : '…'}</div>
+              <div className="kpi-label">{t('customers.detail.outstanding')}</div>
+              <div className="kpi-value num">{summary ? t('customers.detail.amount_sar', { amount: fmt(summary.outstanding) }) : '…'}</div>
             </div>
           </div>
         )}
 
-        {/* الموافقةُ التسويقية في بطاقة العميل — حيث ينظر التاجر إليه، لا في شاشةٍ مستقلة. */}
+        {/* Marketing consent sits on the customer card, where the merchant looks at the customer. */}
         <MarketingConsentPanel customerId={customer.id} canRecord={can('customers', 'record')} />
 
         <div className="card-title" style={{ marginBottom: 10 }}>
-          سجل الفواتير ({customerInvoices.length})
+          {t('customers.detail.history', { n: customerInvoices.length })}
         </div>
         <table>
           <thead>
             <tr>
-              <th>رقم الفاتورة</th>
-              <th>التاريخ</th>
-              <th>الحالة</th>
-              <th>المبلغ</th>
+              <th>{t('customers.detail.col_no')}</th>
+              <th>{t('customers.detail.col_date')}</th>
+              <th>{t('customers.detail.col_status')}</th>
+              <th>{t('customers.detail.col_amount')}</th>
             </tr>
           </thead>
           <tbody>
             {customerInvoices.length === 0 && (
               <tr>
                 <td colSpan={4}>
-                  <div className="empty-state">لا توجد فواتير لهذا العميل بعد</div>
+                  <div className="empty-state">{t('customers.detail.empty')}</div>
                 </td>
               </tr>
             )}
@@ -104,7 +106,7 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
                       invoice and the totals above look like they don't add up. */}
                   {v.docType !== 'INVOICE' && (
                     <span className={`badge ${v.docType === 'CREDIT_NOTE' ? 'overdue' : 'due'}`} style={{ marginInlineStart: 6 }}>
-                      {v.docType === 'CREDIT_NOTE' ? 'إشعار دائن' : 'إشعار مدين'}
+                      {v.docType === 'CREDIT_NOTE' ? t('customers.detail.credit_note') : t('customers.detail.debit_note')}
                     </span>
                   )}
                 </td>
@@ -127,7 +129,7 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
 
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onClose}>
-            إغلاق
+            {t('customers.detail.close')}
           </button>
         </div>
       </div>
