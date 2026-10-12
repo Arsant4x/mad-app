@@ -1,6 +1,7 @@
 import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   assignMaintenance,
   cancelMaintenance,
@@ -16,28 +17,31 @@ import {
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
 import { dfmt, fmt, today } from '../../lib/format';
+import i18n from '../../i18n';
 
-const PRIORITY_META: Record<MaintenancePriority, { label: string; badgeClass: string }> = {
-  URGENT: { label: 'عاجل', badgeClass: 'overdue' },
-  HIGH: { label: 'مرتفع', badgeClass: 'due' },
-  NORMAL: { label: 'عادي', badgeClass: '' },
-};
+/** Built at render so the labels follow the current language. */
+const priorityMeta = (): Record<MaintenancePriority, { label: string; badgeClass: string }> => ({
+  URGENT: { label: i18n.t('maintenance.priority.URGENT'), badgeClass: 'overdue' },
+  HIGH: { label: i18n.t('maintenance.priority.HIGH'), badgeClass: 'due' },
+  NORMAL: { label: i18n.t('maintenance.priority.NORMAL'), badgeClass: '' },
+});
 
-const STATUS_META: Record<MaintenanceStatus, { label: string; badgeClass: string }> = {
-  REPORTED: { label: 'بلاغ جديد', badgeClass: 'due' },
-  ASSIGNED: { label: 'مُسنَد', badgeClass: 'due' },
-  IN_PROGRESS: { label: 'قيد التنفيذ', badgeClass: 'due' },
-  DONE: { label: 'منجز', badgeClass: 'paid' },
-  CLOSED: { label: 'مغلق', badgeClass: 'paid' },
-  CANCELLED: { label: 'ملغى', badgeClass: 'draft' },
-};
+const statusMeta = (): Record<MaintenanceStatus, { label: string; badgeClass: string }> => ({
+  REPORTED: { label: i18n.t('maintenance.status.REPORTED'), badgeClass: 'due' },
+  ASSIGNED: { label: i18n.t('maintenance.status.ASSIGNED'), badgeClass: 'due' },
+  IN_PROGRESS: { label: i18n.t('maintenance.status.IN_PROGRESS'), badgeClass: 'due' },
+  DONE: { label: i18n.t('maintenance.status.DONE'), badgeClass: 'paid' },
+  CLOSED: { label: i18n.t('maintenance.status.CLOSED'), badgeClass: 'paid' },
+  CANCELLED: { label: i18n.t('maintenance.status.CANCELLED'), badgeClass: 'draft' },
+});
 
-const PRIORITIES = Object.keys(PRIORITY_META) as MaintenancePriority[];
+const PRIORITIES: MaintenancePriority[] = ['URGENT', 'HIGH', 'NORMAL'];
 
 /** Open work, in the order the landlord should deal with it. */
 const OPEN_STATUSES: MaintenanceStatus[] = ['REPORTED', 'ASSIGNED', 'IN_PROGRESS'];
 
 export function MaintenancePage() {
+  const { t } = useTranslation();
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -88,7 +92,7 @@ export function MaintenancePage() {
       after?.();
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إتمام العملية'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('maintenance.page.err_failed')));
     } finally {
       setBusy(false);
     }
@@ -103,28 +107,31 @@ export function MaintenancePage() {
 
   if (loading) return null;
 
+  const PRIORITY_META = priorityMeta();
+  const STATUS_META = statusMeta();
+
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الصيانة</div>
-          <div className="page-sub">بلاغات الصيانة من الاستلام حتى الإغلاق</div>
+          <div className="page-title">{t('maintenance.page.title')}</div>
+          <div className="page-sub">{t('maintenance.page.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setAdding((v) => !v)} disabled={properties.length === 0}>
-            {adding ? 'إلغاء' : '+ بلاغ جديد'}
+            {adding ? t('maintenance.page.cancel') : t('maintenance.page.new')}
           </button>
         </div>
       </div>
 
-      {properties.length === 0 && <div className="empty-state">أضِف عقاراً أولاً حتى تتمكن من تسجيل بلاغات الصيانة.</div>}
+      {properties.length === 0 && <div className="empty-state">{t('maintenance.page.no_properties')}</div>}
       {error && <p className="error-text">{error}</p>}
 
       {adding && (
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
-              <label>العقار</label>
+              <label>{t('maintenance.page.property')}</label>
               <select
                 value={propertyId}
                 onChange={(e) => {
@@ -140,9 +147,9 @@ export function MaintenancePage() {
               </select>
             </div>
             <div className="field">
-              <label>الوحدة</label>
+              <label>{t('maintenance.page.unit')}</label>
               <select value={unitId} onChange={(e) => setUnitId(e.target.value)}>
-                <option value="">— مرافق مشتركة —</option>
+                <option value="">{t('maintenance.page.common_areas_option')}</option>
                 {unitsOfProperty.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.unitNo}
@@ -150,20 +157,20 @@ export function MaintenancePage() {
                 ))}
               </select>
               {/* Says why leaving it empty is a real choice, not a missing field. */}
-              <p className="hint">عطل في المصعد أو المولّد أو السطح يخصّ العقار كله، لا وحدة بعينها.</p>
+              <p className="hint">{t('maintenance.page.unit_hint')}</p>
             </div>
           </div>
           <div className="field">
-            <label>عنوان البلاغ</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: تسريب في سخان المياه" />
+            <label>{t('maintenance.page.title_label')}</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('maintenance.page.title_placeholder')} />
           </div>
           <div className="field">
-            <label>الوصف</label>
+            <label>{t('maintenance.page.description')}</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="two-col">
             <div className="field">
-              <label>الأولوية</label>
+              <label>{t('maintenance.page.priority')}</label>
               <select value={priority} onChange={(e) => setPriority(e.target.value as MaintenancePriority)}>
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>
@@ -173,8 +180,8 @@ export function MaintenancePage() {
               </select>
             </div>
             <div className="field">
-              <label>مقدِّم البلاغ</label>
-              <input value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} placeholder="اسم المستأجر أو الحارس" />
+              <label>{t('maintenance.page.reported_by')}</label>
+              <input value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} placeholder={t('maintenance.page.reported_by_placeholder')} />
             </div>
           </div>
           <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
@@ -203,7 +210,7 @@ export function MaintenancePage() {
                 )
               }
             >
-              تسجيل البلاغ
+              {t('maintenance.page.submit')}
             </button>
           </div>
         </div>
@@ -212,16 +219,16 @@ export function MaintenancePage() {
       <div className="toolbar">
         <div className="chip-group">
           <button className={filter === 'open' ? 'chip active' : 'chip'} onClick={() => setFilter('open')}>
-            مفتوحة ({requests.filter((r) => OPEN_STATUSES.includes(r.status)).length})
+            {t('maintenance.page.filter_open', { n: requests.filter((r) => OPEN_STATUSES.includes(r.status)).length })}
           </button>
           <button className={filter === 'DONE' ? 'chip active' : 'chip'} onClick={() => setFilter('DONE')}>
-            منجزة
+            {t('maintenance.page.filter_done')}
           </button>
           <button className={filter === 'CLOSED' ? 'chip active' : 'chip'} onClick={() => setFilter('CLOSED')}>
-            مغلقة
+            {t('maintenance.page.filter_closed')}
           </button>
           <button className={filter === 'all' ? 'chip active' : 'chip'} onClick={() => setFilter('all')}>
-            الكل
+            {t('maintenance.page.filter_all')}
           </button>
         </div>
       </div>
@@ -230,12 +237,12 @@ export function MaintenancePage() {
         <table>
           <thead>
             <tr>
-              <th>الأولوية</th>
-              <th>البلاغ</th>
-              <th>الموقع</th>
-              <th>التاريخ</th>
-              <th>الحالة</th>
-              <th>التكلفة</th>
+              <th>{t('maintenance.page.col_priority')}</th>
+              <th>{t('maintenance.page.col_request')}</th>
+              <th>{t('maintenance.page.col_location')}</th>
+              <th>{t('maintenance.page.col_date')}</th>
+              <th>{t('maintenance.page.col_status')}</th>
+              <th>{t('maintenance.page.col_cost')}</th>
               <th></th>
             </tr>
           </thead>
@@ -243,7 +250,7 @@ export function MaintenancePage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <div className="empty-state">لا توجد بلاغات</div>
+                  <div className="empty-state">{t('maintenance.page.empty')}</div>
                 </td>
               </tr>
             )}
@@ -255,12 +262,12 @@ export function MaintenancePage() {
                 <td>
                   {r.title}
                   {r.description && <div className="hint">{r.description}</div>}
-                  {r.assignedTo && <div className="hint">مُسنَد إلى: {r.assignedTo}</div>}
-                  {r.cancelReason && <div className="hint">سبب الإلغاء: {r.cancelReason}</div>}
+                  {r.assignedTo && <div className="hint">{t('maintenance.page.assigned_to', { name: r.assignedTo })}</div>}
+                  {r.cancelReason && <div className="hint">{t('maintenance.page.cancel_reason', { reason: r.cancelReason })}</div>}
                 </td>
                 <td>
                   {r.property.name}
-                  <div className="hint">{r.unit ? `وحدة ${r.unit.unitNo}` : 'مرافق مشتركة'}</div>
+                  <div className="hint">{r.unit ? t('maintenance.page.unit_no', { unit: r.unit.unitNo }) : t('maintenance.page.common_areas')}</div>
                 </td>
                 <td className="num">{dfmt(r.reportedAt)}</td>
                 <td>
@@ -269,36 +276,35 @@ export function MaintenancePage() {
                 <td className="num">{r.cost ? fmt(r.cost) : '—'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {/* الإسناد **من داخل المستند** — نفس المكوّن المركَّب في
-                      * العقود والفواتير. ولا يُخلط بـ«إسناد» أدناه: ذاك
-                      * يُسنِد **البلاغ إلى فنّي** (حقلٌ في البلاغ)، وهذا
-                      * يُنشئ **مهمةً متابَعة** على البلاغ. */}
+                    {/* Creates a follow-up task on the request (same component as in
+                        contracts and invoices). Not the "assign" button below, which
+                        sets the request's technician. */}
                     <AssignTaskButton screen="maintenance" entityId={r.id} />
                     {/* Only the moves the server would actually accept are
                         offered — a button that always 409s is worse than none. */}
                     {r.status === 'REPORTED' && (
                       <button className="btn btn-ghost" onClick={() => openAction(r.id, 'assign')}>
-                        إسناد
+                        {t('maintenance.page.action_assign')}
                       </button>
                     )}
                     {(r.status === 'REPORTED' || r.status === 'ASSIGNED') && (
                       <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => startMaintenance(r.id, today()))}>
-                        بدء التنفيذ
+                        {t('maintenance.page.action_start')}
                       </button>
                     )}
                     {r.status === 'IN_PROGRESS' && (
                       <button className="btn btn-ghost" onClick={() => openAction(r.id, 'complete')}>
-                        إنجاز
+                        {t('maintenance.page.action_complete')}
                       </button>
                     )}
                     {r.status === 'DONE' && (
                       <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => closeMaintenance(r.id, today()))}>
-                        إغلاق
+                        {t('maintenance.page.action_close')}
                       </button>
                     )}
                     {OPEN_STATUSES.includes(r.status) && (
                       <button className="btn btn-ghost" style={{ color: 'var(--rose)' }} onClick={() => openAction(r.id, 'cancel')}>
-                        إلغاء
+                        {t('maintenance.page.action_cancel')}
                       </button>
                     )}
                   </div>
@@ -307,30 +313,27 @@ export function MaintenancePage() {
                     <div className="card" style={{ background: '#faf9f5', marginTop: 6 }}>
                       {action.kind === 'assign' && (
                         <div className="field">
-                          <label>الفني أو المقاول</label>
-                          <input value={actionText} onChange={(e) => setActionText(e.target.value)} placeholder="اسم الفني أو المؤسسة" />
+                          <label>{t('maintenance.page.technician')}</label>
+                          <input value={actionText} onChange={(e) => setActionText(e.target.value)} placeholder={t('maintenance.page.technician_placeholder')} />
                         </div>
                       )}
                       {action.kind === 'complete' && (
                         <div className="field">
-                          <label>التكلفة</label>
+                          <label>{t('maintenance.page.cost')}</label>
                           <input type="number" min="0" step="0.01" value={actionCost} onChange={(e) => setActionCost(e.target.value)} />
                           {/* Says exactly what will and won't be posted. */}
-                          <p className="hint">
-                            تُرحَّل مصروف صيانة مقابل النقدية. اتركها فارغة إن لم تكلّف الشركة شيئاً — لن يُسجَّل أي قيد. ولتحميلها على المستأجر
-                            أنشئ مطالبة من شاشة العقد.
-                          </p>
+                          <p className="hint">{t('maintenance.page.cost_hint')}</p>
                         </div>
                       )}
                       {action.kind === 'cancel' && (
                         <div className="field">
-                          <label>سبب الإلغاء</label>
-                          <input value={actionText} onChange={(e) => setActionText(e.target.value)} placeholder="مثال: أصلحه المستأجر" />
+                          <label>{t('maintenance.page.cancel_reason_label')}</label>
+                          <input value={actionText} onChange={(e) => setActionText(e.target.value)} placeholder={t('maintenance.page.cancel_reason_placeholder')} />
                         </div>
                       )}
                       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
                         <button className="btn btn-ghost" onClick={() => setAction(null)}>
-                          تراجع
+                          {t('maintenance.page.back')}
                         </button>
                         <button
                           className="btn btn-primary"
@@ -346,7 +349,7 @@ export function MaintenancePage() {
                             }, () => setAction(null))
                           }
                         >
-                          تأكيد
+                          {t('maintenance.page.confirm')}
                         </button>
                       </div>
                     </div>
