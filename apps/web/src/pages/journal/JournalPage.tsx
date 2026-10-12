@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listAccounts, type Account } from '../../api/accounts';
 import { createJournalEntry, listJournalEntries, reverseJournalEntry, type CreateJournalEntryInput, type JournalEntry } from '../../api/journal';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -11,6 +12,7 @@ type View = { mode: 'list' } | { mode: 'builder'; nextNumberHint: string };
 const PAGE_SIZE = 25;
 
 export function JournalPage() {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -18,7 +20,7 @@ export function JournalPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>({ mode: 'list' });
-  // ⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (ق-١٢٥٣): الفعلُ الوحيد على قيدٍ قائم هو العكس.
+  // A posted entry is reversed, never deleted: reversal is the only action on an existing entry.
   const [pendingReverse, setPendingReverse] = useState<JournalEntry | null>(null);
   const [reverseError, setReverseError] = useState<string | null>(null);
   const searchDebounce = useRef<number | undefined>(undefined);
@@ -67,7 +69,7 @@ export function JournalPage() {
       setPendingReverse(null);
       await reloadPage(page, search);
     } catch (e) {
-      // رسالةُ الخادم تسمّي السبب (فترةٌ مقفلة · معكوسٌ سلفاً · قيدٌ آلي) — تُعرض ولا تُخفى.
+      // The server message names the reason (closed period, already reversed, automatic entry); show it as is.
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setReverseError(message ?? i18n.t('err_journal_reverse'));
     }
@@ -101,12 +103,9 @@ export function JournalPage() {
       />
       {pendingReverse && (
         <ConfirmModal
-          title="عكس القيد"
-          body={
-            reverseError ??
-            `عكس القيد ${pendingReverse.no}؟ يُرحَّل قيدٌ عكسيٌّ جديد بتاريخ اليوم يعيد أرصدة الحسابات — ويبقى القيد الأصلي كما هو (القيد المرحَّل لا يُحذف).`
-          }
-          confirmLabel="عكس"
+          title={t('journal.reverse.title')}
+          body={reverseError ?? t('journal.reverse.body', { no: pendingReverse.no })}
+          confirmLabel={t('journal.reverse.confirm')}
           onCancel={() => {
             setPendingReverse(null);
             setReverseError(null);

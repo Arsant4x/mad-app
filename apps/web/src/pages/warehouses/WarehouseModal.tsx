@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Warehouse, WarehouseInput } from '../../api/warehouses';
 import i18n from '../../i18n';
 
@@ -11,6 +12,7 @@ export function WarehouseModal({
   onCancel: () => void;
   onSave: (data: WarehouseInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [location, setLocation] = useState(editing?.location ?? '');
   const [manager, setManager] = useState(editing?.manager ?? '');
@@ -38,30 +40,30 @@ export function WarehouseModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل المستودع' : 'مستودع جديد'}</div>
+          <div className="modal-title">{editing ? t('warehouses.modal.title_edit') : t('warehouses.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم المستودع</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="المستودع الرئيسي" />
+          <label>{t('warehouses.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('warehouses.modal.name_placeholder')} />
         </div>
         <div className="field">
-          <label>الموقع</label>
-          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="المدينة / الحي" />
+          <label>{t('warehouses.modal.location')}</label>
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('warehouses.modal.location_placeholder')} />
         </div>
         <div className="field">
-          <label>المسؤول</label>
-          <input value={manager} onChange={(e) => setManager(e.target.value)} placeholder="اسم المسؤول عن المستودع" />
+          <label>{t('warehouses.modal.manager')}</label>
+          <input value={manager} onChange={(e) => setManager(e.target.value)} placeholder={t('warehouses.modal.manager_placeholder')} />
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('warehouses.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة المستودع'}
+            {editing ? t('warehouses.modal.save_edit') : t('warehouses.modal.add')}
           </button>
         </div>
       </div>

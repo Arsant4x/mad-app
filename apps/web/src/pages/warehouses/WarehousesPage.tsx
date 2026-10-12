@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createWarehouse, deleteWarehouse, listWarehouses, setWarehouseArchived, updateWarehouse, type Warehouse, type WarehouseInput } from '../../api/warehouses';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -7,10 +8,11 @@ import { WarehouseModal } from './WarehouseModal';
 import i18n from '../../i18n';
 
 export function WarehousesPage() {
+  const { t } = useTranslation();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off by default.
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; warehouse: Warehouse } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Warehouse | null>(null);
@@ -60,26 +62,26 @@ export function WarehousesPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">المستودعات</div>
-          <div className="page-sub">مواقع تخزين المخزون</div>
+          <div className="page-title">{t('warehouses.list.title')}</div>
+          <div className="page-sub">{t('warehouses.list.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + مستودع جديد
+            {t('warehouses.list.new')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالاسم أو الموقع..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('warehouses.list.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
         </div>
         <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-          عرض المؤرشفة
+          {t('warehouses.list.show_archived')}
         </button>
       </div>
 
@@ -87,11 +89,11 @@ export function WarehousesPage() {
         <table>
           <thead>
             <tr>
-              <th>اسم المستودع</th>
-              <th>الموقع</th>
-              <th>المسؤول</th>
-              <th>عدد الأصناف</th>
-              <th>إجمالي الكميات</th>
+              <th>{t('warehouses.list.col_name')}</th>
+              <th>{t('warehouses.list.col_location')}</th>
+              <th>{t('warehouses.list.col_manager')}</th>
+              <th>{t('warehouses.list.col_item_count')}</th>
+              <th>{t('warehouses.list.col_total_qty')}</th>
               <th></th>
             </tr>
           </thead>
@@ -99,7 +101,7 @@ export function WarehousesPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={6}>
-                  <div className="empty-state">لا توجد مستودعات مطابقة</div>
+                  <div className="empty-state">{t('warehouses.list.empty')}</div>
                 </td>
               </tr>
             )}
@@ -107,23 +109,31 @@ export function WarehousesPage() {
               <tr key={w.id}>
                 <td>
                   {w.name}
-                  {w.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
-                  {/* ⚖️ ق-١٦٠٤: مستودعُ فرعٍ آخر يُرى باسمه ليُحوَّل إليه، وكمّياتُه لا تصل (الخادمُ يحجبها). */}
-                  {w.otherBranch && <span className="badge draft" style={{ marginRight: 6 }}>فرعٌ آخر</span>}
+                  {w.archived && (
+                    <span className="badge draft" style={{ marginInlineStart: 6 }}>
+                      {t('warehouses.list.archived')}
+                    </span>
+                  )}
+                  {/* Another branch's warehouse is shown by name so stock can be transferred to it; the server withholds its quantities. */}
+                  {w.otherBranch && (
+                    <span className="badge draft" style={{ marginInlineStart: 6 }}>
+                      {t('warehouses.list.other_branch')}
+                    </span>
+                  )}
                 </td>
                 <td>{w.location || '—'}</td>
                 <td>{w.manager || '—'}</td>
                 <td className="num">{w.itemCount ?? '—'}</td>
                 <td className="num">{w.totalQty === null ? '—' : fmt(w.totalQty)}</td>
                 <td>
-                  {/* 🔴 ق-١٦١٩/أ: مستودعُ فرعٍ آخر لا يُعدَّل ولا يُؤرشف ولا يُحذف (الخادمُ يردّها 403)، فلا تُعرض أفعالُه. */}
+                  {/* Another branch's warehouse cannot be edited, archived or deleted (the server answers 403), so no actions are shown. */}
                   {!w.otherBranch && (
                     <RowMenu
                       actions={[
-                        { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', warehouse: w }) },
-                        { label: w.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
+                        { label: t('warehouses.list.edit'), onClick: () => setModal({ mode: 'edit', warehouse: w }) },
+                        { label: w.archived ? t('warehouses.list.unarchive') : t('warehouses.list.archive'), onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
                         '-',
-                        { label: '🗑 حذف', onClick: () => setPendingDelete(w), danger: true },
+                        { label: t('warehouses.list.delete'), onClick: () => setPendingDelete(w), danger: true },
                       ]}
                     />
                   )}
@@ -138,9 +148,9 @@ export function WarehousesPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف المستودع"
-          body={deleteError ?? `حذف المستودع "${pendingDelete.name}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('warehouses.list.delete_title')}
+          body={deleteError ?? t('warehouses.list.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('warehouses.list.delete_confirm')}
           onCancel={() => {
             setPendingDelete(null);
             setDeleteError(null);

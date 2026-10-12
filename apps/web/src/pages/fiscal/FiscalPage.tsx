@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   closeFiscalPeriod,
   createFiscalYear,
@@ -12,9 +13,12 @@ import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import i18n from '../../i18n';
 
-const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+// Month name keys, January first; turned into text where rendered.
+const MONTH_KEYS = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12'];
 
 export function FiscalPage() {
+  const { t } = useTranslation();
+  const monthName = (month: number) => t(`fiscal.months.${MONTH_KEYS[month - 1]}`);
   const [years, setYears] = useState<FiscalYear[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +29,13 @@ export function FiscalPage() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [saving, setSaving] = useState(false);
-  // ⚖️ شهرُ البداية (`ق-١٥٨٤`): لصاحب المنشأة، ويُقبل قبل أوّل ترحيلٍ وحدَه.
+  // The start month belongs to the company owner and is accepted only before the first posting.
   const { user } = useAuth();
   const isOwner = user?.actorType === 'COMPANY';
   const [startMonth, setStartMonth] = useState<number | null>(null);
 
   const [pendingDelete, setPendingDelete] = useState<FiscalYear | null>(null);
-  // ⚖️ إعادةُ فتح الفترة بسببٍ مكتوبٍ يُسجَّل (`ق-١٥٨٣`): يُسأل عنه قبل الفتح، والخادمُ يرفض الفراغ.
+  // Reopening a period needs a written reason that is recorded; it is asked before reopening and the server refuses a blank one.
   const [reopenFor, setReopenFor] = useState<{ id: string; label: string } | null>(null);
   const [reopenReason, setReopenReason] = useState('');
 
@@ -121,12 +125,12 @@ export function FiscalPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">السنة المالية والفترات</div>
-          <div className="page-sub">إقفال الفترة يمنع أي قيد فيها — والتصحيح يكون بقيد عكسي في فترة مفتوحة</div>
+          <div className="page-title">{t('fiscal.title')}</div>
+          <div className="page-sub">{t('fiscal.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-            + سنة مالية
+            {t('fiscal.new_year')}
           </button>
         </div>
       </div>
@@ -136,22 +140,22 @@ export function FiscalPage() {
       {isOwner && (
         <div className="card">
           <div className="card-title" style={{ marginBottom: 8 }}>
-            شهر بداية السنة المالية
+            {t('fiscal.start_month')}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select data-testid="fiscal-start-month" value={startMonth ?? years[0]?.start.slice(5, 7).replace(/^0/, '') ?? '1'} onChange={(e) => setStartMonth(Number(e.target.value))}>
-              {AR_MONTHS.map((m, i) => (
+              {MONTH_KEYS.map((m, i) => (
                 <option key={m} value={i + 1}>
-                  {m}
+                  {monthName(i + 1)}
                 </option>
               ))}
             </select>
             <button className="btn btn-ghost btn-sm" onClick={handleStartMonth} disabled={!startMonth}>
-              تغيير
+              {t('fiscal.change')}
             </button>
           </div>
           <p className="hint" style={{ marginTop: 6 }}>
-            السنة ميلادية افتراضاً وتتجدّد تلقائياً مع أول قيد في سنة جديدة. ويتغيّر شهر بدايتها قبل أول قيد مرحَّل فقط، فيُعاد بناء التقويم منه.
+            {t('fiscal.start_month_hint')}
           </p>
         </div>
       )}
@@ -159,51 +163,48 @@ export function FiscalPage() {
       {showForm && (
         <div className="card">
           <div className="card-title" style={{ marginBottom: 14 }}>
-            سنة مالية جديدة
+            {t('fiscal.form_title')}
           </div>
           <div className="field">
-            <label>اسم السنة</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: السنة المالية 2026" />
+            <label>{t('fiscal.year_name')}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('fiscal.year_name_placeholder')} />
           </div>
           <div className="two-col">
             <div className="field">
-              <label>تاريخ البداية</label>
+              <label>{t('fiscal.start')}</label>
               <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
             </div>
             <div className="field">
-              <label>تاريخ النهاية</label>
+              <label>{t('fiscal.end')}</label>
               <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
             </div>
           </div>
-          <p className="hint">تُنشأ 12 فترة شهرية مفتوحة ابتداءً من تاريخ البداية. الإقفال لاحقاً من الجدول.</p>
+          <p className="hint">{t('fiscal.form_hint')}</p>
           <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
-            {saving ? 'جارٍ الحفظ…' : 'حفظ'}
+            {saving ? t('fiscal.saving') : t('fiscal.save')}
           </button>
         </div>
       )}
 
-      {years.length === 0 && !showForm && (
-        <div className="empty-state">
-          لا توجد سنة مالية بعد، وتُنشأ تلقائياً مع أول قيد مرحَّل.
-        </div>
-      )}
+      {years.length === 0 && !showForm && <div className="empty-state">{t('fiscal.empty')}</div>}
 
       {years.map((year) => (
         <div className="card" key={year.id}>
           <div className="card-head">
             <div className="card-title">
-              {year.name} <span style={{ fontSize: 12, color: 'var(--muted)' }}>({year.start.slice(0, 10)} → {year.end.slice(0, 10)})</span>
+              {year.name}{' '}
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('fiscal.year_range', { start: year.start.slice(0, 10), end: year.end.slice(0, 10) })}</span>
             </div>
             <button className="btn btn-ghost btn-sm" onClick={() => setPendingDelete(year)}>
-              حذف السنة
+              {t('fiscal.delete_year')}
             </button>
           </div>
           <table>
             <thead>
               <tr>
-                <th>الفترة</th>
-                <th>الحالة</th>
-                <th>تاريخ الإقفال</th>
+                <th>{t('fiscal.col_period')}</th>
+                <th>{t('fiscal.col_status')}</th>
+                <th>{t('fiscal.col_closed_at')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -213,21 +214,25 @@ export function FiscalPage() {
                 return (
                   <tr key={p.id}>
                     <td>
-                      {AR_MONTHS[p.month - 1]} {p.year}
+                      {monthName(p.month)} {p.year}
                     </td>
                     <td>
-                      <span className={isClosed ? 'badge' : 'badge paid'}>{isClosed ? 'مقفلة' : 'مفتوحة'}</span>
+                      <span className={isClosed ? 'badge' : 'badge paid'}>{isClosed ? t('fiscal.closed') : t('fiscal.open')}</span>
                     </td>
                     <td>{p.closedAt ? p.closedAt.slice(0, 10) : '—'}</td>
                     <td>
                       <button
                         className="btn btn-ghost btn-sm"
-                        onClick={() => (isClosed ? setReopenFor({ id: p.id, label: `${AR_MONTHS[p.month - 1]} ${p.year}` }) : togglePeriod(p.id, false))}
+                        onClick={() => (isClosed ? setReopenFor({ id: p.id, label: `${monthName(p.month)} ${p.year}` }) : togglePeriod(p.id, false))}
                         disabled={busyPeriodId === p.id}
                       >
-                        {isClosed ? 'إعادة فتح' : 'إقفال'}
+                        {isClosed ? t('fiscal.reopen') : t('fiscal.close')}
                       </button>
-                      {p.reopenReason && <div className="hint" style={{ marginTop: 4 }}>آخر فتح: {p.reopenReason}</div>}
+                      {p.reopenReason && (
+                        <div className="hint" style={{ marginTop: 4 }}>
+                          {t('fiscal.last_reopen', { reason: p.reopenReason })}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -241,24 +246,30 @@ export function FiscalPage() {
         <div className="overlay" onClick={() => setReopenFor(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <div className="modal-title">إعادة فتح {reopenFor.label}</div>
+              <div className="modal-title">{t('fiscal.reopen_title', { label: reopenFor.label })}</div>
               <button className="modal-close" onClick={() => setReopenFor(null)}>
                 ✕
               </button>
             </div>
             <div className="field">
-              <label>سبب إعادة الفتح</label>
-              <textarea data-testid="period-reopen-reason" value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="مثال: تصحيح قيد مصروف رُحّل على حساب خطأ" rows={3} />
+              <label>{t('fiscal.reopen_reason')}</label>
+              <textarea
+                data-testid="period-reopen-reason"
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                placeholder={t('fiscal.reopen_placeholder')}
+                rows={3}
+              />
               <p className="hint" style={{ marginTop: 4 }}>
-                يُحفظ السبب على الفترة مع وقت الفتح ومن فتحها. وإعادة الفتح تعكس قيد إقفال السنة إن وُجد، ويُعاد توليده حين تُقفل الفترة ثانيةً.
+                {t('fiscal.reopen_hint')}
               </p>
             </div>
             <div className="modal-foot">
               <button className="btn btn-ghost" onClick={() => setReopenFor(null)}>
-                إلغاء
+                {t('fiscal.cancel')}
               </button>
               <button className="btn btn-primary" onClick={confirmReopen} disabled={!reopenReason.trim()}>
-                إعادة فتح
+                {t('fiscal.reopen')}
               </button>
             </div>
           </div>
@@ -267,9 +278,9 @@ export function FiscalPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف السنة المالية"
-          body={`سيُحذف "${pendingDelete.name}" وكل فتراته. القيود المرحَّلة لا تُحذف — يزول عنها قيد الإقفال فقط.`}
-          confirmLabel="حذف"
+          title={t('fiscal.delete_title')}
+          body={t('fiscal.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('fiscal.delete_confirm')}
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}
         />

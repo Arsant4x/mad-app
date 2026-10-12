@@ -1,0 +1,37 @@
+{
+  "modal": {
+    "title_edit": "تعديل المستودع",
+    "title_new": "مستودع جديد",
+    "name": "اسم المستودع",
+    "name_placeholder": "المستودع الرئيسي",
+    "location": "الموقع",
+    "location_placeholder": "المدينة / الحي",
+    "manager": "المسؤول",
+    "manager_placeholder": "اسم المسؤول عن المستودع",
+    "cancel": "إلغاء",
+    "save_edit": "حفظ التعديل",
+    "add": "إضافة المستودع"
+  },
+  "list": {
+    "title": "المستودعات",
+    "sub": "مواقع تخزين المخزون",
+    "new": "+ مستودع جديد",
+    "search": "ابحث بالاسم أو الموقع...",
+    "show_archived": "عرض المؤرشفة",
+    "col_name": "اسم المستودع",
+    "col_location": "الموقع",
+    "col_manager": "المسؤول",
+    "col_item_count": "عدد الأصناف",
+    "col_total_qty": "إجمالي الكميات",
+    "empty": "لا توجد مستودعات مطابقة",
+    "archived": "مؤرشف",
+    "other_branch": "فرعٌ آخر",
+    "edit": "✎ تعديل",
+    "unarchive": "📂 إلغاء الأرشفة",
+    "archive": "🗄 أرشفة",
+    "delete": "🗑 حذف",
+    "delete_title": "حذف المستودع",
+    "delete_body": "حذف المستودع \"{{name}}\"؟ لا يمكن التراجع عن هذا الإجراء.",
+    "delete_confirm": "حذف"
+  }
+}

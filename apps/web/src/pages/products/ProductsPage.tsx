@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createProduct, deleteProduct, listProducts, setProductArchived, updateProduct, type Product, type ProductInput } from '../../api/products';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -8,10 +9,11 @@ import { taxBadgeOf } from '../../lib/vat';
 import { ProductModal } from './ProductModal';
 
 export function ProductsPage() {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off by default.
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; product: Product } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
@@ -38,11 +40,11 @@ export function ProductsPage() {
     );
   }, [products, search]);
 
-  // ① القائمُ بلا وحدةٍ معلَنة يُعدّ ويُعرض — لا يُخمَّن له رمز.
+  // Existing items without a declared unit are counted and shown; no code is guessed for them.
   const undeclaredUnits = useMemo(() => products.filter((p) => !p.unitCode).length, [products]);
-  // ٥+٦ القائمُ بلا إعلانِ تتبّعٍ يُعدّ ويُعرض — يُعلَن عند لمس الصنف لا بشاشةٍ جماعية (ق-١٠٨٣).
+  // Existing items without a tracking declaration are counted and shown; each is declared from its card, not in bulk.
   const undeclaredTracking = useMemo(() => products.filter((p) => p.expiryTracked === null || p.expiryTracked === undefined).length, [products]);
-  // ⑧ القائمُ بلا فئةٍ ضريبية معلَنة (`LEGACY_STANDARD`) يُعدّ ويُعرض شارةً في القائمة — لا في وجه المستند (`ق-١٢٢٢`/②)؛ ويُعلَن من البطاقة.
+  // Existing items without a declared tax category (LEGACY_STANDARD) are counted and badged in the list, not on the document; declared from the card.
   const undeclaredTax = useMemo(() => products.filter((p) => taxBadgeOf(p).undeclared).length, [products]);
 
   async function handleSave(data: ProductInput) {
@@ -68,42 +70,42 @@ export function ProductsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">المنتجات والخدمات</div>
-          <div className="page-sub">قائمة الأصناف المستخدمة في بنود الفواتير</div>
+          <div className="page-title">{t('products.list.title')}</div>
+          <div className="page-sub">{t('products.list.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + منتج جديد
+            {t('products.list.new')}
           </button>
         </div>
       </div>
 
       {undeclaredUnits > 0 && (
         <div className="hint" style={{ marginBottom: 8 }}>
-          {undeclaredUnits} صنفاً بلا وحدةِ قياسٍ معلَنة — تُعلَن من بطاقة كلِّ صنف ولا تُخمَّن؛ وحتى تُعلَن يخرج سطرُ الصنف في مستند الهيئة بلا وحدة.
+          {t('products.list.undeclared_units', { n: undeclaredUnits })}
         </div>
       )}
       {undeclaredTracking > 0 && (
         <div className="hint" style={{ marginBottom: 8 }}>
-          {undeclaredTracking} صنفاً لم يُعلَن أيُتتبَّع بالدفعة والانتهاء أم لا — يُعلَن من بطاقة كلِّ صنف عند لمسه (لا شاشةَ جماعية)؛ وحتى يُعلَن يُصرَف بالأقدم كما كان ولا يُرفض منه منتهٍ.
+          {t('products.list.undeclared_tracking', { n: undeclaredTracking })}
         </div>
       )}
       {undeclaredTax > 0 && (
         <div className="hint" style={{ marginBottom: 8 }}>
-          أصنافٌ بلا فئةٍ ضريبية معلَنة: {undeclaredTax} — تُعلَن من بطاقة كلٍّ منها ولا تُخمَّن؛ وحتى تُعلَن يُرَنّ الصنفُ بالنسبة الأساسية كما كان، وتُعدّ سطورُه في الإقرار «على صنفٍ لم تُعلَن فئتُه».
+          {t('products.list.undeclared_tax', { n: undeclaredTax })}
         </div>
       )}
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بأي تفاصيل المنتج..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('products.list.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
         </div>
         <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-          عرض المؤرشفة
+          {t('products.list.show_archived')}
         </button>
       </div>
 
@@ -111,14 +113,14 @@ export function ProductsPage() {
         <table>
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الرمز</th>
-              <th>الفئة</th>
-              <th>الوحدة</th>
-              <th>الضريبة</th>
-              <th>سعر الوحدة</th>
-              <th>التكلفة</th>
-              <th>الباركود</th>
+              <th>{t('products.list.col_name')}</th>
+              <th>{t('products.list.col_sku')}</th>
+              <th>{t('products.list.col_category')}</th>
+              <th>{t('products.list.col_unit')}</th>
+              <th>{t('products.list.col_tax')}</th>
+              <th>{t('products.list.col_price')}</th>
+              <th>{t('products.list.col_cost')}</th>
+              <th>{t('products.list.col_barcode')}</th>
               <th></th>
             </tr>
           </thead>
@@ -126,25 +128,46 @@ export function ProductsPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={9}>
-                  <div className="empty-state">لا توجد منتجات مطابقة</div>
+                  <div className="empty-state">{t('products.list.empty')}</div>
                 </td>
               </tr>
             )}
             {rows.map((p) => (
               <tr key={p.id}>
-                <td>{p.name}{p.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
+                <td>
+                  {p.name}
+                  {p.archived && (
+                    <span className="badge draft" style={{ marginInlineStart: 6 }}>
+                      {t('products.list.archived')}
+                    </span>
+                  )}
+                </td>
                 <td className="num">{p.sku || '—'}</td>
                 <td>{p.category || '—'}</td>
                 <td>
-                  {p.unitCode ? unitLabel(p.unitCode) : <span className="badge draft" title="لم تُعلَن وحدةُ القياس بعد — تُعلَن من بطاقة الصنف ولا تُخمَّن">بلا وحدةٍ معلَنة</span>}
-                  {p.expiryTracked === true && <span className="badge due" style={{ marginInlineStart: 6 }} title="يُصرَف بالأقرب انتهاءً ولا يُباع منه المنتهي">دفعة وانتهاء</span>}
-                  {(p.expiryTracked === null || p.expiryTracked === undefined) && <span className="badge draft" style={{ marginInlineStart: 6 }} title="لم يُعلَن التتبّع بالدفعة والانتهاء بعد — يُعلَن من بطاقة الصنف ولا يُخمَّن">بلا إعلانِ تتبّع</span>}
+                  {p.unitCode ? (
+                    unitLabel(p.unitCode)
+                  ) : (
+                    <span className="badge draft" title={t('products.list.no_unit_title')}>
+                      {t('products.list.no_unit')}
+                    </span>
+                  )}
+                  {p.expiryTracked === true && (
+                    <span className="badge due" style={{ marginInlineStart: 6 }} title={t('products.list.tracked_title')}>
+                      {t('products.list.tracked')}
+                    </span>
+                  )}
+                  {(p.expiryTracked === null || p.expiryTracked === undefined) && (
+                    <span className="badge draft" style={{ marginInlineStart: 6 }} title={t('products.list.untracked_title')}>
+                      {t('products.list.untracked')}
+                    </span>
+                  )}
                 </td>
                 <td>
                   {(() => {
                     const badge = taxBadgeOf(p);
                     return badge.undeclared ? (
-                      <span className="badge draft" title="صنفٌ قائم قبل الحقل — يُرَنّ بالنسبة الأساسية حتى تُعلَن فئتُه من بطاقته">
+                      <span className="badge draft" title={t('products.list.legacy_tax_title')}>
                         {badge.text}
                       </span>
                     ) : (
@@ -158,10 +181,10 @@ export function ProductsPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', product: p }) },
-                      { label: p.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setProductArchived(p.id, !p.archived).then(reload) },
+                      { label: t('products.list.edit'), onClick: () => setModal({ mode: 'edit', product: p }) },
+                      { label: p.archived ? t('products.list.unarchive') : t('products.list.archive'), onClick: () => setProductArchived(p.id, !p.archived).then(reload) },
                       '-',
-                      { label: '🗑 حذف', onClick: () => setPendingDelete(p), danger: true },
+                      { label: t('products.list.delete'), onClick: () => setPendingDelete(p), danger: true },
                     ]}
                   />
                 </td>
@@ -175,9 +198,9 @@ export function ProductsPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف المنتج"
-          body={`حذف "${pendingDelete.name}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('products.list.delete_title')}
+          body={t('products.list.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('products.list.delete_confirm')}
           onCancel={() => setPendingDelete(null)}
           onConfirm={confirmDelete}
         />

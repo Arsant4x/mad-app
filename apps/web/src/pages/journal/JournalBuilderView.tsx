@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Account } from '../../api/accounts';
 import type { CreateJournalEntryInput, JournalLineInput } from '../../api/journal';
 import { fmt, today } from '../../lib/format';
@@ -21,6 +22,7 @@ export function JournalBuilderView({
   onCancel: () => void;
   onSave: (data: CreateJournalEntryInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [date, setDate] = useState(today());
   const [memo, setMemo] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([
@@ -59,7 +61,7 @@ export function JournalBuilderView({
     }
     setSaving(true);
     try {
-      await onSave({ date, memo: memo.trim() || 'بدون بيان', lines: postingLines });
+      await onSave({ date, memo: memo.trim() || t('journal.builder.default_memo'), lines: postingLines });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? i18n.t('err_journal_post'));
@@ -72,40 +74,40 @@ export function JournalBuilderView({
     <div className="subview active">
       <div className="topbar">
         <div>
-          <div className="page-title">قيد يومية جديد</div>
-          <div className="page-sub">يجب أن يتساوى إجمالي المدين مع إجمالي الدائن قبل الترحيل</div>
+          <div className="page-title">{t('journal.builder.title')}</div>
+          <div className="page-sub">{t('journal.builder.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('journal.builder.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handlePost} disabled={!balanced || saving}>
-            ترحيل القيد
+            {t('journal.builder.post')}
           </button>
         </div>
       </div>
       <div className="card">
         <div className="two-col" style={{ marginBottom: 16 }}>
           <div className="field">
-            <label>رقم القيد</label>
+            <label>{t('journal.builder.number')}</label>
             <input className="num" value={nextNumberHint} readOnly />
           </div>
           <div className="field">
-            <label>التاريخ</label>
+            <label>{t('journal.builder.date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
         <div className="field">
-          <label>البيان</label>
-          <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="مثال: تحصيل دفعة من عميل..." />
+          <label>{t('journal.builder.memo')}</label>
+          <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder={t('journal.builder.memo_placeholder')} />
         </div>
 
         <table className="je-table" style={{ marginTop: 14 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'right' }}>الحساب</th>
-              <th style={{ width: 140 }}>مدين</th>
-              <th style={{ width: 140 }}>دائن</th>
+              <th style={{ textAlign: 'start' }}>{t('journal.builder.col_account')}</th>
+              <th style={{ width: 140 }}>{t('journal.builder.col_debit')}</th>
+              <th style={{ width: 140 }}>{t('journal.builder.col_credit')}</th>
               <th style={{ width: 40 }}></th>
             </tr>
           </thead>
@@ -114,7 +116,7 @@ export function JournalBuilderView({
               <tr key={i}>
                 <td>
                   <select value={l.accountId} onChange={(e) => updateLine(i, { accountId: e.target.value })}>
-                    <option value="">اختر الحساب...</option>
+                    <option value="">{t('journal.builder.choose_account')}</option>
                     {accounts.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.code} — {a.name}
@@ -144,17 +146,21 @@ export function JournalBuilderView({
           </tbody>
         </table>
         <button className="add-line" onClick={addLine}>
-          + إضافة سطر
+          {t('journal.builder.add_line')}
         </button>
 
         <div className={`balance-check ${balanced ? 'ok' : 'bad'}`}>
           {balanced ? (
             <>
-              ✓ القيد متوازن — <span className="num">{fmt(totalDebit)}</span> = <span className="num">{fmt(totalCredit)}</span>
+              {t('journal.builder.balanced')}
+              <span className="num">{fmt(totalDebit)}</span> = <span className="num">{fmt(totalCredit)}</span>
             </>
           ) : (
             <>
-              ⚠ غير متوازن — المدين <span className="num">{fmt(totalDebit)}</span> / الدائن <span className="num">{fmt(totalCredit)}</span>
+              {t('journal.builder.unbalanced_debit')}
+              <span className="num">{fmt(totalDebit)}</span>
+              {t('journal.builder.unbalanced_credit')}
+              <span className="num">{fmt(totalCredit)}</span>
             </>
           )}
         </div>
