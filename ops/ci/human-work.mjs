@@ -12,7 +12,9 @@ export const appliesTo = (path) => CODE_FILE.test(path) && !TEXT_CATALOGUE.test(
 
 const EMOJI = /\p{Extended_Pictographic}|\u{FE0F}/u;
 const DECISION_REF = /ق-[0-9٠-٩]+/;
-const WORKFLOW_WORD = /\bclaude\b|\bdirectives?\b|الوكيل|توجيه/i;
+// The repository's rules file is named CLAUDE.md; git lists it in merge-conflict notes.
+// That file name is a path, not a mention of the tool, so it is not read as the word.
+const WORKFLOW_WORD = /\bclaude\b(?!\.md\b)|\bdirectives?\b|الوكيل|توجيه/i;
 const ARABIC = /[؀-ۿ]/;
 
 /** Removes the contents of quoted strings so a comment marker inside one is not read as a comment. */
