@@ -1,1 +1,0 @@
-        const finalTo = await this.signing.finalCopyRecipientOrNull(tx, link.companyId, instance.counterpartyCustomerId);

@@ -22,9 +22,9 @@ describe('شريط «فواتيرك لا تصل الهيئة» في الهيكل
     expect(start).toBeGreaterThan(-1);
     expect(source).toMatch(/unreported\.onboarded && unreported\.count > 0 && \(/);
     // The text now lives behind a translation key; the Arabic wording is unchanged.
-    expect(source).toContain("t('shell.zatca_unreported'");
+    expect(source).toContain("t('shell.einvoice_unreported'");
     const ar = JSON.parse(readFileSync(resolve(__dirname, '../i18n/locales/ar/shell.json'), 'utf8'));
-    expect(ar.zatca_unreported).toContain('فواتيرك لا تصل الهيئة');
+    expect(ar.einvoice_unreported).toContain('فواتيرك لا تصل الهيئة');
   });
 
   it('🔴 وبلا زرّ إغلاق — ظاهرٌ ومستمر', () => {
