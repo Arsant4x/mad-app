@@ -43,6 +43,7 @@ describe('added code lines', () => {
     assert.equal(appliesTo(TS), true);
     assert.equal(appliesTo(SQL), true);
     assert.equal(appliesTo('apps/web/src/i18n/locales/ar.json'), false);
+    assert.equal(appliesTo('apps/web/src/i18n/locales/ar/contracts.json'), false);
     assert.equal(appliesTo('apps/api/src/common/i18n/messages.ts'), false);
     assert.equal(appliesTo('docs/decisions.md'), false);
     assert.equal(appliesTo('ops/ci/attribution-check.mjs'), false);

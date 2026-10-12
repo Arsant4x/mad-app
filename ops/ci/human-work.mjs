@@ -6,7 +6,7 @@
 export const CODE_FILE = /^(apps|packages)\/.+\.(ts|tsx|js|jsx|mjs|cjs|css|scss|sql|prisma|html)$/;
 
 /** Translation and message catalogues: user text lives there on purpose. */
-export const TEXT_CATALOGUE = /^apps\/web\/src\/i18n\/locales\/[^/]+\.json$|^apps\/api\/src\/common\/i18n\/messages\.ts$/;
+export const TEXT_CATALOGUE = /^apps\/web\/src\/i18n\/locales\/.+\.json$|^apps\/api\/src\/common\/i18n\/messages\.ts$/;
 
 export const appliesTo = (path) => CODE_FILE.test(path) && !TEXT_CATALOGUE.test(path);
 
