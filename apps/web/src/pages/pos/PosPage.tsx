@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listProducts, type Product } from '../../api/products';
 import { listBranches, type Branch } from '../../api/branches';
 import { rateForCategory } from '../../lib/vat';
@@ -49,41 +50,44 @@ import { buildPhase1Qr } from '../../lib/zatcaQr';
 import { wallClockOf } from '../../lib/wallClock';
 import { fmt } from '../../lib/format';
 import { num0, round2, type QtyText } from '../../lib/money';
+import { formatDateTime } from '../../i18n/format';
 
 interface CartLine {
   product: Product;
   quantity: number;
-  /** ④B1 — خصمٌ مبلغاً على السطر (صفرٌ غياباً). */
+  /** Line discount as an amount (zero when absent). */
   discount: number;
 }
 
-/** بيعٌ رُنّ على هذا الجهاز: لحظتُه وانحرافُه ومرجعُه المؤقّت إلزاميّةٌ — منها يومُ الفاتورة وطابعُ إيصاله (ق-١٨٥ · ق-١٨٨). */
+/** A sale rung on this device: its moment, clock offset and temporary reference set the invoice day and receipt stamp. */
 type RungSale = PosSaleInput & { offlineRef: string; ringAt: string; ringOffsetMin: number };
 
-/** رسالةُ الخادم كما هي — والتحقّقُ يعيد مصفوفةً فتُضمّ. */
+/** The server's message as is; validation returns an array, which is joined. */
 function messageOf(e: unknown, fallback: string): string {
   const m = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
   return Array.isArray(m) ? m.join(' · ') : (m ?? fallback);
 }
 
-/** حالُ المحاولة كما يقرؤه الكاشير. */
-const ATTEMPT_LABEL: Record<PosPaymentAttempt['status'], string> = {
-  CREATED: 'لم تُرسل',
-  CHARGING: 'بانتظار الجهاز…',
-  APPROVED: 'قبلها المزوّد — تُتمّ الفاتورة',
-  COMPLETED: 'اكتملت',
-  DECLINED: 'رُفضت',
-  UNKNOWN: 'لم يصل جوابُ المزوّد — لا تُعِد الشحن',
-  CANCELLED: 'أُلغيت',
+/** Payment attempt status as the cashier reads it (translation keys). */
+const ATTEMPT_LABEL_KEY: Record<PosPaymentAttempt['status'], string> = {
+  CREATED: 'pos.attempt.created',
+  CHARGING: 'pos.attempt.charging',
+  APPROVED: 'pos.attempt.approved',
+  COMPLETED: 'pos.attempt.completed',
+  DECLINED: 'pos.attempt.declined',
+  UNKNOWN: 'pos.attempt.unknown',
+  CANCELLED: 'pos.attempt.cancelled',
 };
 
 /**
- * شاشة الكاشير (مستند §6 — النسخة الأولى، أونلاين).
+ * Cashier screen.
  *
- * touch-first: أزرار كبيرة، بحث/باركود واحد، سلة، ودفع بزرّين. البيع يخرج
- * فاتورة حقيقية مدفوعة على نفس ترقيم الفواتير، والدرج يُحسب في الخادم.
+ * Touch first: large buttons, one search/barcode field, a cart, and two pay
+ * buttons. A sale issues a real paid invoice on the normal invoice numbering,
+ * and the drawer is computed on the server.
  */
 export function PosPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const companyId = user?.companyId ?? '';
   const [shift, setShift] = useState<PosShift | null>(null);
@@ -105,31 +109,32 @@ export function PosPage() {
   const [offlineReceipt, setOfflineReceipt] = useState<QueuedSale | null>(null);
   const [splitting, setSplitting] = useState(false);
   const [splitCash, setSplitCash] = useState('');
-  /** بنود هبط رصيدها تحت الصفر بهذا البيع — تحذير ناعم داخل الإيصال، لا يمنع البيع. */
+  /** Lines whose stock went below zero with this sale: a soft warning on the receipt, never a block. */
   const [stockWarnings, setStockWarnings] = useState<{ name: string; resultingQty: QtyText }[]>([]);
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // ───── محاولةُ دفع البطاقة (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`) ─────
+  // ───── Card payment attempts ─────
   const { can } = usePermissions();
   const canReview = can('pos', 'review');
-  /** أفعّالٌ ربطُ البوابة — منه يُختار المسار: محاولةٌ عبر المزوّد، أو بيعٌ مباشر. */
+  /** Whether the gateway link is active: it picks the path, an attempt through the provider or a direct sale. */
   const [paymentMode, setPaymentMode] = useState<PosPaymentMode | null>(null);
-  /** المحاولةُ التي تقفل السلةَ حتى تُحسم — «لا تُعِد الشحن». */
+  /** The attempt that locks the cart until it is resolved ("do not charge again"). */
   const [pendingAttempt, setPendingAttempt] = useState<PosPaymentAttempt | null>(null);
-  /** ما لم يُحسم في المناوبة — يراه الكاشير ويستعلم عنه. */
+  /** Unresolved attempts in the shift, which the cashier can check. */
   const [openAttempts, setOpenAttempts] = useState<PosPaymentAttempt[]>([]);
   /**
-   * بيعٌ ببطاقةٍ ينتظر رقمَ مرجع الجهاز من إيصاله — **دون اتصالٍ والربطُ فعّال** (`ق-١٣٩٧`) **أو على جهازٍ مستقلٍّ بلا ربط**
-   * (`ق-١٤١٩` · «فالحكمُ واحد» بنصّ المالك): الأوّلُ يصطفّ محلياً، والثاني يُرسل الآن برقمه.
+   * A card sale waiting for the terminal reference from its receipt, either
+   * offline with the link active, or on a standalone terminal with no link.
+   * The first is queued locally; the second is sent now with its reference.
    */
   const [deviceRefFor, setDeviceRefFor] = useState<RungSale | null>(null);
   const [deviceRefMode, setDeviceRefMode] = useState<'offline' | 'standalone'>('offline');
   const [deviceRef, setDeviceRef] = useState('');
-  /** حسمٌ يدويٌّ بدليلٍ — لصاحب المراجعة (`ق-١٣٩٩`). */
+  /** Manual resolution with evidence, for a reviewer. */
   const [evidenceFor, setEvidenceFor] = useState<PosPaymentAttempt | null>(null);
   const [evidence, setEvidence] = useState({ deviceReference: '', approvalCode: '', note: '' });
-  /** دفعاتُ البطاقة غيرُ المتحقَّقة — للمراجعة. */
+  /** Unverified card payments, for review. */
   const [verifications, setVerifications] = useState<CardVerificationList | null>(null);
 
   async function reload() {
@@ -144,26 +149,28 @@ export function PosPage() {
       setOffline(false);
     } catch (e) {
       if (!isNetworkError(e)) throw e;
-      // انقطاع: نبيع من آخر كتالوج معروف، والمناوبة كما كانت في الذاكرة — ووضعُ الدفع آخرَ ما عُرف.
+      // Offline: sell from the last known catalog, keep the shift in memory, and use the last known payment mode.
       setProducts((prev) => (prev.length ? prev : readCachedProducts(companyId)));
       setPaymentMode((prev) => prev ?? readCachedPaymentMode(companyId));
       setOffline(true);
     }
-    // بمعزل عن الكتلة أعلاه: فشلُ الفروع لا يُسقط البيع في الأوفلاين، وإعادةُ
-    // المحاولة مع كل reload تعني أن انقطاعاً لحظةَ الفتح لا يُخفي المُنتقي بقيةَ
-    // اليوم — وإخفاؤه صامتاً يعني مناوبةً بلا فرع، أي بيعاً كاملاً بلا خصم مخزون.
+    // Separate from the block above: a branch failure must not break offline
+    // selling, and retrying on every reload means an outage at open time does
+    // not hide the picker for the rest of the day. Hiding it silently would mean
+    // a shift with no branch, i.e. sales with no stock deduction.
     try {
       setBranches(await listBranches());
     } catch {
-      /* بلا فروع معروفة يختفي المُنتقي وتُفتح المناوبة على مستوى الشركة كما قبل. */
+      /* With no known branches the picker hides and the shift opens at company level. */
     }
-    // ملفُ المنشأة يُخبَّأ عند كل اتصالٍ ناجح — فرمزُ الإيصال الأوفلاين يجد الاسمَ
-    // القانوني والرقمَ الضريبي حين لا خادم (ق-١٨٨). الفشل يترك المخبَّأ الأخير.
+    // The company profile is cached on every successful connection so the
+    // offline receipt code has the legal name and VAT number when there is no
+    // server. A failure keeps the last cached copy.
     try {
       const profile = await getCompanyProfile();
       cacheSellerProfile(companyId, { legalName: profile.legalName, vatNumber: profile.vatNumber });
     } catch {
-      /* أوفلاين أو ملفٌ لم يُكتب — يبقى آخر مخبَّأ، وغيابه يُنبَّه إليه على الإيصال. */
+      /* Offline or no profile yet: the last cached copy stays, and its absence is flagged on the receipt. */
     }
     setQueueCount(readQueue(companyId).length);
   }
@@ -173,19 +180,19 @@ export function PosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** تفريغ الطابور: كل بيع مصفوف يُعاد إرساله — الخادم يبتلع التكرار بأمان. */
+  /** Flush the queue: every queued sale is resent; the server absorbs duplicates safely. */
   async function flushQueue() {
     const queue = readQueue(companyId);
     for (const sale of queue) {
       try {
-        // حقولُ البيع وحدَها على السلك — حقولُ العرض للإيصال المؤقّت، والخادمُ يرفض ما لا يعرفه (`wireSaleOf`).
+        // Only the sale fields go on the wire; display fields are for the temporary receipt and the server rejects unknown fields.
         await syncPosSale(wireSaleOf(sale));
         removeFromQueue(companyId, sale.clientSaleId);
       } catch (e) {
-        if (isNetworkError(e)) return; // ما زلنا أوفلاين — نحاول لاحقاً.
-        // رفض حقيقي (مثل مناوبة مقفلة): يبقى في الطابور ويُعرض للمستخدم.
+        if (isNetworkError(e)) return; // Still offline; try later.
+        // A real rejection (such as a closed shift): it stays queued and is shown to the user.
         const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-        setError(d?.message ?? 'تعذّرت مزامنة بيع مصفوف');
+        setError(d?.message ?? t('pos.errors.sync_failed'));
         return;
       }
     }
@@ -210,12 +217,13 @@ export function PosPage() {
   }, [products, query]);
 
   const totals = useMemo(() => {
-    // ④B1 — الصافي بعد خصم السطر (BT-131)، والضريبةُ منه.
+    // Net after the line discount (BT-131); VAT is computed from it.
     const net = (l: CartLine) => Math.max(0, Number(l.product.price) * l.quantity - (l.discount || 0));
     const subtotal = cart.reduce((s, l) => s + net(l), 0);
-    // ⑧ الضريبةُ من فئة كلِّ صنف (`rateForCategory`) لا نسبةً واحدة على السلة — فسلةٌ فيها دواءٌ بنسبة الصفر لا
-    // تُحمَّل ضريبتَه؛ والخادمُ يشتقّ النسبةَ نفسَها من الفئة ويعيد المجاميع المعتمَدة. ⚠️ ورمزُ الإيصال المؤقّت
-    // أوفلاين يُبنى من هذا الرقم (ق-١٨٨) فيلزم أن يطابق ما سيحسبه الخادم للسلة نفسِها.
+    // VAT comes from each item's category, not one rate for the cart, so a
+    // zero-rated item carries no VAT. The server derives the same rate and
+    // returns the authoritative totals; the offline receipt code is built from
+    // this figure, so it must match what the server will compute.
     const tax = cart.reduce((s, l) => s + net(l) * (rateForCategory(l.product.taxCategory) / 100), 0);
     return { subtotal, tax, total: subtotal + tax };
   }, [cart]);
@@ -236,7 +244,7 @@ export function PosPage() {
     setCart((prev) => prev.flatMap((l) => (l.product.id === id ? (l.quantity + delta <= 0 ? [] : [{ ...l, quantity: l.quantity + delta }]) : [l])));
   }
 
-  /** باركود: Enter مع تطابق واحد يضيفه مباشرة ويصفّي البحث. */
+  /** Barcode: Enter with exactly one match adds it and clears the search. */
   function handleSearchEnter() {
     if (visible.length === 1) {
       addToCart(visible[0]);
@@ -246,15 +254,16 @@ export function PosPage() {
   }
 
   /**
-   * كل بيع — أونلاين أو أوفلاين — يحمل هوية طرفية من لحظة الرنّ: المسار واحد والخادم يبتلع أي تكرار، فلا فقدان ولا
-   * ازدواج (مستند §6). ومحاولةُ الدفع تحمل الهويّةَ نفسَها (`ق-١٤٠١`).
+   * Every sale, online or offline, carries a client id from the moment it is
+   * rung: one path, and the server absorbs any repeat, so nothing is lost or
+   * doubled. A payment attempt carries the same id.
    */
   function ringSale(method: PosPaymentMethod, payments?: PosPaymentPart[]): RungSale {
     return {
       clientSaleId: newClientSaleId(),
       offlineRef: newOfflineRef(),
       ringAt: new Date().toISOString(),
-      // انحرافُ الجهاز مع اللحظة: يومُ الفاتورة ووقتُها يومُ التاجر لا يومُ UTC (ق-١٨٥).
+      // The device offset with the moment: the invoice day and time are the merchant's, not UTC.
       ringOffsetMin: -new Date().getTimezoneOffset(),
       lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity, ...(l.discount > 0 ? { discount: l.discount } : {}) })),
       paymentMethod: method,
@@ -262,7 +271,7 @@ export function PosPage() {
     };
   }
 
-  /** جزءُ البطاقة من البيع — كلُّه للبطاقة، أو جزؤها من المقسّم. */
+  /** The card part of the sale: all of it for a card sale, or the card part of a split. */
   function cardPartOf(sale: PosSaleInput): number {
     if (sale.paymentMethod === 'CARD') return totals.total;
     if (sale.paymentMethod === 'SPLIT') return (sale.payments ?? []).filter((p) => p.method === 'CARD').reduce((s, p) => s + p.amount, 0);
@@ -272,7 +281,7 @@ export function PosPage() {
   async function pay(method: PosPaymentMethod, payments?: PosPaymentPart[]) {
     if (!cart.length || paying || pendingAttempt) return;
     const sale = ringSale(method, payments);
-    // ⚖️ البطاقةُ والربطُ فعّال تمرّ بمحاولة دفعٍ عبر المزوّد (`ق-١٤٠١`) — وأوفلاين برقم مرجع الجهاز من إيصاله (`ق-١٣٩٧`).
+    // With the link active a card goes through a provider attempt; offline it needs the terminal reference from its receipt.
     if (paymentMode?.active && cardPartOf(sale) > 0) {
       if (offline) {
         setDeviceRef('');
@@ -283,7 +292,7 @@ export function PosPage() {
       await payByAttempt(sale);
       return;
     }
-    // ⚖️ وبلا ربطٍ — جهازٌ مستقلّ: رقمُ مرجعه من إيصاله كبيع البطاقة دون اتصال (`ق-١٤١٩` «فالحكمُ واحد») — لا «أكّده الكاشير».
+    // With no link, a standalone terminal: the reference from its receipt, as for an offline card sale, never the cashier's word alone.
     if (!paymentMode?.active && cardPartOf(sale) > 0) {
       setDeviceRef('');
       setDeviceRefMode('standalone');
@@ -296,15 +305,17 @@ export function PosPage() {
       await completed(await syncPosSale(sale));
     } catch (e) {
       if (isNetworkError(e)) queueOffline(sale);
-      else setError(messageOf(e, 'تعذّر إتمام البيع'));
+      else setError(messageOf(e, t('pos.errors.sale_failed')));
     } finally {
       setPaying(false);
     }
   }
 
   /**
-   * ⭐ **محاولةُ الدفع** (`ق-١٤٠١`): تُنشأ بلا فاتورة ثم تُشحن خارج المعاملة — قُبلت ⟸ إيصال · رُفضت ⟸ السببُ والسلةُ كما هي ·
-   * لا جواب ⟸ **معلّقة**: «لا تُعِد الشحن»، والسلةُ مقفلةٌ عليها حتى تُحسم.
+   * Payment attempt: created with no invoice, then charged outside the
+   * transaction. Approved gives a receipt; declined shows the reason and keeps
+   * the cart; no answer leaves it pending ("do not charge again") with the cart
+   * locked until it is resolved.
    */
   async function payByAttempt(sale: RungSale) {
     setPaying(true);
@@ -314,14 +325,14 @@ export function PosPage() {
       attempt = await createPaymentAttempt(sale);
     } catch (e) {
       setPaying(false);
-      // لم يُشحن شيء — الاتصالُ انقطع قبل المحاولة: فالبيعُ ببطاقةٍ دون اتصالٍ برقم مرجع الجهاز (`ق-١٣٩٧`).
+      // Nothing was charged; the connection dropped before the attempt, so this becomes an offline card sale with the terminal reference.
       if (isNetworkError(e)) {
         setOffline(true);
         setDeviceRef('');
         setDeviceRefMode('offline');
         setDeviceRefFor(sale);
       } else {
-        setError(messageOf(e, 'تعذّر بدء عملية البطاقة'));
+        setError(messageOf(e, t('pos.errors.attempt_start_failed')));
       }
       return;
     }
@@ -329,18 +340,18 @@ export function PosPage() {
     try {
       await applyAttempt(await chargePaymentAttempt(attempt.id), sale);
     } catch (e) {
-      // الطلبُ عند المزوّد أو في الطريق: لا يُعاد الشحن — يُستعلم عنه حين يعود الاتصال.
-      if (isNetworkError(e)) setError('انقطع الاتصال أثناء الشحن — لا تُعِد الشحن؛ استعلم عن حال العملية حين يعود الاتصال.');
+      // The request is at the provider or on its way: do not charge again; check its status when the connection returns.
+      if (isNetworkError(e)) setError(t('pos.errors.connection_lost_charging'));
       else {
         setPendingAttempt(null);
-        setError(messageOf(e, 'تعذّر شحن البطاقة'));
+        setError(messageOf(e, t('pos.errors.charge_failed')));
       }
     } finally {
       setPaying(false);
     }
   }
 
-  /** ما آلت إليه المحاولة — اكتملت ⟸ إيصال · رُفضت ⟸ السبب · وإلا تبقى تقفل السلة. */
+  /** Where the attempt ended: completed gives a receipt, declined gives the reason, otherwise it keeps the cart locked. */
   async function applyAttempt(attempt: PosPaymentAttempt, sale?: PosSaleInput) {
     if (attempt.status === 'COMPLETED' && attempt.sale) {
       setPendingAttempt(null);
@@ -350,7 +361,7 @@ export function PosPage() {
     if (attempt.status === 'DECLINED' || attempt.status === 'CANCELLED') {
       setPendingAttempt(null);
       const split = (sale?.paymentMethod ?? attempt.paymentMethod) === 'SPLIT';
-      setError(`رُفضت البطاقة: ${attempt.declineReason ?? '—'}${split ? ' — أعِد النقد للعميل؛ لم يُسجَّل من البيع شيء.' : ''}`);
+      setError(t('pos.errors.card_declined', { reason: attempt.declineReason ?? '—' }) + (split ? t('pos.errors.card_declined_split') : ''));
       await refreshAttempts();
       return;
     }
@@ -363,21 +374,21 @@ export function PosPage() {
       const all = await listOpenPaymentAttempts();
       setOpenAttempts(all.filter((a) => a.shiftId === shift?.id));
     } catch {
-      /* أوفلاين — يُعاد مع أوّل تحميلٍ ناجح */
+      /* Offline: refreshed on the next successful load. */
     }
   }
 
-  /** «جوابُ المزوّد أوّلاً» (`ق-١٣٩٩`) — الاستعلامُ بالمرجع لا يشحن ثانيةً. */
+  /** The provider's answer first: querying by reference does not charge again. */
   async function queryAttempt(a: PosPaymentAttempt) {
     setError(null);
     try {
       await applyAttempt(await resolvePaymentAttempt(a.id));
     } catch (e) {
-      setError(messageOf(e, 'تعذّر الاستعلام عن العملية'));
+      setError(messageOf(e, t('pos.errors.query_failed')));
     }
   }
 
-  /** ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — مرجعُ الجهاز ورمزُ الموافقة من إيصاله (`ق-١٣٩٩`). */
+  /** Manual resolution by evidence, not by word: the terminal reference and approval code from its receipt. */
   async function submitEvidence() {
     if (!evidenceFor) return;
     setError(null);
@@ -391,19 +402,20 @@ export function PosPage() {
       setEvidence({ deviceReference: '', approvalCode: '', note: '' });
       await applyAttempt(out);
     } catch (e) {
-      setError(messageOf(e, 'تعذّر الحسم'));
+      setError(messageOf(e, t('pos.errors.resolve_failed')));
     }
   }
 
   /**
-   * بيعٌ ببطاقةٍ برقم مرجع الجهاز — ولا يُقبل بدونه (`ق-١٣٩٧`/١ · `ق-١٤١٩`): **دون اتصالٍ** يصطفّ محلياً، **وعلى جهازٍ مستقلّ**
-   * يُرسل الآن برقمه (وإن انقطع الاتصالُ في الطريق اصطفّ برقمه كذلك).
+   * A card sale with the terminal reference, never without it: offline it is
+   * queued locally; on a standalone terminal it is sent now with its reference
+   * (and queued with it if the connection drops on the way).
    */
   async function confirmDeviceRef() {
     if (!deviceRefFor) return;
     const reference = deviceRef.trim();
     if (!reference) {
-      setError('أدخل رقمَ مرجع الجهاز من إيصاله — لا يُقبل البيعُ بالبطاقة بتأكيدك وحدَه.');
+      setError(t('pos.errors.device_ref_required'));
       return;
     }
     const sale = deviceRefFor;
@@ -419,7 +431,7 @@ export function PosPage() {
       await completed(await syncPosSale({ ...sale, cardDeviceReference: reference }));
     } catch (e) {
       if (isNetworkError(e)) queueOffline(sale, reference);
-      else setError(messageOf(e, 'تعذّر إتمام البيع'));
+      else setError(messageOf(e, t('pos.errors.sale_failed')));
     } finally {
       setPaying(false);
     }
@@ -430,13 +442,13 @@ export function PosPage() {
     try {
       setVerifications(await listCardVerifications(state));
     } catch (e) {
-      setError(messageOf(e, 'تعذّر جلب دفعات البطاقة'));
+      setError(messageOf(e, t('pos.errors.verifications_failed')));
     }
   }
 
-  /** ما يُعرض بعد بيعٍ اكتمل — مشتركٌ بين البيع المباشر ومحاولة الدفع. */
+  /** What is shown after a completed sale; shared by the direct sale and the payment attempt. */
   async function completed(invoice: PosSaleResponse) {
-    // الخادم يعيد ids فقط في belowZero — الأسماء تُحلّ من السلة قبل تفريغها.
+    // The server returns only ids in belowZero; names are resolved from the cart before it is cleared.
     const deduction = invoice.stockDeduction;
     if (deduction?.deducted && deduction.belowZero.length > 0) {
       const nameById = new Map(cart.map((l) => [l.product.id, l.product.name]));
@@ -444,18 +456,22 @@ export function PosPage() {
     } else {
       setStockWarnings([]);
     }
-    // تخطي الخصم سلوك مقصود لا خطأ — تلميح خافت فقط لوردية على فرع بلا
-    // مستودع مربوط (وردية بلا فرع أصلاً أو سلة كلها خدمات لا تستحق أي إشارة).
-    setStockNotice(deduction?.deducted === false && deduction.reason === 'NO_BRANCH_WAREHOUSE' && shift?.branchId ? 'لم يُخصم المخزون تلقائياً — لا مستودع مرتبطاً بفرع المناوبة' : null);
+    // Skipping the deduction is intended, not an error: only a faint hint for a
+    // shift on a branch with no linked warehouse (no hint for a shift with no
+    // branch, or a cart of services only).
+    setStockNotice(deduction?.deducted === false && deduction.reason === 'NO_BRANCH_WAREHOUSE' && shift?.branchId ? t('pos.stock_not_deducted') : null);
     setCart([]);
     setReceipt(invoice);
     await reload();
   }
 
   /**
-   * انقطاع: البيع يصطفّ محلياً بإيصال مؤقت، ويتزامن وحده لاحقاً — وبطاقةٌ والربطُ فعّال تحمل رقمَ مرجع الجهاز (`ق-١٣٩٧`).
-   * رمزُ الهيئة يُبنى **هنا، على الجهاز، بلا مفاتيح** (ق-١٨٨): الوسوم الخمسة من ملف المنشأة المخبَّأ وساعة الجهاز نفسها التي
-   * سيأخذها الخادم للفاتورة الممتثلة — فالطابع على الإيصال هو طابعُ المستند القادم حرفاً.
+   * Offline: the sale is queued locally with a temporary receipt and syncs on
+   * its own later; a card sale with the link active carries the terminal
+   * reference. The ZATCA code is built here, on the device, with no keys: the
+   * five tags come from the cached company profile and the same device clock
+   * the server will use for the compliant invoice, so the receipt stamp matches
+   * the coming document exactly.
    */
   function queueOffline(sale: RungSale, cardDeviceReference?: string) {
     const seller = readCachedSellerProfile(companyId);
@@ -486,12 +502,12 @@ export function PosPage() {
     setOfflineReceipt(queued);
   }
 
-  /** تقسيم: الكاشير يُدخل النقد، والبطاقة تكمل الباقي تلقائياً. */
+  /** Split: the cashier enters the cash, and the card covers the rest. */
   async function confirmSplit() {
     const cash = Number(splitCash || '0');
     const card = round2(totals.total - cash);
     if (cash <= 0 || card <= 0) {
-      setError('أدخل مبلغاً نقدياً أكبر من صفر وأقل من الإجمالي.');
+      setError(t('pos.errors.split_invalid'));
       return;
     }
     setSplitting(false);
@@ -505,22 +521,22 @@ export function PosPage() {
   async function handleOpenShift() {
     setError(null);
     try {
-      // فرع الوردية يحدد مستودع الخصم (Branch.warehouseId) — بلا فرع يمضي
-      // البيع بلا خصم مخزون، وهو التراجع الصريح لا خطأ.
+      // The shift branch sets the deduction warehouse (Branch.warehouseId); with
+      // no branch the sale goes ahead with no stock deduction, on purpose.
       await openShift(Number(floatInput || '0'), branchInput || undefined);
       setFloatInput('');
       await reload();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر فتح المناوبة');
+      setError(d?.message ?? t('pos.errors.open_shift_failed'));
     }
   }
 
   async function handleCloseShift() {
     if (!shift) return;
-    // الدرج لا يُختم وفي الطابور مبيعات لم تصل — العدّ سيكون ناقصاً حتماً.
+    // The drawer is not closed while queued sales have not arrived; the count would be short.
     if (readQueue(companyId).length > 0) {
-      setError('توجد مبيعات غير متزامنة — انتظر عودة الاتصال حتى يفرغ الطابور ثم أقفل.');
+      setError(t('pos.errors.unsynced_sales'));
       return;
     }
     setError(null);
@@ -532,68 +548,68 @@ export function PosPage() {
       await reload();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر إقفال المناوبة');
+      setError(d?.message ?? t('pos.errors.close_shift_failed'));
     }
   }
 
   if (loading) return null;
 
-  // ② الانحرافُ يصل نصّاً بإشارته (`ق-١٢٣٥`) — يُقرأ رقماً مرّةً واحدة قبل المقارنة والعرض.
+  // The variance arrives as signed text; read it as a number once before comparing and showing it.
   const closedVariance = closed ? num0(closed.variance) : 0;
 
-  // ---- لا مناوبة: بطاقة فتح ----
+  // ---- No shift: open card ----
   if (!shift) {
     return (
       <div>
         <div className="topbar">
           <div>
-            <div className="page-title">الكاشير</div>
-            <div className="page-sub">افتح مناوبة لبدء البيع</div>
+            <div className="page-title">{t('pos.title')}</div>
+            <div className="page-sub">{t('pos.open.sub')}</div>
           </div>
         </div>
         <div className="card" style={{ maxWidth: 420 }}>
           <div className="card-title" style={{ marginBottom: 10 }}>
-            فتح مناوبة
+            {t('pos.open.card_title')}
           </div>
           <div className="field">
-            <label>العهدة الافتتاحية (نقد الدرج)</label>
+            <label>{t('pos.open.float_label')}</label>
             <input type="number" min="0" value={floatInput} onChange={(e) => setFloatInput(e.target.value)} placeholder="0.00" />
           </div>
-          <BranchPicker branches={branches} value={branchInput} onChange={setBranchInput} label="فرع المناوبة (يحدد مستودع خصم المخزون)" />
+          <BranchPicker branches={branches} value={branchInput} onChange={setBranchInput} label={t('pos.open.branch_label')} />
           {error && <p className="error-text">{error}</p>}
           <button className="btn btn-primary" style={{ width: '100%', padding: 14, fontSize: 16 }} onClick={handleOpenShift}>
-            🧾 فتح المناوبة
+            {t('pos.open.button')}
           </button>
         </div>
 
         {closed && (
           <div className="card" style={{ maxWidth: 420, marginTop: 14 }}>
-            <div className="card-title">ملخص المناوبة المقفلة</div>
+            <div className="card-title">{t('pos.closed.title')}</div>
             <table>
               <tbody>
                 <tr>
-                  <td>عدد المبيعات</td>
+                  <td>{t('pos.closed.sales_count')}</td>
                   <td className="num">{closed.salesCount}</td>
                 </tr>
                 <tr>
-                  <td>نقدي</td>
+                  <td>{t('pos.closed.cash')}</td>
                   <td className="num">{fmt(closed.cashTotal)}</td>
                 </tr>
                 <tr>
-                  <td>شبكة</td>
+                  <td>{t('pos.closed.card')}</td>
                   <td className="num">{fmt(closed.cardTotal)}</td>
                 </tr>
                 <tr>
-                  <td>المتوقع في الدرج</td>
+                  <td>{t('pos.closed.expected')}</td>
                   <td className="num">{fmt(closed.expectedCash)}</td>
                 </tr>
                 <tr>
-                  <td>المعدود فعلياً</td>
+                  <td>{t('pos.closed.counted')}</td>
                   <td className="num">{fmt(Number(closed.declaredClosing))}</td>
                 </tr>
                 <tr>
                   <td>
-                    <b>{closedVariance === 0 ? 'مطابق' : closedVariance > 0 ? 'زيادة' : 'عجز'}</b>
+                    <b>{closedVariance === 0 ? t('pos.closed.match') : closedVariance > 0 ? t('pos.closed.over') : t('pos.closed.short')}</b>
                   </td>
                   <td className="num" style={{ color: closedVariance === 0 ? 'var(--emerald)' : 'var(--rose)', fontWeight: 700 }}>
                     {fmt(Math.abs(closedVariance))}
@@ -601,15 +617,16 @@ export function PosPage() {
                 </tr>
               </tbody>
             </table>
-            {/* ⚖️ المعلّقُ لا يحبس المناوبة — يُسمّى هنا وينتقل إلى قائمة المطابقة حتى يُحسم (`ق-١٤١٨`). */}
+            {/* A pending attempt does not hold the shift: it is named here and moves to the matching list until resolved. */}
             {(closed.pendingAttempts ?? []).length > 0 && (
               <div data-testid="pos-closed-pending" style={{ marginTop: 10, fontSize: 13 }}>
-                <b>عملياتُ بطاقةٍ لم تُحسم ({closed.pendingAttempts.length})</b> — أُقفلت المناوبةُ وهي فيها، وتنتقل إلى قائمة المطابقة بالتسوية حتى يحسمها
-                جوابُ المزوّد أو الدليل:
+                <b>{t('pos.closed.pending_title', { n: closed.pendingAttempts.length })}</b>
+                {t('pos.closed.pending_body')}
                 <ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>
                   {closed.pendingAttempts.map((a) => (
                     <li key={a.id}>
-                      <span className="num">{fmt(a.cardAmount)}</span> · {a.status === 'UNKNOWN' ? 'معلّقة' : a.status === 'CHARGING' ? 'تُشحن' : 'قُبلت ولم تكتمل'} ·{' '}
+                      <span className="num">{fmt(a.cardAmount)}</span> ·{' '}
+                      {a.status === 'UNKNOWN' ? t('pos.closed.status_unknown') : a.status === 'CHARGING' ? t('pos.closed.status_charging') : t('pos.closed.status_approved')} ·{' '}
                       <span className="num">{a.createdAt.slice(0, 16).replace('T', ' ')}</span>
                     </li>
                   ))}
@@ -622,39 +639,39 @@ export function PosPage() {
     );
   }
 
-  // ---- مناوبة مفتوحة: الكاشير ----
+  // ---- Open shift: the cashier ----
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الكاشير</div>
+          <div className="page-title">{t('pos.title')}</div>
           <div className="page-sub">
-            مناوبة {shift.openedByName} · {shift.salesCount} عملية · الدرج المتوقع {fmt(shift.expectedCash)}
-            {shift.branchId && <span className="badge draft" style={{ marginRight: 8 }}>{branches.find((b) => b.id === shift.branchId)?.name ?? 'فرع'}</span>}
-            {offline && <span className="badge draft" style={{ marginRight: 8 }}>⚠ أوفلاين — البيع مستمر</span>}
-            {queueCount > 0 && <span className="badge draft" style={{ marginRight: 8 }}>بانتظار المزامنة: {queueCount}</span>}
+            {t('pos.shift.sub', { name: shift.openedByName, n: shift.salesCount, expected: fmt(shift.expectedCash) })}
+            {shift.branchId && <span className="badge draft" style={{ marginInlineStart: 8 }}>{branches.find((b) => b.id === shift.branchId)?.name ?? t('pos.shift.branch_fallback')}</span>}
+            {offline && <span className="badge draft" style={{ marginInlineStart: 8 }}>{t('pos.shift.offline_badge')}</span>}
+            {queueCount > 0 && <span className="badge draft" style={{ marginInlineStart: 8 }}>{t('pos.shift.queue_badge', { n: queueCount })}</span>}
           </div>
         </div>
         <div className="topbar-actions">
           {canReview && (
             <button className="btn btn-ghost" onClick={() => openVerifications('open')}>
-              💳 بطاقاتٌ غيرُ متحقَّقة
+              {t('pos.shift.unverified_cards')}
             </button>
           )}
           <button className="btn btn-ghost" onClick={() => setClosing(true)}>
-            إقفال المناوبة
+            {t('pos.shift.close_button')}
           </button>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14, alignItems: 'start' }}>
-        {/* الأصناف */}
+        {/* Items */}
         <div className="card">
           <div className="search-box" style={{ marginBottom: 12, maxWidth: 'none' }}>
             <input
               ref={searchRef}
               autoFocus
-              placeholder="ابحث بالاسم أو امسح الباركود ثم Enter..."
+              placeholder={t('pos.search_placeholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearchEnter()}
@@ -678,16 +695,16 @@ export function PosPage() {
                 </span>
               </button>
             ))}
-            {visible.length === 0 && <div className="empty-state">لا صنف مطابقاً</div>}
+            {visible.length === 0 && <div className="empty-state">{t('pos.no_match')}</div>}
           </div>
         </div>
 
-        {/* السلة */}
+        {/* Cart */}
         <div className="card">
           <div className="card-title" style={{ marginBottom: 8 }}>
-            السلة
+            {t('pos.cart.title')}
           </div>
-          {cart.length === 0 && <div className="empty-state">اضغط صنفاً لإضافته</div>}
+          {cart.length === 0 && <div className="empty-state">{t('pos.cart.empty')}</div>}
           {cart.map((l) => (
             <div key={l.product.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
               <div style={{ flex: 1 }}>
@@ -707,11 +724,11 @@ export function PosPage() {
               </button>
               <input
                 className="num"
-                aria-label={`خصم ${l.product.name}`}
-                title="خصم على السطر (مبلغ)"
+                aria-label={t('pos.cart.discount_aria', { name: l.product.name })}
+                title={t('pos.cart.discount_title')}
                 style={{ width: 64 }}
                 value={l.discount || ''}
-                placeholder="خصم"
+                placeholder={t('pos.cart.discount_placeholder')}
                 onChange={(e) => setDiscount(l.product.id, Math.max(0, parseFloat(e.target.value) || 0))}
               />
             </div>
@@ -720,15 +737,15 @@ export function PosPage() {
           <table style={{ marginTop: 10 }}>
             <tbody>
               <tr>
-                <td>الإجمالي قبل الضريبة</td>
+                <td>{t('pos.cart.subtotal')}</td>
                 <td className="num">{fmt(totals.subtotal)}</td>
               </tr>
               <tr>
-                <td>الضريبة 15%</td>
+                <td>{t('pos.cart.tax')}</td>
                 <td className="num">{fmt(totals.tax)}</td>
               </tr>
               <tr>
-                <td style={{ fontWeight: 700 }}>الإجمالي</td>
+                <td style={{ fontWeight: 700 }}>{t('pos.cart.total')}</td>
                 <td className="num" style={{ fontWeight: 700, fontSize: 16 }}>
                   {fmt(totals.total)}
                 </td>
@@ -737,23 +754,23 @@ export function PosPage() {
           </table>
 
           {error && <p className="error-text">{error}</p>}
-          {/* السلةُ مقفلةٌ على محاولتها حتى تُحسم — «لا تُعِد الشحن» (الموجز ٢.٩). */}
+          {/* The cart is locked on its attempt until it is resolved ("do not charge again"). */}
           {pendingAttempt && (
             <div className="card" data-testid="pos-pending-attempt" style={{ marginTop: 10, border: '1px solid var(--amber, var(--line))' }}>
-              <b>{ATTEMPT_LABEL[pendingAttempt.status]}</b>
+              <b>{t(ATTEMPT_LABEL_KEY[pendingAttempt.status])}</b>
               <p className="num" style={{ margin: '6px 0' }}>
                 {fmt(pendingAttempt.cardAmount)}
-                {pendingAttempt.status === 'CHARGING' && paymentMode?.deadlineMs ? ` · المهلة ${Math.round(paymentMode.deadlineMs / 1000)} ثانية` : ''}
+                {pendingAttempt.status === 'CHARGING' && paymentMode?.deadlineMs ? t('pos.pending.deadline', { n: Math.round(paymentMode.deadlineMs / 1000) }) : ''}
               </p>
               {pendingAttempt.detail && <p className="hint">{pendingAttempt.detail}</p>}
               {pendingAttempt.status !== 'CHARGING' && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(pendingAttempt)}>
-                    🔎 استعلام عن حالها
+                    {t('pos.pending.query')}
                   </button>
                   {canReview && pendingAttempt.status === 'UNKNOWN' && (
                     <button className="btn btn-ghost btn-sm" onClick={() => setEvidenceFor(pendingAttempt)}>
-                      حسمٌ بدليل
+                      {t('pos.pending.evidence')}
                     </button>
                   )}
                 </div>
@@ -762,32 +779,32 @@ export function PosPage() {
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CASH')}>
-              💵 نقدي
+              {t('pos.pay.cash')}
             </button>
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CARD')}>
-              💳 شبكة
+              {t('pos.pay.card')}
             </button>
           </div>
           <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => setSplitting(true)}>
-            ✂ تقسيم نقدي + شبكة
+            {t('pos.pay.split')}
           </button>
-          {/* ما لم يُحسم في المناوبة — والمناوبةُ لا تُقفل والمالُ في الطريق (الموجز ٢.٧). */}
+          {/* Unresolved attempts in the shift; the shift does not close while money is in transit. */}
           {openAttempts.filter((a) => a.id !== pendingAttempt?.id && a.status !== 'CREATED').length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div className="card-title" style={{ fontSize: 13 }}>عملياتُ بطاقةٍ لم تُحسم</div>
+              <div className="card-title" style={{ fontSize: 13 }}>{t('pos.open_attempts.title')}</div>
               {openAttempts
                 .filter((a) => a.id !== pendingAttempt?.id && a.status !== 'CREATED')
                 .map((a) => (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
                     <span className="num" style={{ flex: 1, fontSize: 12 }}>
-                      {fmt(a.cardAmount)} · {ATTEMPT_LABEL[a.status]}
+                      {fmt(a.cardAmount)} · {t(ATTEMPT_LABEL_KEY[a.status])}
                     </span>
                     <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(a)}>
-                      استعلام
+                      {t('pos.open_attempts.query')}
                     </button>
                     {canReview && a.status === 'UNKNOWN' && (
                       <button className="btn btn-ghost btn-sm" onClick={() => setEvidenceFor(a)}>
-                        بدليل
+                        {t('pos.open_attempts.evidence')}
                       </button>
                     )}
                   </div>
@@ -797,119 +814,118 @@ export function PosPage() {
         </div>
       </div>
 
-      {/* تقسيم الدفع */}
+      {/* Split payment */}
       {splitting && (
         <div className="overlay" onClick={() => setSplitting(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="modal-head">
-              <div className="modal-title">تقسيم الدفع</div>
+              <div className="modal-title">{t('pos.split.title')}</div>
               <button className="modal-close" onClick={() => setSplitting(false)}>✕</button>
             </div>
             <p className="num" style={{ textAlign: 'center', fontWeight: 700, fontSize: 18 }}>{fmt(totals.total)}</p>
             <div className="field">
-              <label>المبلغ النقدي</label>
+              <label>{t('pos.split.cash_label')}</label>
               <input type="number" min="0" autoFocus value={splitCash} onChange={(e) => setSplitCash(e.target.value)} placeholder="0.00" />
             </div>
             <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-              الشبكة تُكمل الباقي: <b className="num">{fmt(Math.max(0, totals.total - Number(splitCash || '0')))}</b>
+              {t('pos.split.card_rest')}<b className="num">{fmt(Math.max(0, totals.total - Number(splitCash || '0')))}</b>
             </p>
             {error && <p className="error-text">{error}</p>}
             <div className="modal-foot">
-              <button className="btn btn-ghost" onClick={() => setSplitting(false)}>إلغاء</button>
-              <button className="btn btn-primary" onClick={confirmSplit}>تأكيد التقسيم</button>
+              <button className="btn btn-ghost" onClick={() => setSplitting(false)}>{t('pos.common.cancel')}</button>
+              <button className="btn btn-primary" onClick={confirmSplit}>{t('pos.split.confirm')}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ⚖️ بيعٌ ببطاقةٍ برقم مرجع الجهاز من إيصاله — دون اتصالٍ والربطُ فعّال (`ق-١٣٩٧`/١) أو جهازٌ مستقلٌّ بلا ربط (`ق-١٤١٩`). */}
+      {/* Card sale with the terminal reference from its receipt: offline with the link active, or a standalone terminal. */}
       {deviceRefFor && (
         <div className="overlay" onClick={() => setDeviceRefFor(null)}>
           <div className="modal" data-testid="pos-device-ref" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="modal-head">
-              <div className="modal-title">{deviceRefMode === 'offline' ? 'بطاقةٌ دون اتصال' : 'بطاقةٌ على جهازٍ مستقلّ'}</div>
+              <div className="modal-title">{deviceRefMode === 'offline' ? t('pos.device_ref.title_offline') : t('pos.device_ref.title_standalone')}</div>
               <button className="modal-close" onClick={() => setDeviceRefFor(null)}>✕</button>
             </div>
             <p style={{ fontSize: 13 }}>
-              {deviceRefMode === 'offline'
-                ? 'الاتصالُ منقطع وبوابةُ الدفع مربوطة: اشحن على الجهاز مباشرةً، ثم أدخل '
-                : 'لا بوابةَ دفعٍ مربوطة: اشحن على جهاز الشبكة، ثم أدخل '}
-              <b>رقمَ المرجع المطبوع على إيصاله</b>. يُسجَّل البيعُ غيرَ متحقَّقٍ حتى تطابقه تسويةُ الشبكة.
+              {deviceRefMode === 'offline' ? t('pos.device_ref.intro_offline') : t('pos.device_ref.intro_standalone')}
+              <b>{t('pos.device_ref.ref_bold')}</b>
+              {t('pos.device_ref.outro')}
             </p>
             <div className="field">
-              <label>رقمُ مرجع الجهاز</label>
+              <label>{t('pos.device_ref.label')}</label>
               <input autoFocus value={deviceRef} onChange={(e) => setDeviceRef(e.target.value)} maxLength={64} />
             </div>
             {error && <p className="error-text">{error}</p>}
             <div className="modal-foot">
-              <button className="btn btn-ghost" onClick={() => setDeviceRefFor(null)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={() => setDeviceRefFor(null)}>{t('pos.common.cancel')}</button>
               <button className="btn btn-primary" disabled={!deviceRef.trim()} onClick={confirmDeviceRef}>
-                تسجيلُ البيع
+                {t('pos.device_ref.submit')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — لصاحب المراجعة، بعد أن يُسأل المزوّد (`ق-١٣٩٩`). */}
+      {/* Manual resolution by evidence, for a reviewer, after the provider has been asked. */}
       {evidenceFor && (
         <div className="overlay" onClick={() => setEvidenceFor(null)}>
           <div className="modal" data-testid="pos-evidence" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <div className="modal-head">
-              <div className="modal-title">حسمُ عمليةٍ معلّقة بدليل</div>
+              <div className="modal-title">{t('pos.evidence.title')}</div>
               <button className="modal-close" onClick={() => setEvidenceFor(null)}>✕</button>
             </div>
             <p className="num" style={{ fontSize: 13 }}>
-              {fmt(evidenceFor.cardAmount)} · يُسأل المزوّدُ أوّلاً — فإن أجاب فجوابُه يحسمها. والحسمُ بدليلٍ لا يُعدّ نهائياً حتى تطابقه تسويةُ الشبكة.
+              {t('pos.evidence.intro', { amount: fmt(evidenceFor.cardAmount) })}
             </p>
             <div className="field">
-              <label>رقمُ مرجع الجهاز (من إيصاله)</label>
+              <label>{t('pos.evidence.device_ref')}</label>
               <input value={evidence.deviceReference} onChange={(e) => setEvidence({ ...evidence, deviceReference: e.target.value })} maxLength={64} />
             </div>
             <div className="field">
-              <label>رمزُ الموافقة (من إيصاله)</label>
+              <label>{t('pos.evidence.approval_code')}</label>
               <input value={evidence.approvalCode} onChange={(e) => setEvidence({ ...evidence, approvalCode: e.target.value })} maxLength={32} />
             </div>
             <div className="field">
-              <label>ملاحظة</label>
+              <label>{t('pos.evidence.note')}</label>
               <input value={evidence.note} onChange={(e) => setEvidence({ ...evidence, note: e.target.value })} maxLength={500} />
             </div>
             {error && <p className="error-text">{error}</p>}
             <div className="modal-foot">
-              <button className="btn btn-ghost" onClick={() => setEvidenceFor(null)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={() => setEvidenceFor(null)}>{t('pos.common.cancel')}</button>
               <button className="btn btn-primary" disabled={!evidence.deviceReference.trim() || !evidence.approvalCode.trim()} onClick={submitEvidence}>
-                حسمٌ بالدليل
+                {t('pos.evidence.submit')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ⚖️ دفعاتُ البطاقة غيرُ المتحقَّقة — باسم الكاشير وبحال المطابقة ومهلة التسوية (`ق-١٣٩٧`/٢–٣). */}
+      {/* Unverified card payments, by cashier, matching state and settlement deadline. */}
       {verifications && (
         <div className="overlay" onClick={() => setVerifications(null)}>
           <div className="modal" data-testid="pos-card-verifications" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
             <div className="modal-head">
-              <div className="modal-title">دفعاتُ بطاقةٍ غيرُ متحقَّقة — مهلةُ التسوية {verifications.settlementDays} أيام</div>
+              <div className="modal-title">{t('pos.verifications.title', { n: verifications.settlementDays })}</div>
               <button className="modal-close" onClick={() => setVerifications(null)}>✕</button>
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('open')}>غيرُ مطابَقة</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('overdue')}>تجاوزت المهلة</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('matched')}>طابقتها تسوية</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('open')}>{t('pos.verifications.filter_open')}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('overdue')}>{t('pos.verifications.filter_overdue')}</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('matched')}>{t('pos.verifications.filter_matched')}</button>
             </div>
-            {verifications.items.length === 0 && <div className="empty-state">لا شيء هنا</div>}
+            {verifications.items.length === 0 && <div className="empty-state">{t('pos.verifications.empty')}</div>}
             {verifications.items.length > 0 && (
               <table>
                 <thead>
                   <tr>
-                    <th>الفاتورة</th>
-                    <th>اليوم</th>
-                    <th>المبلغ</th>
-                    <th>الكاشير</th>
-                    <th>مرجعُ الجهاز</th>
-                    <th>بمَ ثبت</th>
-                    <th>الحال</th>
+                    <th>{t('pos.verifications.col_invoice')}</th>
+                    <th>{t('pos.verifications.col_day')}</th>
+                    <th>{t('pos.verifications.col_amount')}</th>
+                    <th>{t('pos.verifications.col_cashier')}</th>
+                    <th>{t('pos.verifications.col_device_ref')}</th>
+                    <th>{t('pos.verifications.col_proof')}</th>
+                    <th>{t('pos.verifications.col_status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -920,26 +936,36 @@ export function PosPage() {
                       <td className="num">{fmt(r.amount)}</td>
                       <td>{r.cashierName ?? '—'}</td>
                       <td className="num">{r.deviceReference ?? '—'}</td>
-                      <td>{r.verification === 'MANUAL_EVIDENCE' ? `حسمٌ بدليل${r.resolvedByName ? ` (${r.resolvedByName})` : ''}` : 'برقم مرجع الجهاز'}</td>
+                      <td>
+                        {r.verification === 'MANUAL_EVIDENCE'
+                          ? r.resolvedByName
+                            ? t('pos.verifications.proof_evidence_by', { name: r.resolvedByName })
+                            : t('pos.verifications.proof_evidence')
+                          : t('pos.verifications.proof_device_ref')}
+                      </td>
                       <td style={{ color: r.matched ? 'var(--emerald)' : r.overdue ? 'var(--rose)' : undefined }}>
-                        {r.matched ? `طابقتها ${r.settlementNo ?? 'تسوية'}` : r.overdue ? `تجاوزت المهلة (${r.ageDays} يوماً)` : `تنتظر (${r.ageDays} يوماً)`}
+                        {r.matched
+                          ? t('pos.verifications.matched', { ref: r.settlementNo ?? t('pos.verifications.settlement') })
+                          : r.overdue
+                            ? t('pos.verifications.overdue', { n: r.ageDays })
+                            : t('pos.verifications.waiting', { n: r.ageDays })}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-            {/* ⚖️ المعلّقُ من مناوبةٍ مقفلة — في قائمة المطابقة حتى يُحسم، لا يُخمَّن (`ق-١٤١٨`). */}
+            {/* Pending attempts from a closed shift stay in the matching list until resolved, never guessed. */}
             {verifications.unresolvedAttempts.length > 0 && (
               <div data-testid="pos-unresolved-attempts" style={{ marginTop: 12 }}>
-                <div className="card-title">عملياتُ بطاقةٍ لم تُحسم من مناوباتٍ مقفلة ({verifications.unresolvedAttempts.length})</div>
+                <div className="card-title">{t('pos.verifications.unresolved_title', { n: verifications.unresolvedAttempts.length })}</div>
                 <table>
                   <thead>
                     <tr>
-                      <th>المبلغ</th>
-                      <th>الكاشير</th>
-                      <th>البدء</th>
-                      <th>الحال</th>
+                      <th>{t('pos.verifications.col_amount')}</th>
+                      <th>{t('pos.verifications.col_cashier')}</th>
+                      <th>{t('pos.verifications.col_started')}</th>
+                      <th>{t('pos.verifications.col_status')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -948,7 +974,13 @@ export function PosPage() {
                         <td className="num">{fmt(a.amount)}</td>
                         <td>{a.cashierName ?? '—'}</td>
                         <td className="num">{a.createdAt.slice(0, 16).replace('T', ' ')}</td>
-                        <td>{a.status === 'UNKNOWN' ? 'معلّقة — تنتظر جوابَ المزوّد أو الدليل' : a.status === 'CHARGING' ? 'تُشحن' : 'قُبلت ولم تكتمل'}</td>
+                        <td>
+                          {a.status === 'UNKNOWN'
+                            ? t('pos.verifications.status_unknown')
+                            : a.status === 'CHARGING'
+                              ? t('pos.verifications.status_charging')
+                              : t('pos.verifications.status_approved')}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -959,16 +991,16 @@ export function PosPage() {
         </div>
       )}
 
-      {/* إيصال أوفلاين — مرجع مؤقت، الرقم الحقيقي يأتي مع المزامنة */}
+      {/* Offline receipt: a temporary reference; the real number comes with the sync. */}
       {offlineReceipt && (
         <div className="overlay" onClick={() => setOfflineReceipt(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
             <div className="modal-head">
-              <div className="modal-title">بيع مسجَّل أوفلاين ✓</div>
+              <div className="modal-title">{t('pos.offline_receipt.title')}</div>
               <button className="modal-close" onClick={() => setOfflineReceipt(null)}>✕</button>
             </div>
             <div className="print-receipt">
-              <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>مرجع مؤقت: {offlineReceipt.offlineRef}</p>
+              <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>{t('pos.offline_receipt.temp_ref', { ref: offlineReceipt.offlineRef })}</p>
               <table>
                 <tbody>
                   {offlineReceipt.display.map((l, i) => (
@@ -978,49 +1010,49 @@ export function PosPage() {
                     </tr>
                   ))}
                   <tr>
-                    <td style={{ fontWeight: 700 }}>الإجمالي (شامل الضريبة)</td>
+                    <td style={{ fontWeight: 700 }}>{t('pos.offline_receipt.total_incl')}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{fmt(offlineReceipt.total)}</td>
                   </tr>
                 </tbody>
               </table>
-              {/* نصٌّ ظاهر على الإيصال — مسار الأوفلاين المعتمد (ق-١٩٢/أ): الممتثلة تصدر عند العودة بتاريخ هذا البيع. */}
+              {/* Visible text on the receipt: the compliant invoice is issued on reconnect, dated this sale. */}
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
-                إيصالٌ مؤقّت — تُصدَر الفاتورة الممتثلة تلقائياً بتاريخ هذا البيع فور عودة الاتصال
+                {t('pos.offline_receipt.notice')}
               </p>
-              {/* رمز الهيئة للمرحلة الأولى — مبنيٌّ على الجهاز، داخل منطقة الطباعة (ق-١٨٨). */}
+              {/* Phase one ZATCA code, built on the device, inside the print area. */}
               {offlineReceipt.zatcaQr && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
                   <ZatcaQr payload={offlineReceipt.zatcaQr} size={128} />
                 </div>
               )}
             </div>
-            {/* خارج منطقة الطباعة عمداً — تنبيهٌ للكاشير لا سطراً على إيصال العميل. */}
+            {/* Outside the print area on purpose: a note for the cashier, not a line on the customer's receipt. */}
             {!offlineReceipt.zatcaQr && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
-                الإيصال بلا رمز الهيئة — لم يُخبَّأ الاسم القانوني والرقم الضريبي قبل الانقطاع؛ أكملهما في ملف المنشأة عند عودة الاتصال.
+                {t('pos.offline_receipt.no_qr')}
               </p>
             )}
             <div className="modal-foot">
-              <button className="btn btn-ghost" onClick={() => setOfflineReceipt(null)}>إغلاق</button>
-              <button className="btn btn-primary" onClick={() => window.print()}>🖨 طباعة</button>
+              <button className="btn btn-ghost" onClick={() => setOfflineReceipt(null)}>{t('pos.common.close')}</button>
+              <button className="btn btn-primary" onClick={() => window.print()}>{t('pos.common.print')}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* إيصال */}
+      {/* Receipt */}
       {receipt && (
         <div className="overlay" onClick={() => setReceipt(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
             <div className="modal-head">
-              <div className="modal-title">تم البيع ✓</div>
+              <div className="modal-title">{t('pos.receipt.title')}</div>
               <button className="modal-close" onClick={() => setReceipt(null)}>
                 ✕
               </button>
             </div>
             <div id="pos-receipt" className="print-receipt">
               <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>
-                فاتورة {receipt.no}
+                {t('pos.receipt.invoice_no', { no: receipt.no })}
               </p>
               <table>
                 <tbody>
@@ -1033,7 +1065,7 @@ export function PosPage() {
                     </tr>
                   ))}
                   <tr>
-                    <td style={{ fontWeight: 700 }}>الإجمالي (شامل الضريبة)</td>
+                    <td style={{ fontWeight: 700 }}>{t('pos.receipt.total_incl')}</td>
                     <td className="num" style={{ fontWeight: 700 }}>
                       {fmt(Number(receipt.total))}
                     </td>
@@ -1041,43 +1073,47 @@ export function PosPage() {
                 </tbody>
               </table>
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
-                {receipt.paymentMethod === 'CASH' && 'دفع نقدي'}
-                {receipt.paymentMethod === 'CARD' && 'دفع بالشبكة'}
+                {receipt.paymentMethod === 'CASH' && t('pos.receipt.paid_cash')}
+                {receipt.paymentMethod === 'CARD' && t('pos.receipt.paid_card')}
                 {receipt.paymentMethod === 'SPLIT' &&
                   (receipt.posPayments ?? [])
-                    .map((p) => (p.method === 'CASH' ? `نقدي ${fmt(Number(p.amount))}` : `شبكة ${fmt(Number(p.amount))}`))
+                    .map((p) =>
+                      p.method === 'CASH'
+                        ? t('pos.receipt.split_cash', { amount: fmt(Number(p.amount)) })
+                        : t('pos.receipt.split_card', { amount: fmt(Number(p.amount)) }),
+                    )
                     .join(' + ')}
                 {' · '}
-                {new Date().toLocaleString('ar-SA')}
+                {formatDateTime(new Date())}
               </p>
-              {/* رمز الهيئة على إيصال العميل — إلزاميٌّ توليداً وطباعةً (الملحق ١ · ق-١٨٦). داخل منطقة الطباعة عمداً. */}
+              {/* The ZATCA code on the customer's receipt is required both generated and printed, so it sits inside the print area. */}
               {receipt.receiptQr && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
                   <ZatcaQr payload={receipt.receiptQr} size={128} />
                 </div>
               )}
             </div>
-            {/* ⑤A4: فاتورةٌ كاملة (مشترٍ مؤسّسة/اعتباريّ/مسجَّل) تُجاز قبل أن تُشارَك — لا طباعةَ هنا، والتسليمُ من شاشة الفواتير بعد الإجازة. */}
+            {/* A full tax invoice is cleared before it is shared: no printing here; it is handed over from the invoices screen after clearance. */}
             {receipt.clearance?.required && (
               <p className="hint" data-testid="pos-clearance-gate" style={{ color: 'var(--rose)' }}>
-                {receipt.clearance.message ?? 'فاتورةٌ ضريبيةٌ كاملة — تُجاز لدى الهيئة قبل تسليمها؛ تُطبع من شاشة الفواتير بعد الإجازة.'}
+                {receipt.clearance.message ?? t('pos.receipt.clearance_fallback')}
               </p>
             )}
-            {/* خارج .print-receipt عمداً — تنبيه للكاشير لا سطراً على إيصال العميل. */}
+            {/* Outside .print-receipt on purpose: a note for the cashier, not a line on the customer's receipt. */}
             {!receipt.receiptQr && !receipt.clearance?.required && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
-                الإيصال بلا رمز الهيئة — أكمل الاسم القانوني والرقم الضريبي في ملف المنشأة.
+                {t('pos.receipt.no_qr')}
               </p>
             )}
-            {/* ق-١٩٦/١: سقوطُ الختم لا يُسقط البيع — إيصالٌ بالوسوم الخمسة، وتنبيهٌ للكاشير خارج الإيصال. */}
+            {/* A failed stamp does not fail the sale: the receipt carries the five tags, with a note for the cashier outside it. */}
             {receipt.stampError && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
-                لم يُختم عند البيع — خرج الإيصال بالوسوم الخمسة؛ يُعاد الختم والإبلاغ تلقائياً. السبب: {receipt.stampError}
+                {t('pos.receipt.stamp_error', { reason: receipt.stampError })}
               </p>
             )}
             {stockWarnings.length > 0 && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
-                تنبيه: الرصيد الناتج سالب — {stockWarnings.map((w) => `${w.name} (${fmt(w.resultingQty)})`).join('، ')} — تحقق من الجرد
+                {t('pos.receipt.negative_stock', { items: stockWarnings.map((w) => `${w.name} (${fmt(w.resultingQty)})`).join(t('pos.receipt.list_sep')) })}
               </p>
             )}
             {stockNotice && (
@@ -1087,11 +1123,11 @@ export function PosPage() {
             )}
             <div className="modal-foot">
               <button className="btn btn-ghost" onClick={() => setReceipt(null)}>
-                إغلاق
+                {t('pos.common.close')}
               </button>
               {!receipt.clearance?.required && (
                 <button className="btn btn-primary" onClick={() => window.print()}>
-                  🖨 طباعة
+                  {t('pos.common.print')}
                 </button>
               )}
             </div>
@@ -1099,12 +1135,12 @@ export function PosPage() {
         </div>
       )}
 
-      {/* إقفال المناوبة */}
+      {/* Close shift */}
       {closing && (
         <div className="overlay" onClick={() => setClosing(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="modal-head">
-              <div className="modal-title">إقفال المناوبة</div>
+              <div className="modal-title">{t('pos.close.title')}</div>
               <button className="modal-close" onClick={() => setClosing(false)}>
                 ✕
               </button>
@@ -1112,19 +1148,19 @@ export function PosPage() {
             <table>
               <tbody>
                 <tr>
-                  <td>العهدة الافتتاحية</td>
+                  <td>{t('pos.close.opening_float')}</td>
                   <td className="num">{fmt(Number(shift.openingFloat))}</td>
                 </tr>
                 <tr>
-                  <td>مبيعات نقدية</td>
+                  <td>{t('pos.close.cash_sales')}</td>
                   <td className="num">{fmt(shift.cashTotal)}</td>
                 </tr>
                 <tr>
-                  <td>مبيعات شبكة</td>
+                  <td>{t('pos.close.card_sales')}</td>
                   <td className="num">{fmt(shift.cardTotal)}</td>
                 </tr>
                 <tr>
-                  <td style={{ fontWeight: 700 }}>المتوقع في الدرج</td>
+                  <td style={{ fontWeight: 700 }}>{t('pos.close.expected')}</td>
                   <td className="num" style={{ fontWeight: 700 }}>
                     {fmt(shift.expectedCash)}
                   </td>
@@ -1132,16 +1168,16 @@ export function PosPage() {
               </tbody>
             </table>
             <div className="field" style={{ marginTop: 10 }}>
-              <label>النقد المعدود فعلياً</label>
+              <label>{t('pos.close.counted_label')}</label>
               <input type="number" min="0" value={declared} onChange={(e) => setDeclared(e.target.value)} placeholder="0.00" />
             </div>
             {error && <p className="error-text">{error}</p>}
             <div className="modal-foot">
               <button className="btn btn-ghost" onClick={() => setClosing(false)}>
-                إلغاء
+                {t('pos.common.cancel')}
               </button>
               <button className="btn btn-primary" onClick={handleCloseShift}>
-                إقفال وحساب الفرق
+                {t('pos.close.submit')}
               </button>
             </div>
           </div>
