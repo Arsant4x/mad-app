@@ -298,12 +298,12 @@ export function AppShell() {
             }}
           >
             <span>
-              {t('shell.zatca_unreported', { n: unreported.count })}
-              {unreported.oldestIssueDate ? t('shell.zatca_oldest', { date: formatDate(unreported.oldestIssueDate) }) : ''}
-              {unreported.failedQueue > 0 ? t('shell.zatca_failed', { n: unreported.failedQueue }) : ''}
+              {t('shell.einvoice_unreported', { n: unreported.count })}
+              {unreported.oldestIssueDate ? t('shell.einvoice_oldest', { date: formatDate(unreported.oldestIssueDate) }) : ''}
+              {unreported.failedQueue > 0 ? t('shell.einvoice_failed', { n: unreported.failedQueue }) : ''}
             </span>
             <NavLink to="/company-profile" className="btn btn-primary btn-sm" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              {t('shell.zatca_report_link')}
+              {t('shell.einvoice_report_link')}
             </NavLink>
           </div>
         )}

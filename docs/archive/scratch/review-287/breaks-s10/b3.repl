@@ -1,1 +1,0 @@
-        if (nationalId === 'never' || !plan || !plan.idSchemes.includes(REPRESENTATIVE_ID_SCHEME)) throw new BadRequestException(MSG.form_substitute_nafath_id);

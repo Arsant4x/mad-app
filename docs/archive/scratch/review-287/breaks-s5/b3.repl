@@ -1,1 +1,0 @@
-          if (rep) this.logger.debug('representative ignored for a natural person');
