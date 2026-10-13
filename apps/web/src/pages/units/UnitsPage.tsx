@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listProperties, type Property } from '../../api/properties';
 import { BulkUnitsModal } from './BulkUnitsModal';
+import { unitTypeLabel } from './unitTypes';
 import { cancelReservation, createReservation, listReservations, type Reservation, type ReservationInput } from '../../api/reservations';
 import { createUnit, deleteUnit, listUnits, setUnitArchived, updateUnit, type Unit, type UnitInput, type UnitStatus } from '../../api/units';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -61,7 +62,7 @@ export function UnitsPage() {
     return units.filter((u) => {
       const matchesProperty = propertyFilter === 'all' || u.propertyId === propertyFilter;
       const propertyName = propertyById.get(u.propertyId)?.name ?? '';
-      const matchesQuery = !q || u.unitNo.toLowerCase().includes(q) || u.type.toLowerCase().includes(q) || propertyName.toLowerCase().includes(q);
+      const matchesQuery = !q || u.unitNo.toLowerCase().includes(q) || u.type.toLowerCase().includes(q) || unitTypeLabel(u.type).toLowerCase().includes(q) || propertyName.toLowerCase().includes(q);
       return matchesProperty && matchesQuery;
     });
   }, [units, search, propertyFilter, propertyById]);
@@ -184,7 +185,7 @@ export function UnitsPage() {
                       <td>{propertyById.get(u.propertyId)?.name ?? '—'}</td>
                       <td className="num">{u.unitNo}{u.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('units.page.archived')}</span>}</td>
                       <td>{u.floor || '—'}</td>
-                      <td>{u.type}</td>
+                      <td>{unitTypeLabel(u.type)}</td>
                       <td className="num">{fmt(u.rentMonthly)}</td>
                       <td>
                         <span className={`badge ${badgeOf(STATUS_META, u.status).badgeClass}`}>

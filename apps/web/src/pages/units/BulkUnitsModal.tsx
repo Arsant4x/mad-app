@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { bulkCreateUnits } from '../../api/units';
 import type { Property } from '../../api/properties';
+import { DEFAULT_UNIT_TYPE, storedUnitType, unitTypeLabel } from './unitTypes';
 
 /**
  * Bulk units: a prefix and a count, so "A-" and 12 make A-1 to A-12.
@@ -13,7 +14,7 @@ export function BulkUnitsModal({ properties, onCancel, onDone }: { properties: P
   const [prefix, setPrefix] = useState('');
   const [count, setCount] = useState('10');
   const [startAt, setStartAt] = useState('1');
-  const [type, setType] = useState('سكني'); // i18n-exempt: stored unit type value
+  const [type, setType] = useState(unitTypeLabel(DEFAULT_UNIT_TYPE));
   const [rentMonthly, setRentMonthly] = useState('');
   const [floor, setFloor] = useState('');
   const [saving, setSaving] = useState(false);
@@ -41,7 +42,7 @@ export function BulkUnitsModal({ properties, onCancel, onDone }: { properties: P
         prefix: prefix.trim(),
         count: Number(count),
         startAt: Number(startAt) || 1,
-        type: type.trim() || 'سكني', // i18n-exempt: stored unit type value
+        type: storedUnitType(type.trim()) || DEFAULT_UNIT_TYPE,
         rentMonthly: Number(rentMonthly),
         floor: floor.trim() || undefined,
       });
