@@ -88,5 +88,13 @@
     "expiry": "Reservation valid until",
     "cancel": "Cancel",
     "confirm": "Confirm reservation"
+  },
+  "types": {
+    "residential": "Residential",
+    "shop": "Shop",
+    "showroom": "Showroom",
+    "office": "Office",
+    "storeroom": "Storeroom",
+    "other": "Other"
   }
 }

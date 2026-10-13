@@ -88,5 +88,13 @@
     "expiry": "الحجز ساري حتى تاريخ",
     "cancel": "إلغاء",
     "confirm": "تأكيد الحجز"
+  },
+  "types": {
+    "residential": "سكني",
+    "shop": "محل",
+    "showroom": "معرض",
+    "office": "مكتب",
+    "storeroom": "مخزن",
+    "other": "أخرى"
   }
 }

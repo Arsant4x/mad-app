@@ -128,6 +128,70 @@
       "count": 1,
       "reason": "Default Arabic display locale 'ar-SA', kept so every screen moved here renders Arabic exactly as before; one place instead of one per screen. Moves to the company's region setting with the localisation work."
     },
+    "apps/web/src/i18n/locales/ar/common.json": {
+      "count": 1,
+      "reason": "Exemption reason codes (VATEX-SA-*) quoted in the buyer-dependent note of the tax category picker; moves with the VAT unit's labels."
+    },
+    "apps/web/src/i18n/locales/ar/company_profile.json": {
+      "count": 2,
+      "reason": "The national address hint naming ZATCA, and the e-invoicing section's key group named after it; moves with the e-invoicing unit."
+    },
+    "apps/web/src/i18n/locales/ar/contracts.json": {
+      "count": 1,
+      "reason": "The 15% VAT rate written in the exclusive-rent hint; becomes the rate from settings when the VAT unit owns these texts."
+    },
+    "apps/web/src/i18n/locales/ar/customers.json": {
+      "count": 2,
+      "reason": "The riyal abbreviation next to amounts, and the 'SA' country placeholder; amounts move to the currency sign component."
+    },
+    "apps/web/src/i18n/locales/ar/dashboard.json": {
+      "count": 1,
+      "reason": "The riyal abbreviation next to dashboard amounts; moves to the currency sign component."
+    },
+    "apps/web/src/i18n/locales/ar/invoices.json": {
+      "count": 2,
+      "reason": "The riyal abbreviation next to totals, and the e-invoicing status label naming ZATCA."
+    },
+    "apps/web/src/i18n/locales/ar/pos.json": {
+      "count": 1,
+      "reason": "The 15% VAT rate printed on the offline receipt; becomes the rate from settings."
+    },
+    "apps/web/src/i18n/locales/ar/suppliers.json": {
+      "count": 2,
+      "reason": "The riyal abbreviation next to amounts, and the 15% VAT label on the purchase form."
+    },
+    "apps/web/src/i18n/locales/en/common.json": {
+      "count": 1,
+      "reason": "Exemption reason codes (VATEX-SA-*) quoted in the buyer-dependent note of the tax category picker."
+    },
+    "apps/web/src/i18n/locales/en/company_profile.json": {
+      "count": 8,
+      "reason": "ZATCA named in the e-invoicing section and address hint, and SAR 40 million in the VAT period hint; moves with the e-invoicing unit."
+    },
+    "apps/web/src/i18n/locales/en/contracts.json": {
+      "count": 7,
+      "reason": "The 15% VAT rate written in rent, fee, commission and cleaning hints; becomes the rate from settings."
+    },
+    "apps/web/src/i18n/locales/en/customers.json": {
+      "count": 1,
+      "reason": "The 'SA' country placeholder in the buyer address form."
+    },
+    "apps/web/src/i18n/locales/en/invoices.json": {
+      "count": 8,
+      "reason": "ZATCA named in note hints, the send button and the e-invoicing status label."
+    },
+    "apps/web/src/i18n/locales/en/pos.json": {
+      "count": 4,
+      "reason": "The 15% VAT rate on the receipt, and ZATCA named in the offline receipt and clearance messages."
+    },
+    "apps/web/src/i18n/locales/en/shell.json": {
+      "count": 1,
+      "reason": "ZATCA named in the banner for issued documents not yet accepted."
+    },
+    "apps/web/src/i18n/locales/en/suppliers.json": {
+      "count": 1,
+      "reason": "The 15% VAT label on the purchase form."
+    },
     "apps/web/src/layout/AppShell.tsx": {
       "count": 4,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
