@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getIncorporationReport, type IncorporationReport } from '../../api/purchases';
 import { fmt } from '../../lib/format';
+import { Money } from '../../components/currency/Money';
 
 /**
  * Establishment costs report, ported from the v20 mockup's
@@ -45,7 +46,7 @@ export function IncorporationReportPage() {
           <div className="kpi-row">
             <div className="kpi-card neu">
               <div className="kpi-label">{t('suppliers.incorporation.kpi_total')}</div>
-              <div className="kpi-value num">{t('suppliers.amount_sar', { amount: fmt(data.total) })}</div>
+              <div className="kpi-value num"><Money value={fmt(data.total)} /></div>
             </div>
             <div className="kpi-card neu">
               <div className="kpi-label">{t('suppliers.incorporation.kpi_count')}</div>
@@ -72,7 +73,7 @@ export function IncorporationReportPage() {
                   <tr key={row.item}>
                     <td>{row.item}</td>
                     <td className="num">{row.count}</td>
-                    <td className="num">{t('suppliers.amount_sar', { amount: fmt(row.total) })}</td>
+                    <td className="num"><Money value={fmt(row.total)} /></td>
                     <td>{row.method}</td>
                   </tr>
                 ))}

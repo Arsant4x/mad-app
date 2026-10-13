@@ -120,6 +120,10 @@
       "count": 1,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
+    "apps/web/src/components/currency/currencyGlyphs.ts": {
+      "count": 1,
+      "reason": "The official riyal sign (U+20C1) keyed to the central bank's own SVG file, so fonts that lack the sign still show it. The one place that knows the sign: screens read the symbol from the company currency and never name it."
+    },
     "apps/web/src/i18n/format.ts": {
       "count": 1,
       "reason": "Default Arabic display locale 'ar-SA', kept so every screen moved here renders Arabic exactly as before; one place instead of one per screen. Moves to the company's region setting with the localisation work."

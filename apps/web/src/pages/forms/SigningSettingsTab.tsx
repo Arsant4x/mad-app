@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getFormSigningSettings, updateFormSigningSettings, type FormSigningSettings } from '../../api/forms';
 import { useAuth } from '../../auth/AuthContext';
 import { apiErrorMessage } from '../../lib/apiError';
+import { CurrencyMark } from '../../components/currency/Money';
 
 /**
  * Signing settings.
@@ -108,7 +109,9 @@ export function SigningSettingsTab() {
       </table>
 
       <div className="field" style={{ marginTop: 12 }}>
-        <label htmlFor="nafath-threshold">{t('forms.signing_settings.threshold_label', { currency: settings.currency })}</label>
+        <label htmlFor="nafath-threshold">
+          {t('forms.signing_settings.threshold_label')} (<CurrencyMark code={settings.currency} />)
+        </label>
         <input
           id="nafath-threshold"
           type="number"

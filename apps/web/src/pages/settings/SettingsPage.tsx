@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useCurrencies } from '../../components/currency/CurrencyContext';
+import { CurrencySign } from '../../components/currency/Money';
 import {
   createActivity,
   deleteActivity,
@@ -67,11 +69,14 @@ export function SettingsPage() {
   const [rateValue, setRateValue] = useState('');
   const [rateDate, setRateDate] = useState(new Date().toISOString().slice(0, 10));
 
+  const shellCurrencies = useCurrencies();
+
   async function reload() {
     const [a, c, r] = await Promise.all([listActivities(), listCurrencies(), listExchangeRates()]);
     setActivities(a);
     setCurrencies(c);
     setRates(r);
+    shellCurrencies.reload();
   }
 
   useEffect(() => {
@@ -384,7 +389,12 @@ export function SettingsPage() {
                   {c.code} {c.isBase && <span className="badge paid">{t('settings.page.base')}</span>}
                 </td>
                 <td>
-                  {c.name} {c.symbol ? `(${c.symbol})` : ''}
+                  {c.name}{' '}
+                  {c.symbol ? (
+                    <>
+                      (<CurrencySign symbol={c.symbol} code={c.code} />)
+                    </>
+                  ) : null}
                 </td>
                 <td>
                   {isOwner && !c.isBase ? (

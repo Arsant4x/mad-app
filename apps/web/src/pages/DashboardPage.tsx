@@ -6,6 +6,7 @@ import { listInvoices, type Invoice } from '../api/invoices';
 import { getDashboard, type DashboardSummary } from '../api/reports';
 import { usePermissions } from '../auth/PermissionsContext';
 import { dfmt, fmt } from '../lib/format';
+import { Money } from '../components/currency/Money';
 import { num0 } from '../lib/money';
 import { computeRange, type DashRange } from './dashboardRange';
 import { STATUS_META } from './invoices/statusMeta';
@@ -127,28 +128,28 @@ export function DashboardPage() {
           {summary.revenue !== undefined && (
             <div className="kpi-card pos">
               <div className="kpi-label">{t('dashboard.revenue')}</div>
-              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.revenue) })}</div>
+              <div className="kpi-value num"><Money value={fmt(summary.revenue)} /></div>
               <div className="kpi-delta">{t('dashboard.revenue_note')}</div>
             </div>
           )}
           {summary.expenses !== undefined && (
             <div className="kpi-card neg">
               <div className="kpi-label">{t('dashboard.expenses')}</div>
-              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.expenses) })}</div>
+              <div className="kpi-value num"><Money value={fmt(summary.expenses)} /></div>
               <div className="kpi-delta">{t('dashboard.expenses_note')}</div>
             </div>
           )}
           {summary.netProfit !== undefined && (
             <div className={`kpi-card ${net >= 0 ? 'pos' : 'neg'}`}>
               <div className="kpi-label">{t('dashboard.net_profit')}</div>
-              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.netProfit) })}</div>
+              <div className="kpi-value num"><Money value={fmt(summary.netProfit)} /></div>
               <div className={`kpi-delta ${net >= 0 ? 'up' : 'down'}`}>{net >= 0 ? t('dashboard.profit_period') : t('dashboard.loss_period')}</div>
             </div>
           )}
           {summary.receivables !== undefined && (
             <div className="kpi-card neu">
               <div className="kpi-label">{t('dashboard.receivables')}</div>
-              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.receivables) })}</div>
+              <div className="kpi-value num"><Money value={fmt(summary.receivables)} /></div>
               <div className="kpi-delta">{summary.scope === 'ownBranches' ? t('dashboard.receivables_own') : t('dashboard.receivables_all')}</div>
             </div>
           )}

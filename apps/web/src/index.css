@@ -58,6 +58,23 @@ textarea {
   unicode-bidi: isolate;
 }
 
+/* An amount and its currency sign: always laid out left to right, sign first. */
+.money {
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+
+/* The issuer's drawn sign: as tall as the digits, in the text colour so it
+   keeps the text's contrast with the background. */
+.currency-sign {
+  display: inline-block;
+  height: 0.75em;
+  width: auto;
+  vertical-align: baseline;
+  fill: currentColor;
+}
+
 /* ---------- page chrome ---------- */
 .topbar {
   display: flex;

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getCustomerSummary, type Customer, type CustomerSummary } from '../../api/customers';
 import type { Invoice } from '../../api/invoices';
 import { dfmt, fmt } from '../../lib/format';
+import { Money } from '../../components/currency/Money';
 import { num0 } from '../../lib/money';
 import { STATUS_META } from '../invoices/statusMeta';
 import { usePermissions } from '../../auth/PermissionsContext';
@@ -61,16 +62,16 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
           <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
             <div className="kpi-card neu">
               <div className="kpi-label">{t('customers.detail.billed')}</div>
-              <div className="kpi-value num">{summary ? t('customers.detail.amount_sar', { amount: fmt(summary.billed) }) : '…'}</div>
+              <div className="kpi-value num">{summary ? <Money value={fmt(summary.billed)} /> : '…'}</div>
               <div className="kpi-delta">{t('customers.detail.invoice_count', { n: customerInvoices.length })}</div>
             </div>
             <div className="kpi-card pos">
               <div className="kpi-label">{t('customers.detail.collected')}</div>
-              <div className="kpi-value num">{summary ? t('customers.detail.amount_sar', { amount: fmt(summary.collected) }) : '…'}</div>
+              <div className="kpi-value num">{summary ? <Money value={fmt(summary.collected)} /> : '…'}</div>
             </div>
             <div className={`kpi-card ${balance > 0 ? 'neg' : 'pos'}`}>
               <div className="kpi-label">{t('customers.detail.outstanding')}</div>
-              <div className="kpi-value num">{summary ? t('customers.detail.amount_sar', { amount: fmt(summary.outstanding) }) : '…'}</div>
+              <div className="kpi-value num">{summary ? <Money value={fmt(summary.outstanding)} /> : '…'}</div>
             </div>
           </div>
         )}

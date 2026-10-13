@@ -22,7 +22,6 @@
   "range_year": "This year",
   "range_all": "All periods",
   "to": "to",
-  "amount_sar": "{{amount}} SAR",
   "revenue": "Revenue",
   "revenue_note": "Net of VAT, for the selected period",
   "expenses": "Expenses",

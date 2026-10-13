@@ -23,8 +23,7 @@
     "col_rate": "النسبة",
     "rate_pct": "{{rate}}٪",
     "add_line": "+ إضافة بند جديد",
-    "line_error": "البند {{n}}: {{msg}}",
-    "amount_sar": "{{amount}} ر.س"
+    "line_error": "البند {{n}}: {{msg}}"
   },
   "credit_note": {
     "title": "إصدار إشعار دائن",
