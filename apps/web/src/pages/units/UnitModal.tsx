@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Property } from '../../api/properties';
 import type { Unit, UnitInput } from '../../api/units';
+import { DEFAULT_UNIT_TYPE, storedUnitType, unitTypeLabel, unitTypeSuggestions } from './unitTypes';
 
-const TYPE_OPTIONS = ['سكني', 'محل', 'معرض', 'مكتب', 'مخزن', 'أخرى']; // i18n-exempt: stored unit type values
 
 export function UnitModal({
   properties,
@@ -22,7 +22,7 @@ export function UnitModal({
   const [propertyId, setPropertyId] = useState(editing?.propertyId ?? defaultPropertyId ?? properties[0]?.id ?? '');
   const [unitNo, setUnitNo] = useState(editing?.unitNo ?? '');
   const [floor, setFloor] = useState(editing?.floor ?? '');
-  const [type, setType] = useState(editing?.type ?? 'سكني'); // i18n-exempt: stored unit type value
+  const [type, setType] = useState(unitTypeLabel(editing?.type ?? DEFAULT_UNIT_TYPE));
   const [subtype, setSubtype] = useState(editing?.subtype ?? '');
   const [rentMonthly, setRentMonthly] = useState(editing?.rentMonthly ?? '');
   const [underMaintenance, setUnderMaintenance] = useState(editing?.underMaintenance ?? false);
@@ -42,7 +42,7 @@ export function UnitModal({
         propertyId,
         unitNo: unitNo.trim(),
         floor: floor.trim() || undefined,
-        type,
+        type: storedUnitType(type),
         subtype: subtype.trim() || undefined,
         rentMonthly: parseFloat(String(rentMonthly)) || 0,
         roomDetails: roomDetails.trim() || undefined,
@@ -90,7 +90,7 @@ export function UnitModal({
             <label>{t('units.modal.type')}</label>
             <input list="unit-type-list" value={type} onChange={(e) => setType(e.target.value)} placeholder={t('units.modal.type_placeholder')} />
             <datalist id="unit-type-list">
-              {TYPE_OPTIONS.map((o) => (
+              {unitTypeSuggestions().map((o) => (
                 <option key={o} value={o} />
               ))}
             </datalist>

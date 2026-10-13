@@ -34,7 +34,7 @@ export function BranchesPage() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return branches;
-    return branches.filter((b) => b.name.toLowerCase().includes(q) || (b.type ?? '').toLowerCase().includes(q));
+    return branches.filter((b) => b.name.toLowerCase().includes(q) || (b.type ?? '').toLowerCase().includes(q) || (b.type ? branchTypeLabel(b.type).toLowerCase().includes(q) : false));
   }, [branches, search]);
 
   async function handleSave(data: BranchInput) {
