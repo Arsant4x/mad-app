@@ -6,6 +6,7 @@ import { listOpenPrepayments, type Customer, type Invoice, type InvoiceLineInput
 import { num0 } from '../../lib/money';
 import type { NewCustomerKind } from '../../api/customers';
 import { fmt, toLocalISODate, today } from '../../lib/format';
+import { Money } from '../../components/currency/Money';
 import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
 import i18n from '../../i18n';
@@ -303,7 +304,7 @@ export function InvoiceBuilderView({
                     checked={applyIds.includes(p.id)}
                     onChange={(e) => setApplyIds((ids) => (e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id)))}
                   />{' '}
-                  <span className="num">{p.no}</span> · {p.issueDate.slice(0, 10)} · <span className="num">{p.total}</span> {p.currency}
+                  <span className="num">{p.no}</span> · {p.issueDate.slice(0, 10)} · <span className="num"><Money value={p.total} currency={p.currency} /></span>
                   {p.receiptNo && <span className="hint">{t('invoices.builder.from_receipt', { no: p.receiptNo })}</span>}
                 </label>
               ))}
@@ -325,7 +326,7 @@ export function InvoiceBuilderView({
             </div>
             <div className="t-row grand">
               <span>{t('invoices.builder.grand_total')}</span>
-              <span className="num">{t('invoices.common.amount_sar', { amount: fmt(totals.grand) })}</span>
+              <span className="num"><Money value={fmt(totals.grand)} /></span>
             </div>
             {appliedPreview > 0 && (
               <>
@@ -335,7 +336,7 @@ export function InvoiceBuilderView({
                 </div>
                 <div className="t-row">
                   <span>{t('invoices.builder.due_after_prepayments')}</span>
-                  <span className="num">{t('invoices.common.amount_sar', { amount: fmt(Math.max(0, totals.grand - appliedPreview)) })}</span>
+                  <span className="num"><Money value={fmt(Math.max(0, totals.grand - appliedPreview))} /></span>
                 </div>
               </>
             )}

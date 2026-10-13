@@ -26,6 +26,9 @@ describe('🔴 لا علامةَ سعوديةً حرفيةً جديدةً خار
     expect(scan.filesScanned).toBeGreaterThan(500);
     expect(countMarkerLines("export const DEFAULT_CURRENCY = 'SAR';")).toBe(1);
     expect(countMarkerLines('// كان هنا \'SAR\' ثابتةً — شرحٌ لا شيفرة')).toBe(0);
+    // The official riyal sign is a marker as the character and as its escape.
+    expect(countMarkerLines(`const sign = '${String.fromCodePoint(0x20c1)}';`)).toBe(1);
+    expect(countMarkerLines(`const sign = '${'\\'}u20C1';`)).toBe(1);
     // الموجبُ المعلوم: بذرةُ عملة الأساس في `company-defaults.ts` (كان `base-amount.util.ts` حتى أسقط `ق-١٣٦٨` ريالَه الثابت).
     expect(scan.outside['apps/api/src/companies/company-defaults.ts']).toBeGreaterThan(0);
     expect(scan.outside['apps/api/src/auth/auth.service.ts']).toBeUndefined();

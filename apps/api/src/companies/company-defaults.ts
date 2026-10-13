@@ -44,7 +44,8 @@ export const DEFAULT_ACTIVITY_NAME = 'النشاط الرئيسي';
 
 /** رمز عملة الأساس. يطابق `Company.baseCurrency` الافتراضي عمداً: صفٌّ لا
  *  يطابق أساس المنشأة أسوأ من غياب الصفّ — يوحي بأن الأساس شيء آخر. */
-export const DEFAULT_CURRENCY = { code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س' } as const;
+// The riyal's symbol is the central bank's official sign (U+20C1); the interface draws it from the issuer's file.
+export const DEFAULT_CURRENCY = { code: 'SAR', name: 'ريال سعودي', symbol: '\u20C1' } as const;
 
 export interface CompanyDefaultsResult {
   activityCreated: boolean;

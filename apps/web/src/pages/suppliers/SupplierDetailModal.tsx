@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Purchase } from '../../api/purchases';
 import { getSupplierSummary, type Supplier, type SupplierSummary } from '../../api/suppliers';
 import { dfmt, fmt } from '../../lib/format';
+import { Money } from '../../components/currency/Money';
 import { num0 } from '../../lib/money';
 import { purchaseStatus } from './purchaseStatus';
 
@@ -90,18 +91,18 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
           <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
             <div className="kpi-card neu">
               <div className="kpi-label">{t('suppliers.detail.kpi_billed')}</div>
-              <div className="kpi-value num">{summary ? t('suppliers.amount_sar', { amount: fmt(summary.billed) }) : '…'}</div>
+              <div className="kpi-value num">{summary ? <Money value={fmt(summary.billed)} /> : '…'}</div>
               <div className="kpi-delta">
                 {t('suppliers.detail.shown_of', { shown: filtered.length, total: allForSupplier.length })}
               </div>
             </div>
             <div className="kpi-card pos">
               <div className="kpi-label">{t('suppliers.detail.kpi_paid')}</div>
-              <div className="kpi-value num">{summary ? t('suppliers.amount_sar', { amount: fmt(summary.paid) }) : '…'}</div>
+              <div className="kpi-value num">{summary ? <Money value={fmt(summary.paid)} /> : '…'}</div>
             </div>
             <div className={`kpi-card ${totalDue > 0 ? 'neg' : 'pos'}`}>
               <div className="kpi-label">{t('suppliers.detail.kpi_due')}</div>
-              <div className="kpi-value num">{summary ? t('suppliers.amount_sar', { amount: fmt(summary.due) }) : '…'}</div>
+              <div className="kpi-value num">{summary ? <Money value={fmt(summary.due)} /> : '…'}</div>
             </div>
           </div>
         )}

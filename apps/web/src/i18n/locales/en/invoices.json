@@ -23,8 +23,7 @@
     "col_rate": "Rate",
     "rate_pct": "{{rate}}%",
     "add_line": "+ Add line",
-    "line_error": "Line {{n}}: {{msg}}",
-    "amount_sar": "{{amount}} SAR"
+    "line_error": "Line {{n}}: {{msg}}"
   },
   "credit_note": {
     "title": "Issue credit note",

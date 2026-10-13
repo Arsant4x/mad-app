@@ -266,7 +266,7 @@ async function seedActivityAndCurrency(companyId: string, activityName: string, 
     await tx.currency.upsert({
       where: { companyId_code: { companyId, code: 'SAR' } },
       update: {},
-      create: { companyId, code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', isBase: true, rate: 1 },
+      create: { companyId, code: 'SAR', name: 'ريال سعودي', symbol: '\u20C1', isBase: true, rate: 1 },
     });
   });
 }

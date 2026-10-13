@@ -110,7 +110,7 @@
     "empty": "No company templates yet; copy a template from “Company templates” to set its period",
     "default": "Default",
     "period_aria": "Signing period: {{name}}",
-    "threshold_label": "Contract value above which Nafath is required ({{currency}})",
+    "threshold_label": "Contract value above which Nafath is required",
     "threshold_aria": "Nafath threshold",
     "threshold_placeholder": "Empty = not required",
     "threshold_hint": "A contract whose total value exceeds this threshold is signed by the tenant only after identity verification through Nafath; below it Nafath is optional.",

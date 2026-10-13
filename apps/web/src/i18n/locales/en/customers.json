@@ -32,7 +32,6 @@
     "phone": "Mobile",
     "refused": "Company-wide customer figures are shown only to users who see all branches.",
     "billed": "Total invoiced",
-    "amount_sar": "{{amount}} SAR",
     "invoice_count": "Invoices: {{n}}",
     "collected": "Collected",
     "outstanding": "Balance due",

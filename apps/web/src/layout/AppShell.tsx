@@ -11,6 +11,7 @@ import { usePermissions } from '../auth/PermissionsContext';
 import { exitSupportMode, supportCompanyId, supportCompanyName } from '../lib/supportMode';
 import { currentLanguage, setLanguage } from '../i18n';
 import { formatDate } from '../i18n/format';
+import { CurrencyProvider } from '../components/currency/CurrencyContext';
 
 interface NavItemDef {
   /**
@@ -338,7 +339,9 @@ export function AppShell() {
         ) : consent?.blocked ? (
           <ConsentRequiredView state={consent} onAccepted={setConsent} onLogout={logout} />
         ) : (
-          <Outlet />
+          <CurrencyProvider>
+            <Outlet />
+          </CurrencyProvider>
         )}
       </main>
     </div>

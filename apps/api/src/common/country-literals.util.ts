@@ -26,6 +26,7 @@ export const COUNTRY_MARKERS: ReadonlyArray<{ id: string; re: RegExp; what: stri
   { id: 'zatca', re: /zatca/i, what: 'اسمُ الهيئة (ZATCA) في شيفرةٍ عامّة' },
   { id: 'sar', re: /(['"`])SAR\1/, what: 'رمزُ الريال حرفاً — والعملةُ من المنشأة' },
   { id: 'riyal-symbol', re: /ر\.س/, what: 'رمزُ الريال في الواجهة' },
+  { id: 'riyal-sign', re: /\u20C1|\\u20C1/, what: 'رمزُ الريال الرسميّ (U+20C1) حرفاً — والرمزُ من عملة المنشأة' },
   { id: 'riyadh-tz', re: /Asia\/Riyadh/, what: 'منطقةُ الرياض الزمنية — والمنطقةُ من المنشأة' },
   { id: 'ksa-offset', re: /\bKSA_UTC_OFFSET_MIN\b/, what: 'إزاحةُ التوقيت السعوديّ' },
   { id: 'ar-sa', re: /ar-SA/, what: 'محلّيةُ العرض السعودية' },
