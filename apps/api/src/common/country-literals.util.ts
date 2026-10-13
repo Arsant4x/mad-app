@@ -61,12 +61,24 @@ function walk(dir: string, out: string[] = []): string[] {
     if (name === 'node_modules' || name === 'dist') continue;
     if (statSync(full).isDirectory()) walk(full, out);
     else if (/\.tsx?$/.test(name) && !/\.d\.ts$/.test(name)) out.push(full);
+    else if (/\.json$/.test(name) && isTranslationFile(posix(full))) out.push(full);
   }
   return out;
 }
 
+/**
+ * Translation files are read like code: moving a marker out of a screen into a
+ * translation value must not hide it from the guard.
+ */
+export const TRANSLATION_ROOT = 'apps/web/src/i18n/locales/';
+
+function isTranslationFile(path: string): boolean {
+  return /\/apps\/web\/src\/i18n\/locales\/(ar|en)\/[^/]+\.json$/.test(`/${path}`);
+}
+
 /** أهو ملفُّ إنتاج؟ — لا اختبار ولا بيئةَ اختبار. */
 function isProduction(rel: string): boolean {
+  if (isTranslationFile(rel)) return true;
   if (!/\.(ts|tsx)$/.test(rel)) return false;
   if (/\.(spec|e2e-spec|test)\.tsx?$/.test(rel)) return false;
   return !rel.startsWith('apps/web/src/test/');
@@ -89,12 +101,15 @@ export function insideSaudiBoundary(rel: string): boolean {
   if (rel.startsWith('apps/api/src/common/region/')) return true;
   if (rel.startsWith('apps/api/src/common/vat/') || rel.startsWith('apps/api/src/obligations/')) return true;
   if (rel.startsWith('apps/web/src/pages/obligations/')) return true;
+  // The VAT return screens' own translation file sits inside with them.
+  if (/^apps\/web\/src\/i18n\/locales\/(ar|en)\/obligations\.json$/.test(rel)) return true;
   return ['apps/web/src/lib/vat.ts', 'apps/web/src/api/obligations.ts', 'apps/web/src/components/LineTaxPicker.tsx'].includes(rel);
 }
 
 /** عددُ الأسطر التي تحمل علامةً سعودية في نصّ ملفّ — بعد تجريد التعليقات. */
-export function countMarkerLines(source: string): number {
-  return stripComments(source)
+export function countMarkerLines(source: string, { json = false } = {}): number {
+  // JSON has no comments, and its values are exactly what is shown.
+  return (json ? source : stripComments(source))
     .split(/\r?\n/)
     .filter((line) => COUNTRY_MARKERS.some((m) => m.re.test(line))).length;
 }
@@ -117,7 +132,7 @@ export function scanCountryLiterals(root: string = REPO_ROOT): CountryLiteralsSc
       const rel = posix(relative(root, abs));
       if (!isProduction(rel) || SELF.has(rel)) continue;
       filesScanned += 1;
-      const n = countMarkerLines(readFileSync(abs, 'utf8'));
+      const n = countMarkerLines(readFileSync(abs, 'utf8'), { json: rel.endsWith('.json') });
       if (n === 0) continue;
       if (insideSaudiBoundary(rel)) insideLines += n;
       else outside[rel] = n;

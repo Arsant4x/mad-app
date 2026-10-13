@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { countMarkerLines, DEBT_FILE, insideSaudiBoundary, REPO_ROOT, scanCountryLiterals } from './country-literals.util';
+import { countMarkerLines, DEBT_FILE, insideSaudiBoundary, REPO_ROOT, scanCountryLiterals, TRANSLATION_ROOT } from './country-literals.util';
 import { readsDeclaredStrings } from './source-scan.util';
 
 // 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): العلاماتُ السعودية نصوصٌ (`'SAR'` · `'Asia/Riyadh'` · `'ar-SA'`) — فتجريدُها يُعميه.
@@ -34,6 +34,15 @@ describe('🔴 لا علامةَ سعوديةً حرفيةً جديدةً خار
     expect(insideSaudiBoundary('apps/api/src/common/region/regions.ts')).toBe(true);
     expect(insideSaudiBoundary('apps/api/src/invoices/invoices.service.ts')).toBe(false);
     expect(scan.insideLines).toBeGreaterThan(0);
+  });
+
+  it('⓪ب translation files are read like code: a known value is hit, a clean file is not, VAT return text sits inside', () => {
+    expect(countMarkerLines('  "amount_sar": "{{amount}} ر.س",', { json: true })).toBe(1);
+    expect(countMarkerLines('  "archived": "Archived",', { json: true })).toBe(0);
+    expect(scan.outside[`${TRANSLATION_ROOT}en/invoices.json`]).toBeGreaterThan(0);
+    expect(scan.outside[`${TRANSLATION_ROOT}ar/trash.json`]).toBeUndefined();
+    expect(insideSaudiBoundary(`${TRANSLATION_ROOT}ar/obligations.json`)).toBe(true);
+    expect(insideSaudiBoundary(`${TRANSLATION_ROOT}ar/invoices.json`)).toBe(false);
   });
 
   it('⭐ ① لا ملفَّ خارج الحدود يزيد على دَينه — ولا ملفَّ جديداً بعلامةٍ لم تُعلَن', () => {
