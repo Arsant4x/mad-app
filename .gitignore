@@ -41,3 +41,6 @@ backups/
 # السجلُّ أثرٌ محلّيٌّ يُقرأ في تقرير الجلسة لا يُدفع، والمنفذُ مؤقّتٌ بأجلٍ لا يُلتزم به.
 .claude/edit-while-reading.log
 .claude/allow-edit-while-reading
+
+# Per-machine tool settings carry local paths and permissions; each machine keeps its own copy.
+.claude/settings.local.json
