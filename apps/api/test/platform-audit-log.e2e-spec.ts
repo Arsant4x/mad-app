@@ -189,8 +189,9 @@ describe('Platform audit log (e2e)', () => {
   });
 
   it('refuses UPDATE and DELETE on the platform audit table in the database, and hides it outside the platform context', async () => {
-    const rows = await platformRowsUntil(`adminId=${operationsAdminId}&page=1`, (all) => all.length > 0);
-    const rowId = rows[0]?.id;
+    const isRefusal = (r: PlatformRow) => r.route === '/companies/:id/subscription' && r.status === 403;
+    const rows = await platformRowsUntil(`adminId=${operationsAdminId}&page=1`, (all) => all.some(isRefusal));
+    const rowId = rows.find(isRefusal)?.id;
     expect(rowId).toBeTruthy();
 
     await expect(asPlatform((tx) => tx.$executeRaw`UPDATE "platform_audit_logs" SET "status" = 200 WHERE "id" = ${rowId}`)).rejects.toThrow(/append only/);
