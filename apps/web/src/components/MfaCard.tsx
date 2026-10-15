@@ -8,16 +8,28 @@ import { beginMfa, confirmMfa, disableMfa, getMfaStatus, type MfaStatus } from '
  * Protecting my account is my decision: no role grants or withholds it, and the identity comes from
  * the token. The secret and the recovery codes are shown once: no path returns them, and the screen
  * says so before the user closes it, so whoever closes it without copying starts again.
+ *
+ * Turning it on or off asks for the current password. After the change the server ends the access
+ * token it was made with, and the API client renews the session on the next request. On the sign-in
+ * screen `onEnrolled` takes the recovery codes instead, since that short session ends with the change.
  */
-export function MfaCard() {
+export function MfaCard({ onEnrolled }: { onEnrolled?: (recoveryCodes: string[]) => void } = {}) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<MfaStatus | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [otpauth, setOtpauth] = useState<string | null>(null);
   const [codes, setCodes] = useState<string[] | null>(null);
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const ready = code.trim().length >= 6 && password.length > 0;
+  const passwordField = (
+    <div className="field" style={{ maxWidth: 220 }}>
+      <label htmlFor="mfa-current-password">{t('common.mfa.current_password')}</label>
+      <input id="mfa-current-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+    </div>
+  );
 
   async function reload() {
     setStatus(await getMfaStatus());
@@ -66,13 +78,15 @@ export function MfaCard() {
             <label>{t('common.mfa.code_to_disable')}</label>
             <input className="num" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} />
           </div>
+          {passwordField}
           <button
             className="btn btn-ghost btn-sm"
-            disabled={busy || code.trim().length < 6}
+            disabled={busy || !ready}
             onClick={() =>
               run(async () => {
-                await disableMfa(code.trim());
+                await disableMfa(code.trim(), password);
                 setCode('');
+                setPassword('');
                 setCodes(null);
                 setSecret(null);
                 await reload();
@@ -91,15 +105,21 @@ export function MfaCard() {
             <label>{t('common.mfa.code_from_app')}</label>
             <input className="num" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
           </div>
+          {passwordField}
           <button
             className="btn btn-primary btn-sm"
-            disabled={busy || code.trim().length < 6}
+            disabled={busy || !ready}
             onClick={() =>
               run(async () => {
-                const done = await confirmMfa(code.trim());
-                setCodes(done.recoveryCodes);
+                const done = await confirmMfa(code.trim(), password);
                 setCode('');
+                setPassword('');
                 setSecret(null);
+                if (onEnrolled) {
+                  onEnrolled(done.recoveryCodes);
+                  return;
+                }
+                setCodes(done.recoveryCodes);
                 await reload();
               })
             }

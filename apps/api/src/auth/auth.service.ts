@@ -9,8 +9,9 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { createCompanyAccount } from '../companies/create-company-account';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
-import { JwtPayload } from './types';
+import { JwtPayload, MFA_ENROLMENT_SCOPE } from './types';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { CredentialChangeService } from '../common/credentials/credential-change.service';
 import { MailService } from '../common/mail/mail.service';
 import { MfaService } from '../common/mfa/mfa.service';
 import { assertPasswordPolicy } from '../common/password/password-policy';
@@ -67,6 +68,7 @@ interface IdentityRow {
   actorType: 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
   passwordHash: string;
   companyId: string | null;
+  credentialVersion: number;
 }
 
 /**
@@ -85,6 +87,8 @@ interface IdentityWithProfiles {
   id: string;
   username: string;
   actorType: 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
+  /** Carried into every token signed for this identity, so a later credential change makes the token stale. */
+  credentialVersion: number;
   platformAdmin: { id: string; displayName: string; role: PlatformRole } | null;
   company:
     | { id: string; orgName: string; status: AccountStatus; frozenAt: Date | null; subEnd: Date | null; permissionTemplate: { isAllScreens: boolean; allowedScreens: string[] } }
@@ -120,6 +124,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mail: MailService,
     private readonly mfa: MfaService,
+    private readonly credentials: CredentialChangeService,
   ) {}
 
   /**
@@ -128,7 +133,15 @@ export class AuthService {
    * (يتيمةٌ — `ق-٦٦٨`) تعود بلا ملفٍّ فيرفضها `buildSessionFromIdentity` كما كان.
    */
   private async loadProfiles(identity: IdentityRow): Promise<IdentityWithProfiles> {
-    const base: IdentityWithProfiles = { id: identity.id, username: identity.username, actorType: identity.actorType, platformAdmin: null, company: null, companyUser: null };
+    const base: IdentityWithProfiles = {
+      id: identity.id,
+      username: identity.username,
+      actorType: identity.actorType,
+      credentialVersion: identity.credentialVersion,
+      platformAdmin: null,
+      company: null,
+      companyUser: null,
+    };
     if (identity.actorType === 'PLATFORM_ADMIN') {
       base.platformAdmin = await this.prisma.platformAdmin.findUnique({ where: { loginIdentityId: identity.id }, select: { id: true, displayName: true, role: true } });
       return base;
@@ -185,9 +198,8 @@ export class AuthService {
       if (!code) throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_required, mfaRequired: true });
       await this.mfa.assertCode(identity.id, code);
     } else if (identity.actorType === 'PLATFORM_ADMIN' && MfaService.requiredForPlatformAdmin()) {
-      // ⛔ **الإلزامُ علَمٌ مطفأٌ افتراضياً**: مُشعَلاً لا يدخل مديرُ منصّةٍ بلا تسجيل —
-      //    **والرسالةُ تقول ما يفعل**، فلا يُترك أمام رفضٍ لا مخرجَ منه.
-      throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_enrolment_required, mfaEnrolmentRequired: true });
+      // No session until the second factor is on; the refusal carries a short session that can only enrol it.
+      throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_enrolment_required, mfaEnrolmentRequired: true, enrolmentToken: await this.signEnrolmentToken(profiles) });
     }
 
     return this.buildSessionFromIdentity(profiles);
@@ -318,8 +330,8 @@ export class AuthService {
       throw new UnauthorizedException(MSG.invalid_credentials);
     }
 
-    const accessToken = await this.signAccessToken(payload);
-    const { refreshToken, refreshTokenExpiresAt } = await this.issueRefreshToken(identity.id);
+    const { refreshToken, refreshTokenExpiresAt, sessionId } = await this.issueRefreshToken(identity.id);
+    const accessToken = await this.signAccessToken({ ...payload, cv: identity.credentialVersion, sid: sessionId });
     return { accessToken, refreshToken, refreshTokenExpiresAt, user };
   }
 
@@ -330,20 +342,38 @@ export class AuthService {
     });
   }
 
-  private async issueRefreshToken(loginIdentityId: string): Promise<{ refreshToken: string; refreshTokenExpiresAt: Date }> {
+  /** Long enough to scan the key and type one code; the guard lets it reach the enrolment routes only. */
+  private static readonly ENROLMENT_SESSION_TTL = '10m';
+
+  private signEnrolmentToken(identity: IdentityWithProfiles): Promise<string> {
+    if (!identity.platformAdmin) throw new UnauthorizedException(MSG.invalid_credentials);
+    const payload: JwtPayload = {
+      sub: identity.id,
+      actorType: 'PLATFORM_ADMIN',
+      companyId: null,
+      profileId: identity.platformAdmin.id,
+      username: identity.username,
+      cv: identity.credentialVersion,
+      scope: MFA_ENROLMENT_SCOPE,
+    };
+    return this.jwt.signAsync(payload, { secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'), expiresIn: AuthService.ENROLMENT_SESSION_TTL });
+  }
+
+  private async issueRefreshToken(loginIdentityId: string): Promise<{ refreshToken: string; refreshTokenExpiresAt: Date; sessionId: string }> {
     const refreshToken = crypto.randomBytes(REFRESH_TOKEN_BYTES).toString('hex');
     const ttlMs = this.parseTtlToMs(this.config.get<string>('JWT_REFRESH_TTL', '30d'));
     const expiresAt = new Date(Date.now() + ttlMs);
 
-    await this.prisma.refreshToken.create({
+    const row = await this.prisma.refreshToken.create({
       data: {
         tokenHash: this.hashToken(refreshToken),
         loginIdentityId,
         expiresAt,
       },
+      select: { id: true },
     });
 
-    return { refreshToken, refreshTokenExpiresAt: expiresAt };
+    return { refreshToken, refreshTokenExpiresAt: expiresAt, sessionId: row.id };
   }
 
   // ---------- Password reset ----------
@@ -423,14 +453,14 @@ export class AuthService {
     assertPasswordPolicy(newPassword, { username: identity.username, email: identity.company?.email });
 
     const passwordHash = await argon2.hash(newPassword);
-    await this.prisma.$transaction([
-      this.prisma.loginIdentity.update({ where: { id: record.loginIdentityId }, data: { passwordHash } }),
-      this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
-      this.prisma.refreshToken.updateMany({
-        where: { loginIdentityId: record.loginIdentityId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
+    const notice = await this.prisma.$transaction(async (tx) => {
+      // The token is claimed first and only while still unused, so a second redemption, even at the same moment, writes nothing.
+      const claimed = await tx.passwordResetToken.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+      if (claimed.count !== 1) throw new UnauthorizedException(MSG.reset_token_invalid);
+      await tx.loginIdentity.update({ where: { id: record.loginIdentityId }, data: { passwordHash } });
+      return this.credentials.record(tx, record.loginIdentityId, ['password']);
+    });
+    this.credentials.notify(notice);
   }
 
   // ---------- Self-registration ----------

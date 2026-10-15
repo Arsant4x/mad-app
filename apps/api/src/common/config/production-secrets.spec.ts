@@ -21,6 +21,7 @@ const VALID = {
   S3_PUBLIC_URL: 'https://files.mad-app.sa',
   WEB_ORIGIN: 'https://app.mad-app.sa',
   DATABASE_URL: 'postgresql://app_user:s3cret@postgres:5432/mad_app?schema=public',
+  MFA_REQUIRED_FOR_PLATFORM_ADMIN: 'true',
 } as NodeJS.ProcessEnv;
 
 const withEnv = (over: Record<string, string | undefined>) => ({ ...VALID, ...over }) as NodeJS.ProcessEnv;
@@ -199,5 +200,15 @@ describe('③ — عنوانُ متتبّع الأخطاء يُقبل صالحا
     for (const bad of ['http://k3y@errors.rikzapp.com/3', 'http://k3y@127.0.0.1:9000/3', 'https://errors.rikzapp.com/3', 'https://k3y@errors.rikzapp.com/x']) {
       expect(reasons({ ERROR_TRACKING_DSN: bad })).toContain('ERROR_TRACKING_DSN — صيغةٌ غير صالحة');
     }
+  });
+});
+
+describe('second factor required for platform accounts in production', () => {
+  it('boots when MFA_REQUIRED_FOR_PLATFORM_ADMIN is true', () => {
+    expect(() => assertProductionSecrets(withEnv({ MFA_REQUIRED_FOR_PLATFORM_ADMIN: 'true' }))).not.toThrow();
+  });
+
+  it.each([[undefined], ['false'], [''], ['yes']])('refuses to boot when MFA_REQUIRED_FOR_PLATFORM_ADMIN is %p', (value) => {
+    expect(() => assertProductionSecrets(withEnv({ MFA_REQUIRED_FOR_PLATFORM_ADMIN: value }))).toThrow(/MFA_REQUIRED_FOR_PLATFORM_ADMIN/);
   });
 });

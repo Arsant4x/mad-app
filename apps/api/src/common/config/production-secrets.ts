@@ -83,6 +83,12 @@ const REQUIRED: SecretRule[] = [
     why: 'مفتاحُ بصمة البحث برقم الهويّة («معرّفٌ:مفتاح») — منفصلٌ عن مفاتيح التشفير',
     extra: (v, env) => blindKeyProblem(v, env.PII_ENCRYPTION_KEYS),
   },
+  // A platform account reaches every company; production does not run with its second factor optional.
+  {
+    name: 'MFA_REQUIRED_FOR_PLATFORM_ADMIN',
+    why: 'يُلزم حسابات المنصّة بالمصادقة المتعددة، فحساب المنصّة يصل إلى كل المنشآت ولا تكفي كلمة مرور مسرّبة وحدها للدخول به',
+    extra: (v) => (v === 'true' ? null : 'يجب أن يكون true في الإنتاج'),
+  },
 ];
 
 /** Domain of the sender address ("Name <no-reply@rikzapp.com>" or "no-reply@rikzapp.com"), or null without one. */

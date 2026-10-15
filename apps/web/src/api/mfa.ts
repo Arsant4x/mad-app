@@ -14,8 +14,10 @@ export const getMfaStatus = () => apiClient.get<MfaStatus>('/auth/mfa').then((r)
 /** يبدأ التسجيل — **السرُّ يُعرض مرّةً هنا ولا يُقرأ بعدها من أيّ مسار**. */
 export const beginMfa = () => apiClient.post<{ secret: string; otpauth: string }>('/auth/mfa/begin').then((r) => r.data);
 
-/** يُكمله برمزٍ من التطبيق — **ورموزُ الاسترداد تُعرض مرّةً واحدة**. */
-export const confirmMfa = (code: string) => apiClient.post<{ recoveryCodes: string[] }>('/auth/mfa/confirm', { code }).then((r) => r.data);
+/** Completes enrolment with a code from the app and the current password; the recovery codes are shown once. */
+export const confirmMfa = (code: string, currentPassword: string) =>
+  apiClient.post<{ recoveryCodes: string[] }>('/auth/mfa/confirm', { code, currentPassword }).then((r) => r.data);
 
-/** يُلغيه **برمزٍ حيّ** — فلا يُلغيه من استولى على جلسةٍ مفتوحة. */
-export const disableMfa = (code: string) => apiClient.post<{ enrolled: boolean }>('/auth/mfa/disable', { code }).then((r) => r.data);
+/** Turns it off with a live code and the current password, so an open session alone cannot remove it. */
+export const disableMfa = (code: string, currentPassword: string) =>
+  apiClient.post<{ enrolled: boolean }>('/auth/mfa/disable', { code, currentPassword }).then((r) => r.data);

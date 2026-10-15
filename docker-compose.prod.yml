@@ -122,6 +122,8 @@ services:
       ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       TRIAL_DAYS: ${TRIAL_DAYS:-14}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      # Platform accounts sign in with a second factor; the boot guard refuses any value but true.
+      MFA_REQUIRED_FOR_PLATFORM_ADMIN: ${MFA_REQUIRED_FOR_PLATFORM_ADMIN:-true}
       DEV_SEED_PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME}
       DEV_SEED_PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
     ports:

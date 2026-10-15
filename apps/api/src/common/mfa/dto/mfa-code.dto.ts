@@ -1,4 +1,5 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { PASSWORD_MAX_LENGTH } from '../../password/password-policy';
 
 /**
  * ⚖️ `ق-١٣٨٣` — **في ملفّ `.dto.ts` لا في المتحكّم**: مُلحَقُ `@nestjs/swagger` يقرأ هذه اللاحقةَ وحدَها
@@ -9,4 +10,10 @@ export class MfaCodeDto {
   @IsString()
   @MinLength(6)
   code!: string;
+
+  /** The account's current password: turning the second factor on or off changes the sign-in credentials. */
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(PASSWORD_MAX_LENGTH)
+  currentPassword!: string;
 }

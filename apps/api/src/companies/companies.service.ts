@@ -10,6 +10,7 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.dto';
 import { PlatformDecisionsService } from '../platform/platform-decisions.service';
+import { CredentialChange, CredentialChangeService } from '../common/credentials/credential-change.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { assertPasswordPolicy } from '../common/password/password-policy';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
@@ -64,6 +65,7 @@ export class CompaniesService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly config: ConfigService,
     private readonly decisions: PlatformDecisionsService,
+    private readonly credentials: CredentialChangeService,
   ) {}
 
   /**
@@ -165,29 +167,36 @@ export class CompaniesService {
     // «والقائمون لا يُمسّون».
     if (dto.permissionTemplateId && dto.permissionTemplateId !== existing.permissionTemplateId) await this.assertCompanyTemplate(dto.permissionTemplateId);
 
+    const current = await this.prisma.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
     // Checked before any write, against the username the account will have after this update.
-    if (dto.password) {
-      const identity = await this.prisma.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
-      assertPasswordPolicy(dto.password, { username: dto.username ?? identity.username, email: existing.email });
-    }
+    if (dto.password) assertPasswordPolicy(dto.password, { username: dto.username ?? current.username, email: existing.email });
 
-    if (dto.username) {
-      const clash = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-      if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
-      await this.prisma.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username: dto.username } });
+    const username = dto.username && dto.username !== current.username ? dto.username : undefined;
+    if (username) {
+      const clash = await this.prisma.loginIdentity.findUnique({ where: { username } });
+      if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username }));
     }
-    if (dto.password) {
-      await this.prisma.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { passwordHash: await argon2.hash(dto.password) } });
-    }
+    const passwordHash = dto.password ? await argon2.hash(dto.password) : undefined;
 
-    return this.prisma.company.update({
-      where: { id },
-      data: {
-        orgName: dto.orgName,
-        permissionTemplateId: dto.permissionTemplateId,
-      },
-      include: COMPANY_INCLUDE,
+    const changes: CredentialChange[] = [];
+    if (username) changes.push('username');
+    if (passwordHash) changes.push('password');
+    const { company, notice } = await this.prisma.$transaction(async (tx) => {
+      if (changes.length) await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username, passwordHash } });
+      // A change of the owner's sign-in details ends every session the owner had before it.
+      const notice = changes.length ? await this.credentials.record(tx, existing.loginIdentityId, changes) : null;
+      const company = await tx.company.update({
+        where: { id },
+        data: {
+          orgName: dto.orgName,
+          permissionTemplateId: dto.permissionTemplateId,
+        },
+        include: COMPANY_INCLUDE,
+      });
+      return { company, notice };
     });
+    if (notice) this.credentials.notify(notice);
+    return company;
   }
 
   /**

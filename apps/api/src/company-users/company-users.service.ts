@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
+import { CredentialChange, CredentialChangeNotice, CredentialChangeService } from '../common/credentials/credential-change.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { assertBranchIdsAssignable, assertNoOpenShiftOutside, replaceBranchAssignments } from './branch-assignment.util';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
@@ -52,6 +53,7 @@ export class CompanyUsersService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly audit: AuditService,
+    private readonly credentials: CredentialChangeService,
   ) {}
 
   list(companyId: string, actorType: string, query?: PagedQueryDto) {
@@ -138,7 +140,8 @@ export class CompanyUsersService {
   async update(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateCompanyUserDto) {
     assertIsCompanyOwner(actorType);
 
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    const { updated, notice } = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      let notice: CredentialChangeNotice | null = null;
       const existing = await tx.companyUser.findUnique({ where: { id } });
       if (!existing || existing.companyId !== companyId) throw new NotFoundException(MSG.company_user_not_found);
 
@@ -150,30 +153,23 @@ export class CompanyUsersService {
         if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
       }
 
-      if (dto.password) {
-        const identity = await tx.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
-        assertPasswordPolicy(dto.password, { username: dto.username ?? identity.username });
-      }
+      const current = await tx.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
+      if (dto.password) assertPasswordPolicy(dto.password, { username: dto.username ?? current.username });
 
-      if (dto.username) {
-        const clash = await tx.loginIdentity.findUnique({ where: { username: dto.username } });
-        if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
-        await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username: dto.username } });
+      const username = dto.username && dto.username !== current.username ? dto.username : undefined;
+      if (username) {
+        const clash = await tx.loginIdentity.findUnique({ where: { username } });
+        if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username }));
       }
-      /**
-       * **وتغييرُ الكلمة يُنهي الجلساتِ كالتعطيل** (`ق-١٢٧٨`/④ — `R48` في المراجعة الخارجية).
-       *
-       * كان يكتب التجزئةَ وحدَها: فموظّفٌ غادر وغُيّرت كلمتُه **يبقى داخلاً برمز تحديثه** حتى
-       * ثلاثين يوماً ما لم يُجمَّد — والمالكُ الذي غيّر الكلمةَ يظنّ أنه أغلق الباب.
-       * و`auth.service.resetPassword` كانت تُبطلها والمسارُ الثاني لا — **فاستوى المساران**.
-       * (والإبطالُ داخل المعاملة نفسِها: كلمةٌ جديدة بلا إبطالٍ ملتزَمٍ معها حالةٌ نصفية.)
-       */
-      if (dto.password) {
-        await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { passwordHash: await argon2.hash(dto.password) } });
-        await tx.refreshToken.updateMany({
-          where: { loginIdentityId: existing.loginIdentityId, revokedAt: null },
-          data: { revokedAt: new Date() },
-        });
+      // A new username or password ends the employee's sessions in the same transaction: a new
+      // credential without the revocation committed with it is a half state.
+      const changes: CredentialChange[] = [];
+      if (username) changes.push('username');
+      if (dto.password) changes.push('password');
+      if (changes.length) {
+        const passwordHash = dto.password ? await argon2.hash(dto.password) : undefined;
+        await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username, passwordHash } });
+        notice = await this.credentials.record(tx, existing.loginIdentityId, changes);
       }
 
       /**
@@ -211,12 +207,15 @@ export class CompanyUsersService {
         });
       }
 
-      return tx.companyUser.update({
+      const updated = await tx.companyUser.update({
         where: { id },
         data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData, allBranches },
         include: COMPANY_USER_INCLUDE,
       });
+      return { updated, notice };
     });
+    if (notice) this.credentials.notify(notice);
+    return updated;
   }
 
   /** Every id must belong to this company — a branch id from elsewhere would
