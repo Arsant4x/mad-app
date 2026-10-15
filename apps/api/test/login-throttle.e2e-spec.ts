@@ -124,4 +124,15 @@ d('Unauthenticated route throttling (e2e)', () => {
     expect(codes.slice(0, 5).every((c) => c === 400)).toBe(true);
     expect(codes[5]).toBe(429);
   });
+
+  it('counts a request with a made-up key by address on routes that use the default counter too', async () => {
+    const ip = freshIp();
+    const unknownLink = 'C'.repeat(43);
+    const codes: number[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      codes.push((await http().post(`/public/forms/${unknownLink}/otp`).set('X-Forwarded-For', ip).set('X-Api-Key', fakeKey())).status);
+    }
+    expect(codes.slice(0, 5)).toEqual([404, 404, 404, 404, 404]);
+    expect(codes[5]).toBe(429);
+  });
 });
