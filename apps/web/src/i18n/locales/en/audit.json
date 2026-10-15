@@ -17,6 +17,7 @@
     "details": "Details"
   },
   "owner_suffix": " (owner)",
+  "platform_admin_suffix": " (platform administration)",
   "hide": "Hide",
   "details": "Details",
   "ip_label": "IP:",

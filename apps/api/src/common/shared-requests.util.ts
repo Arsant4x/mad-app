@@ -135,7 +135,7 @@ export function renderSharedRequests(doc: OpenAPIObject): RenderedRequests {
     bodyNames.add(n);
     for (const r of refsIn(schemas[n])) queue.push(r);
   }
-  const decls: Declaration[] = [...bodyNames].sort((a, b) => a.localeCompare(b, 'en')).map((n) => declarationOf(n, schemas[n], `جسمُ طلب — \`${n}\` في الخادم.`));
+  const decls: Declaration[] = [...bodyNames].sort((a, b) => a.localeCompare(b, 'en')).map((n) => declarationOf(n, schemas[n], `Request body: \`${n}\` on the server.`));
 
   // ② وسائطُ الاستعلام لكلِّ عمليةٍ تعلنها.
   const queries = ops
@@ -147,7 +147,7 @@ export function renderSharedRequests(doc: OpenAPIObject): RenderedRequests {
         properties: Object.fromEntries(params.map((p) => [p.name, p.schema ?? {}])),
         required: params.filter((p) => p.required).map((p) => p.name),
       };
-      return declarationOf(queryTypeName(op.operationId!), schema, `وسائطُ استعلام \`${op.operationId}\`.`);
+      return declarationOf(queryTypeName(op.operationId!), schema, `Query parameters of \`${op.operationId}\`.`);
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'en'));
   const names = [...decls, ...queries].map((d) => d.name);
@@ -224,7 +224,7 @@ export function renderSharedResponses(doc: OpenAPIObject, requestNames: Readonly
     names.add(n);
     for (const r of refsIn(schemas[n])) queue.push(r);
   }
-  const all = [...names].sort((a, b) => a.localeCompare(b, 'en')).map((n) => declarationOf(n, schemas[n], `ردٌّ — \`${n}\` في الخادم (ق-١٤٣٨).`));
+  const all = [...names].sort((a, b) => a.localeCompare(b, 'en')).map((n) => declarationOf(n, schemas[n], `Response: \`${n}\` on the server.`));
 
   const unitSet = new Set(all.filter((d) => d.saudi || [...d.refs].some((r) => requestUnitNames.has(r))).map((d) => d.name));
   let grew = true;

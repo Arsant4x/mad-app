@@ -46,7 +46,7 @@ function parentIdFromParams(params: unknown): string | undefined {
   return undefined;
 }
 
-function safeDetails(body: unknown): Record<string, unknown> | null {
+export function safeDetails(body: unknown): Record<string, unknown> | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body as Record<string, unknown>)) {

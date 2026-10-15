@@ -41,6 +41,7 @@ const ENTITY_LABELS: Record<string, string> = {
   reminders: 'تذكيرات التحصيل',
   subscription: 'الاشتراك',
   'company-profile': 'بيانات المنشأة',
+  companies: 'حساب المنشأة',
   'company-users': 'حساب موظف',
   zatca: 'الفوترة الإلكترونية',
   files: 'ملف',
@@ -120,6 +121,7 @@ const SUB_RESOURCE_LABELS: Record<string, string> = {
   forms: 'نموذج',
   values: 'قيم نموذج',
   seal: 'ختم نموذج',
+  subscription: 'الاشتراك',
 };
 
 @Injectable()

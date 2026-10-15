@@ -3,34 +3,34 @@
 // يُعاد توليدُه بـ: npm run openapi:snapshot  (من apps/api)
 // والحارسُ خطوةُ openapi:check نفسُها (scripts/openapi-snapshot.ts) — تعيد الرسمَ وتُسقط إن اختلف.
 
-/** جسمُ طلب — `AcceptConsentDto` في الخادم. */
+/** Request body: `AcceptConsentDto` on the server. */
 export interface AcceptConsentDto {
   version: number;
 }
 
-/** جسمُ طلب — `AllocateDto` في الخادم. */
+/** Request body: `AllocateDto` on the server. */
 export interface AllocateDto {
   allocations: AllocationDto[];
   date?: string;
 }
 
-/** جسمُ طلب — `AllocateSupplierPaymentDto` في الخادم. */
+/** Request body: `AllocateSupplierPaymentDto` on the server. */
 export interface AllocateSupplierPaymentDto {
   allocations: SupplierAllocationDto[];
 }
 
-/** جسمُ طلب — `AllocationDto` في الخادم. */
+/** Request body: `AllocationDto` on the server. */
 export interface AllocationDto {
   invoiceId: string;
   amount: number;
 }
 
-/** جسمُ طلب — `AssignMaintenanceDto` في الخادم. */
+/** Request body: `AssignMaintenanceDto` on the server. */
 export interface AssignMaintenanceDto {
   assignedTo: string;
 }
 
-/** جسمُ طلب — `BulkCreateUnitsDto` في الخادم. */
+/** Request body: `BulkCreateUnitsDto` on the server. */
 export interface BulkCreateUnitsDto {
   propertyId: string;
   prefix: string;
@@ -42,7 +42,7 @@ export interface BulkCreateUnitsDto {
   rentMonthly: number;
 }
 
-/** جسمُ طلب — `CancelContractDto` في الخادم. */
+/** Request body: `CancelContractDto` on the server. */
 export interface CancelContractDto {
   cancelDate: string;
   cancelReason: string;
@@ -55,39 +55,39 @@ export interface CancelContractDto {
   exchangeRate?: number;
 }
 
-/** جسمُ طلب — `CancelMaintenanceDto` في الخادم. */
+/** Request body: `CancelMaintenanceDto` on the server. */
 export interface CancelMaintenanceDto {
   cancelReason: string;
 }
 
-/** جسمُ طلب — `ClaimWarrantyDto` في الخادم. */
+/** Request body: `ClaimWarrantyDto` on the server. */
 export interface ClaimWarrantyDto {
   warrantyId?: string | null;
 }
 
-/** جسمُ طلب — `CloseMaintenanceDto` في الخادم. */
+/** Request body: `CloseMaintenanceDto` on the server. */
 export interface CloseMaintenanceDto {
   closedAt: string;
 }
 
-/** جسمُ طلب — `CloseReconciliationDto` في الخادم. */
+/** Request body: `CloseReconciliationDto` on the server. */
 export interface CloseReconciliationDto {
   until: string;
 }
 
-/** جسمُ طلب — `CloseShiftDto` في الخادم. */
+/** Request body: `CloseShiftDto` on the server. */
 export interface CloseShiftDto {
   declaredClosing: number;
   notes?: string;
   closedOffsetMin?: number;
 }
 
-/** جسمُ طلب — `CommentTaskDto` في الخادم. */
+/** Request body: `CommentTaskDto` on the server. */
 export interface CommentTaskDto {
   note: string;
 }
 
-/** جسمُ طلب — `CompleteMaintenanceDto` في الخادم. */
+/** Request body: `CompleteMaintenanceDto` on the server. */
 export interface CompleteMaintenanceDto {
   completedAt: string;
   cost?: number;
@@ -97,25 +97,25 @@ export interface CompleteMaintenanceDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `ContractFeeDto` في الخادم. */
+/** Request body: `ContractFeeDto` on the server. */
 export interface ContractFeeDto {
   label: string;
   amount: number;
   effectiveFrom?: string;
 }
 
-/** جسمُ طلب — `ConvertQuoteDto` في الخادم. */
+/** Request body: `ConvertQuoteDto` on the server. */
 export interface ConvertQuoteDto {
   creditOverride?: boolean;
 }
 
-/** جسمُ طلب — `CopyFormTemplateDto` في الخادم. */
+/** Request body: `CopyFormTemplateDto` on the server. */
 export interface CopyFormTemplateDto {
   sourceTemplateId: string;
   name?: string;
 }
 
-/** جسمُ طلب — `CreateAccountDto` في الخادم. */
+/** Request body: `CreateAccountDto` on the server. */
 export interface CreateAccountDto {
   code: string;
   name: string;
@@ -124,20 +124,20 @@ export interface CreateAccountDto {
   openingDate?: string;
 }
 
-/** جسمُ طلب — `CreateActivityDto` في الخادم. */
+/** Request body: `CreateActivityDto` on the server. */
 export interface CreateActivityDto {
   name: string;
   activityType?: string;
   sector?: 'REALESTATE' | 'RESTAURANT' | 'RETAIL' | 'PHARMACY' | 'CONTRACTING' | 'FREELANCE' | 'OTHER';
 }
 
-/** جسمُ طلب — `CreateApiKeyDto` في الخادم. */
+/** Request body: `CreateApiKeyDto` on the server. */
 export interface CreateApiKeyDto {
   name: string;
   permissionTemplateId: string;
 }
 
-/** جسمُ طلب — `CreateBankDto` في الخادم. */
+/** Request body: `CreateBankDto` on the server. */
 export interface CreateBankDto {
   name: string;
   kind: 'CASH_BOX' | 'BANK_ACCOUNT';
@@ -149,7 +149,7 @@ export interface CreateBankDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateBranchDto` في الخادم. */
+/** Request body: `CreateBranchDto` on the server. */
 export interface CreateBranchDto {
   name: string;
   type?: string;
@@ -159,7 +159,7 @@ export interface CreateBranchDto {
   hours?: string;
 }
 
-/** جسمُ طلب — `CreateCashDepositDto` في الخادم. */
+/** Request body: `CreateCashDepositDto` on the server. */
 export interface CreateCashDepositDto {
   drawerId: string;
   bankId: string;
@@ -168,13 +168,13 @@ export interface CreateCashDepositDto {
   memo?: string;
 }
 
-/** جسمُ طلب — `CreateCashDrawerDto` في الخادم. */
+/** Request body: `CreateCashDrawerDto` on the server. */
 export interface CreateCashDrawerDto {
   name: string;
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateClaimDto` في الخادم. */
+/** Request body: `CreateClaimDto` on the server. */
 export interface CreateClaimDto {
   kind: 'MAINTENANCE' | 'UTILITIES' | 'LATE_FEE' | 'DAMAGE' | 'OTHER';
   amount: number;
@@ -187,7 +187,7 @@ export interface CreateClaimDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateCompanyDto` في الخادم. */
+/** Request body: `CreateCompanyDto` on the server. */
 export interface CreateCompanyDto {
   orgName: string;
   username: string;
@@ -198,7 +198,7 @@ export interface CreateCompanyDto {
   country?: string;
 }
 
-/** جسمُ طلب — `CreateCompanyUserDto` في الخادم. */
+/** Request body: `CreateCompanyUserDto` on the server. */
 export interface CreateCompanyUserDto {
   name: string;
   username: string;
@@ -209,7 +209,7 @@ export interface CreateCompanyUserDto {
   canEditMasterData?: boolean;
 }
 
-/** جسمُ طلب — `CreateContractDto` في الخادم. */
+/** Request body: `CreateContractDto` on the server. */
 export interface CreateContractDto {
   unitId: string;
   classification: 'RESIDENTIAL' | 'COMMERCIAL' | 'SERVICED_LODGING' | 'MIXED';
@@ -236,7 +236,7 @@ export interface CreateContractDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateCreditNoteDto` في الخادم. */
+/** Request body: `CreateCreditNoteDto` on the server. */
 export interface CreateCreditNoteDto {
   reason: string;
   issueDate?: string;
@@ -244,7 +244,7 @@ export interface CreateCreditNoteDto {
   lines?: InvoiceLineDto[];
 }
 
-/** جسمُ طلب — `CreateCurrencyDto` في الخادم. */
+/** Request body: `CreateCurrencyDto` on the server. */
 export interface CreateCurrencyDto {
   code: string;
   name: string;
@@ -252,7 +252,7 @@ export interface CreateCurrencyDto {
   rate?: number;
 }
 
-/** جسمُ طلب — `CreateCustomerDto` في الخادم. */
+/** Request body: `CreateCustomerDto` on the server. */
 export interface CreateCustomerDto {
   name: string;
   kind: 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON';
@@ -270,7 +270,7 @@ export interface CreateCustomerDto {
   allowSameName?: boolean;
 }
 
-/** جسمُ طلب — `CreateDebitNoteDto` في الخادم. */
+/** Request body: `CreateDebitNoteDto` on the server. */
 export interface CreateDebitNoteDto {
   reason: string;
   issueDate?: string;
@@ -278,14 +278,14 @@ export interface CreateDebitNoteDto {
   lines: InvoiceLineDto[];
 }
 
-/** جسمُ طلب — `CreateDelegationDto` في الخادم. */
+/** Request body: `CreateDelegationDto` on the server. */
 export interface CreateDelegationDto {
   granteeId: string;
   nodeKey: 'root' | 'other' | 'realestate' | 'accounting' | 'sales' | 'purchasing' | 'hr' | 'banking' | 'compliance' | 'company' | 'overview' | 'dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms';
   grants: string[];
 }
 
-/** جسمُ طلب — `CreateEmployeeDto` في الخادم. */
+/** Request body: `CreateEmployeeDto` on the server. */
 export interface CreateEmployeeDto {
   status?: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   fullName: string;
@@ -300,20 +300,20 @@ export interface CreateEmployeeDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateFiscalYearDto` في الخادم. */
+/** Request body: `CreateFiscalYearDto` on the server. */
 export interface CreateFiscalYearDto {
   name: string;
   start: string;
   end: string;
 }
 
-/** جسمُ طلب — `CreateFormInstanceDto` في الخادم. */
+/** Request body: `CreateFormInstanceDto` on the server. */
 export interface CreateFormInstanceDto {
   templateId: string;
   formDate?: string;
 }
 
-/** جسمُ طلب — `CreateFormTemplateDto` في الخادم. */
+/** Request body: `CreateFormTemplateDto` on the server. */
 export interface CreateFormTemplateDto {
   formTypeId: string;
   name: string;
@@ -321,7 +321,7 @@ export interface CreateFormTemplateDto {
   items: FormTemplateItemDto[];
 }
 
-/** جسمُ طلب — `CreateFormTypeDto` في الخادم. */
+/** Request body: `CreateFormTypeDto` on the server. */
 export interface CreateFormTypeDto {
   code: string;
   name: string;
@@ -329,7 +329,7 @@ export interface CreateFormTypeDto {
   sector?: 'REALESTATE' | 'RESTAURANT' | 'RETAIL' | 'PHARMACY' | 'CONTRACTING' | 'FREELANCE' | 'OTHER';
 }
 
-/** جسمُ طلب — `CreateGoodsReceiptDto` في الخادم. */
+/** Request body: `CreateGoodsReceiptDto` on the server. */
 export interface CreateGoodsReceiptDto {
   receivedAt: string;
   warehouseId?: string;
@@ -337,7 +337,7 @@ export interface CreateGoodsReceiptDto {
   lines: GoodsReceiptLineDto[];
 }
 
-/** جسمُ طلب — `CreateHandoverDto` في الخادم. */
+/** Request body: `CreateHandoverDto` on the server. */
 export interface CreateHandoverDto {
   type: 'DELIVERY' | 'RECEIPT';
   date: string;
@@ -347,7 +347,7 @@ export interface CreateHandoverDto {
   items: HandoverItemDto[];
 }
 
-/** جسمُ طلب — `CreateIntegrationDto` في الخادم. */
+/** Request body: `CreateIntegrationDto` on the server. */
 export interface CreateIntegrationDto {
   kind: 'PAYMENT_GATEWAY' | 'BNPL' | 'ECOMMERCE';
   provider: string;
@@ -355,7 +355,7 @@ export interface CreateIntegrationDto {
   credentials: Record<string, unknown>;
 }
 
-/** جسمُ طلب — `CreateInvoiceDto` في الخادم. */
+/** Request body: `CreateInvoiceDto` on the server. */
 export interface CreateInvoiceDto {
   customerId: string;
   issueDate: string;
@@ -371,7 +371,7 @@ export interface CreateInvoiceDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateJournalEntryDto` في الخادم. */
+/** Request body: `CreateJournalEntryDto` on the server. */
 export interface CreateJournalEntryDto {
   date: string;
   memo: string;
@@ -381,7 +381,7 @@ export interface CreateJournalEntryDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateLandedCostDto` في الخادم. */
+/** Request body: `CreateLandedCostDto` on the server. */
 export interface CreateLandedCostDto {
   purchaseLineId: string;
   method?: 'VALUE' | 'QUANTITY' | 'MANUAL';
@@ -392,7 +392,7 @@ export interface CreateLandedCostDto {
   notes?: string;
 }
 
-/** جسمُ طلب — `CreateLeaveRequestDto` في الخادم. */
+/** Request body: `CreateLeaveRequestDto` on the server. */
 export interface CreateLeaveRequestDto {
   employeeId: string;
   leaveTypeId: string;
@@ -401,14 +401,14 @@ export interface CreateLeaveRequestDto {
   reason?: string;
 }
 
-/** جسمُ طلب — `CreateLeaveTypeDto` في الخادم. */
+/** Request body: `CreateLeaveTypeDto` on the server. */
 export interface CreateLeaveTypeDto {
   name: string;
   annualDays?: number;
   paid?: boolean;
 }
 
-/** جسمُ طلب — `CreateMaintenanceDto` في الخادم. */
+/** Request body: `CreateMaintenanceDto` on the server. */
 export interface CreateMaintenanceDto {
   propertyId: string;
   unitId?: string;
@@ -419,7 +419,7 @@ export interface CreateMaintenanceDto {
   reportedAt: string;
 }
 
-/** جسمُ طلب — `CreateNetworkSettlementDto` في الخادم. */
+/** Request body: `CreateNetworkSettlementDto` on the server. */
 export interface CreateNetworkSettlementDto {
   bankId: string;
   date: string;
@@ -432,7 +432,7 @@ export interface CreateNetworkSettlementDto {
   receiptIds?: string[];
 }
 
-/** جسمُ طلب — `CreatePaymentDto` في الخادم. */
+/** Request body: `CreatePaymentDto` on the server. */
 export interface CreatePaymentDto {
   customerId: string;
   branchId?: string;
@@ -449,7 +449,7 @@ export interface CreatePaymentDto {
   exchangeRate?: number;
 }
 
-/** جسمُ طلب — `CreatePosPaymentAttemptDto` في الخادم. */
+/** Request body: `CreatePosPaymentAttemptDto` on the server. */
 export interface CreatePosPaymentAttemptDto {
   lines: PosSaleLineDto[];
   paymentMethod: 'CASH' | 'CARD' | 'SPLIT';
@@ -462,7 +462,7 @@ export interface CreatePosPaymentAttemptDto {
   offlineRef?: string;
 }
 
-/** جسمُ طلب — `CreatePosSaleDto` في الخادم. */
+/** Request body: `CreatePosSaleDto` on the server. */
 export interface CreatePosSaleDto {
   lines: PosSaleLineDto[];
   paymentMethod: 'CASH' | 'CARD' | 'SPLIT';
@@ -473,7 +473,7 @@ export interface CreatePosSaleDto {
   cardDeviceReference?: string;
 }
 
-/** جسمُ طلب — `CreateProductDto` في الخادم. */
+/** Request body: `CreateProductDto` on the server. */
 export interface CreateProductDto {
   name: string;
   sku?: string;
@@ -489,7 +489,7 @@ export interface CreateProductDto {
   barcode?: string;
 }
 
-/** جسمُ طلب — `CreatePropertyDto` في الخادم. */
+/** Request body: `CreatePropertyDto` on the server. */
 export interface CreatePropertyDto {
   name: string;
   address?: string;
@@ -507,7 +507,7 @@ export interface CreatePropertyDto {
   lng?: number;
 }
 
-/** جسمُ طلب — `CreatePurchaseDto` في الخادم. */
+/** Request body: `CreatePurchaseDto` on the server. */
 export interface CreatePurchaseDto {
   supplierId: string;
   date: string;
@@ -530,7 +530,7 @@ export interface CreatePurchaseDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateQuoteDto` في الخادم. */
+/** Request body: `CreateQuoteDto` on the server. */
 export interface CreateQuoteDto {
   customerId: string;
   branchId?: string;
@@ -542,7 +542,7 @@ export interface CreateQuoteDto {
   exchangeRate?: number;
 }
 
-/** جسمُ طلب — `CreateReservationDto` في الخادم. */
+/** Request body: `CreateReservationDto` on the server. */
 export interface CreateReservationDto {
   unitId: string;
   name: string;
@@ -551,14 +551,14 @@ export interface CreateReservationDto {
   expiryDate: string;
 }
 
-/** جسمُ طلب — `CreateScriptDto` في الخادم. */
+/** Request body: `CreateScriptDto` on the server. */
 export interface CreateScriptDto {
   audience: 'TENANT' | 'CUSTOMER' | 'EMPLOYEE';
   title: string;
   text: string;
 }
 
-/** جسمُ طلب — `CreateStockMovementDto` في الخادم. */
+/** Request body: `CreateStockMovementDto` on the server. */
 export interface CreateStockMovementDto {
   productId: string;
   warehouseId: string;
@@ -573,7 +573,7 @@ export interface CreateStockMovementDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateSupplierDto` في الخادم. */
+/** Request body: `CreateSupplierDto` on the server. */
 export interface CreateSupplierDto {
   name: string;
   vatNumber?: string;
@@ -581,7 +581,7 @@ export interface CreateSupplierDto {
   category?: string;
 }
 
-/** جسمُ طلب — `CreateSupplierNoteDto` في الخادم. */
+/** Request body: `CreateSupplierNoteDto` on the server. */
 export interface CreateSupplierNoteDto {
   reason: string;
   date?: string;
@@ -589,7 +589,7 @@ export interface CreateSupplierNoteDto {
   lines?: SupplierNoteLineDto[];
 }
 
-/** جسمُ طلب — `CreateSupplierPaymentDto` في الخادم. */
+/** Request body: `CreateSupplierPaymentDto` on the server. */
 export interface CreateSupplierPaymentDto {
   supplierId: string;
   branchId?: string;
@@ -604,7 +604,7 @@ export interface CreateSupplierPaymentDto {
   exchangeRate?: number;
 }
 
-/** جسمُ طلب — `CreateTaskDto` في الخادم. */
+/** Request body: `CreateTaskDto` on the server. */
 export interface CreateTaskDto {
   title: string;
   assigneeId: string;
@@ -618,7 +618,7 @@ export interface CreateTaskDto {
   dueAnchor?: string;
 }
 
-/** جسمُ طلب — `CreateTemplateDto` في الخادم. */
+/** Request body: `CreateTemplateDto` on the server. */
 export interface CreateTemplateDto {
   allowedScreens?: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms')[];
   name: string;
@@ -626,7 +626,7 @@ export interface CreateTemplateDto {
   screenActions?: Record<string, unknown>;
 }
 
-/** جسمُ طلب — `CreateTransactionDto` في الخادم. */
+/** Request body: `CreateTransactionDto` on the server. */
 export interface CreateTransactionDto {
   bankId: string;
   date: string;
@@ -638,7 +638,7 @@ export interface CreateTransactionDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `CreateUnitDto` في الخادم. */
+/** Request body: `CreateUnitDto` on the server. */
 export interface CreateUnitDto {
   propertyId: string;
   unitNo: string;
@@ -650,14 +650,14 @@ export interface CreateUnitDto {
   roomDetails?: string;
 }
 
-/** جسمُ طلب — `CreateWarehouseDto` في الخادم. */
+/** Request body: `CreateWarehouseDto` on the server. */
 export interface CreateWarehouseDto {
   name: string;
   location?: string;
   manager?: string;
 }
 
-/** جسمُ طلب — `CreateWarrantyDto` في الخادم. */
+/** Request body: `CreateWarrantyDto` on the server. */
 export interface CreateWarrantyDto {
   subject: string;
   propertyId: string;
@@ -671,7 +671,7 @@ export interface CreateWarrantyDto {
   notes?: string;
 }
 
-/** جسمُ طلب — `CreateWriteOffDto` في الخادم. */
+/** Request body: `CreateWriteOffDto` on the server. */
 export interface CreateWriteOffDto {
   productId: string;
   warehouseId: string;
@@ -682,17 +682,17 @@ export interface CreateWriteOffDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `DecideDto` في الخادم. */
+/** Request body: `DecideDto` on the server. */
 export interface DecideDto {
   note?: string;
 }
 
-/** جسمُ طلب — `DecideLeaveRequestDto` في الخادم. */
+/** Request body: `DecideLeaveRequestDto` on the server. */
 export interface DecideLeaveRequestDto {
   note?: string;
 }
 
-/** جسمُ طلب — `DeclareStockOpeningDto` في الخادم. */
+/** Request body: `DeclareStockOpeningDto` on the server. */
 export interface DeclareStockOpeningDto {
   openingDate?: string;
   notes?: string;
@@ -700,7 +700,7 @@ export interface DeclareStockOpeningDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `DeclareVatCorrectionDto` في الخادم. */
+/** Request body: `DeclareVatCorrectionDto` on the server. */
 export interface DeclareVatCorrectionDto {
   year: number;
   quarter?: 1 | 2 | 3 | 4;
@@ -713,7 +713,7 @@ export interface DeclareVatCorrectionDto {
   reason: string;
 }
 
-/** جسمُ طلب — `DeclareVatRatioDto` في الخادم. */
+/** Request body: `DeclareVatRatioDto` on the server. */
 export interface DeclareVatRatioDto {
   year: number;
   ratio: number;
@@ -721,7 +721,7 @@ export interface DeclareVatRatioDto {
   note?: string;
 }
 
-/** جسمُ طلب — `DeductionDto` في الخادم. */
+/** Request body: `DeductionDto` on the server. */
 export interface DeductionDto {
   kind: 'UNPAID_RENT' | 'DAMAGE' | 'UTILITIES' | 'CLEANING' | 'OTHER';
   amount: number;
@@ -730,32 +730,32 @@ export interface DeductionDto {
   onBehalfEvidence?: string;
 }
 
-/** جسمُ طلب — `DeletionRequestDecisionDto` في الخادم. */
+/** Request body: `DeletionRequestDecisionDto` on the server. */
 export interface DeletionRequestDecisionDto {
   note?: string;
 }
 
-/** جسمُ طلب — `EndContractFeeDto` في الخادم. */
+/** Request body: `EndContractFeeDto` on the server. */
 export interface EndContractFeeDto {
   endedAt: string;
 }
 
-/** جسمُ طلب — `FindByNationalIdDto` في الخادم. */
+/** Request body: `FindByNationalIdDto` on the server. */
 export interface FindByNationalIdDto {
   nationalId: string;
 }
 
-/** جسمُ طلب — `ForgotPasswordDto` في الخادم. */
+/** Request body: `ForgotPasswordDto` on the server. */
 export interface ForgotPasswordDto {
   username: string;
 }
 
-/** جسمُ طلب — `FormSubstituteDecisionDto` في الخادم. */
+/** Request body: `FormSubstituteDecisionDto` on the server. */
 export interface FormSubstituteDecisionDto {
   approve: boolean;
 }
 
-/** جسمُ طلب — `FormTemplateItemDto` في الخادم. */
+/** Request body: `FormTemplateItemDto` on the server. */
 export interface FormTemplateItemDto {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
   label: string;
@@ -767,13 +767,13 @@ export interface FormTemplateItemDto {
   helpText?: string;
 }
 
-/** جسمُ طلب — `FormTypeSignPeriodDto` في الخادم. */
+/** Request body: `FormTypeSignPeriodDto` on the server. */
 export interface FormTypeSignPeriodDto {
   formTypeId: string;
   signPeriodDays: number;
 }
 
-/** جسمُ طلب — `FormValueDto` في الخادم. */
+/** Request body: `FormValueDto` on the server. */
 export interface FormValueDto {
   itemId: string;
   text?: string | null;
@@ -782,7 +782,7 @@ export interface FormValueDto {
   note?: string | null;
 }
 
-/** جسمُ طلب — `GoodsReceiptLineDto` في الخادم. */
+/** Request body: `GoodsReceiptLineDto` on the server. */
 export interface GoodsReceiptLineDto {
   purchaseLineId: string;
   quantity: number;
@@ -790,14 +790,14 @@ export interface GoodsReceiptLineDto {
   expiryDate?: string;
 }
 
-/** جسمُ طلب — `HandoverItemDto` في الخادم. */
+/** Request body: `HandoverItemDto` on the server. */
 export interface HandoverItemDto {
   label: string;
   condition: 'GOOD' | 'FAIR' | 'DAMAGED' | 'MISSING';
   note?: string;
 }
 
-/** جسمُ طلب — `InvoiceLineDto` في الخادم. */
+/** Request body: `InvoiceLineDto` on the server. */
 export interface InvoiceLineDto {
   description: string;
   productId?: string;
@@ -812,76 +812,76 @@ export interface InvoiceLineDto {
   returnCondition?: 'GOOD' | 'DAMAGED' | 'REPAIRABLE';
 }
 
-/** جسمُ طلب — `IssueReplacementDto` في الخادم. */
+/** Request body: `IssueReplacementDto` on the server. */
 export interface IssueReplacementDto {
   issuedAt?: string;
   issuedOffsetMin?: number;
 }
 
-/** جسمُ طلب — `JournalLineDto` في الخادم. */
+/** Request body: `JournalLineDto` on the server. */
 export interface JournalLineDto {
   accountId: string;
   debit: number;
   credit: number;
 }
 
-/** جسمُ طلب — `LandedCostManualLineDto` في الخادم. */
+/** Request body: `LandedCostManualLineDto` on the server. */
 export interface LandedCostManualLineDto {
   layerId: string;
   baseAmount: number;
 }
 
-/** جسمُ طلب — `LinkLoginAccountDto` في الخادم. */
+/** Request body: `LinkLoginAccountDto` on the server. */
 export interface LinkLoginAccountDto {
   companyUserId: string | null;
 }
 
-/** جسمُ طلب — `LoginDto` في الخادم. */
+/** Request body: `LoginDto` on the server. */
 export interface LoginDto {
   username: string;
   password: string;
   code?: string;
 }
 
-/** جسمُ طلب — `MatchStatementLineDto` في الخادم. */
+/** Request body: `MatchStatementLineDto` on the server. */
 export interface MatchStatementLineDto {
   transactionId: string;
   lineId: string;
 }
 
-/** جسمُ طلب — `MfaCodeDto` في الخادم. */
+/** Request body: `MfaCodeDto` on the server. */
 export interface MfaCodeDto {
   code: string;
   currentPassword: string;
 }
 
-/** جسمُ طلب — `OpenShiftDto` في الخادم. */
+/** Request body: `OpenShiftDto` on the server. */
 export interface OpenShiftDto {
   openingFloat: number;
   branchId?: string;
   drawerId?: string;
 }
 
-/** جسمُ طلب — `PayClaimDto` في الخادم. */
+/** Request body: `PayClaimDto` on the server. */
 export interface PayClaimDto {
   paidAt: string;
   exchangeRate?: number;
 }
 
-/** جسمُ طلب — `PosPaymentPartDto` في الخادم. */
+/** Request body: `PosPaymentPartDto` on the server. */
 export interface PosPaymentPartDto {
   method: 'CASH' | 'CARD';
   amount: number;
 }
 
-/** جسمُ طلب — `PosSaleLineDto` في الخادم. */
+/** Request body: `PosSaleLineDto` on the server. */
 export interface PosSaleLineDto {
   productId: string;
   quantity: number;
   discount?: number;
 }
 
-/** جسمُ طلب — `PostStatementLineDto` في الخادم. */
+/** Request body: `PostStatementLineDto` on the server. */
 export interface PostStatementLineDto {
   transactionId: string;
   counterpartyAccountId?: string;
@@ -889,20 +889,20 @@ export interface PostStatementLineDto {
   memo?: string;
 }
 
-/** جسمُ طلب — `PrepaymentTaxDto` في الخادم. */
+/** Request body: `PrepaymentTaxDto` on the server. */
 export interface PrepaymentTaxDto {
   taxCategory: 'S' | 'Z' | 'E' | 'O';
   taxExemptionReasonCode?: string;
   taxExemptionReason?: string;
 }
 
-/** جسمُ طلب — `PublishVersionDto` في الخادم. */
+/** Request body: `PublishVersionDto` on the server. */
 export interface PublishVersionDto {
   summary: string;
   effectiveFrom: string;
 }
 
-/** جسمُ طلب — `PurchaseLineDto` في الخادم. */
+/** Request body: `PurchaseLineDto` on the server. */
 export interface PurchaseLineDto {
   description: string;
   productId?: string;
@@ -913,7 +913,7 @@ export interface PurchaseLineDto {
   expiryDate?: string;
 }
 
-/** جسمُ طلب — `QuoteLineDto` في الخادم. */
+/** Request body: `QuoteLineDto` on the server. */
 export interface QuoteLineDto {
   description: string;
   productId?: string;
@@ -926,7 +926,7 @@ export interface QuoteLineDto {
   taxExemptionReason?: string;
 }
 
-/** جسمُ طلب — `RecordAttendanceDto` في الخادم. */
+/** Request body: `RecordAttendanceDto` on the server. */
 export interface RecordAttendanceDto {
   employeeId: string;
   date: string;
@@ -935,7 +935,7 @@ export interface RecordAttendanceDto {
   notes?: string;
 }
 
-/** جسمُ طلب — `RecordDepositDto` في الخادم. */
+/** Request body: `RecordDepositDto` on the server. */
 export interface RecordDepositDto {
   type: 'RENT' | 'FACILITY';
   holder?: 'COMPANY' | 'EJAR';
@@ -947,7 +947,7 @@ export interface RecordDepositDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `RecordKeyMoneyDto` في الخادم. */
+/** Request body: `RecordKeyMoneyDto` on the server. */
 export interface RecordKeyMoneyDto {
   direction: 'RECEIVED' | 'PAID';
   amount: number;
@@ -958,7 +958,7 @@ export interface RecordKeyMoneyDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `RecordMarketingConsentDto` في الخادم. */
+/** Request body: `RecordMarketingConsentDto` on the server. */
 export interface RecordMarketingConsentDto {
   channel: 'SMS' | 'EMAIL' | 'WHATSAPP';
   granted: boolean;
@@ -967,7 +967,7 @@ export interface RecordMarketingConsentDto {
   note?: string;
 }
 
-/** جسمُ طلب — `RecordPaymentDto` في الخادم. */
+/** Request body: `RecordPaymentDto` on the server. */
 export interface RecordPaymentDto {
   installmentId?: string;
   date: string;
@@ -981,7 +981,7 @@ export interface RecordPaymentDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `RefundDto` في الخادم. */
+/** Request body: `RefundDto` on the server. */
 export interface RefundDto {
   creditNoteId: string;
   date: string;
@@ -995,7 +995,7 @@ export interface RefundDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `RegisterDto` في الخادم. */
+/** Request body: `RegisterDto` on the server. */
 export interface RegisterDto {
   orgName: string;
   username: string;
@@ -1004,12 +1004,12 @@ export interface RegisterDto {
   country?: string;
 }
 
-/** جسمُ طلب — `RejectWriteOffDto` في الخادم. */
+/** Request body: `RejectWriteOffDto` on the server. */
 export interface RejectWriteOffDto {
   reason: string;
 }
 
-/** جسمُ طلب — `RenewContractDto` في الخادم. */
+/** Request body: `RenewContractDto` on the server. */
 export interface RenewContractDto {
   start: string;
   end: string;
@@ -1027,31 +1027,31 @@ export interface RenewContractDto {
   carryDeposits?: boolean;
 }
 
-/** جسمُ طلب — `RenewSubscriptionDto` في الخادم. */
+/** Request body: `RenewSubscriptionDto` on the server. */
 export interface RenewSubscriptionDto {
   months: number;
 }
 
-/** جسمُ طلب — `ReopenPeriodDto` في الخادم. */
+/** Request body: `ReopenPeriodDto` on the server. */
 export interface ReopenPeriodDto {
   reason: string;
 }
 
-/** جسمُ طلب — `RequestDecisionDto` في الخادم. */
+/** Request body: `RequestDecisionDto` on the server. */
 export interface RequestDecisionDto {
   action: 'ACCOUNT_ERASURE' | 'SUBSCRIPTION_CHANGE' | 'REFUND';
   targetId: string;
   summary: string;
 }
 
-/** جسمُ طلب — `RequestSubstituteDto` في الخادم. */
+/** Request body: `RequestSubstituteDto` on the server. */
 export interface RequestSubstituteDto {
   name: string;
   mobile: string;
   nationalId?: string;
 }
 
-/** جسمُ طلب — `RequestSupportAccessDto` في الخادم. */
+/** Request body: `RequestSupportAccessDto` on the server. */
 export interface RequestSupportAccessDto {
   screens: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms')[];
   companyId: string;
@@ -1059,93 +1059,93 @@ export interface RequestSupportAccessDto {
   durationMinutes: number;
 }
 
-/** جسمُ طلب — `ResetPasswordDto` في الخادم. */
+/** Request body: `ResetPasswordDto` on the server. */
 export interface ResetPasswordDto {
   token: string;
   newPassword: string;
 }
 
-/** جسمُ طلب — `ResolvePaymentAttemptWithEvidenceDto` في الخادم. */
+/** Request body: `ResolvePaymentAttemptWithEvidenceDto` on the server. */
 export interface ResolvePaymentAttemptWithEvidenceDto {
   deviceReference: string;
   approvalCode: string;
   note?: string;
 }
 
-/** جسمُ طلب — `ReverseJournalEntryDto` في الخادم. */
+/** Request body: `ReverseJournalEntryDto` on the server. */
 export interface ReverseJournalEntryDto {
   date?: string;
   memo?: string;
 }
 
-/** جسمُ طلب — `ReversePaymentDto` في الخادم. */
+/** Request body: `ReversePaymentDto` on the server. */
 export interface ReversePaymentDto {
   reason?: string;
   date?: string;
 }
 
-/** جسمُ طلب — `ReverseSupplierPaymentDto` في الخادم. */
+/** Request body: `ReverseSupplierPaymentDto` on the server. */
 export interface ReverseSupplierPaymentDto {
   reason?: string;
   date?: string;
 }
 
-/** جسمُ طلب — `SendReminderDto` في الخادم. */
+/** Request body: `SendReminderDto` on the server. */
 export interface SendReminderDto {
   channel: 'WHATSAPP' | 'SMS' | 'CALL' | 'EMAIL' | 'OTHER';
   message: string;
 }
 
-/** جسمُ طلب — `SetArchivedDto` في الخادم. */
+/** Request body: `SetArchivedDto` on the server. */
 export interface SetArchivedDto {
   archived: boolean;
 }
 
-/** جسمُ طلب — `SetEnabledDto` في الخادم. */
+/** Request body: `SetEnabledDto` on the server. */
 export interface SetEnabledDto {
   enabled: boolean;
 }
 
-/** جسمُ طلب — `SetFiscalStartMonthDto` في الخادم. */
+/** Request body: `SetFiscalStartMonthDto` on the server. */
 export interface SetFiscalStartMonthDto {
   month: number;
 }
 
-/** جسمُ طلب — `SetFormValuesDto` في الخادم. */
+/** Request body: `SetFormValuesDto` on the server. */
 export interface SetFormValuesDto {
   values: FormValueDto[];
 }
 
-/** جسمُ طلب — `SetPrimaryActivityDto` في الخادم. */
+/** Request body: `SetPrimaryActivityDto` on the server. */
 export interface SetPrimaryActivityDto {
   activityId?: string | null;
   confirmed: boolean;
 }
 
-/** جسمُ طلب — `SettleDepositDto` في الخادم. */
+/** Request body: `SettleDepositDto` on the server. */
 export interface SettleDepositDto {
   settledAt: string;
   deductions: DeductionDto[];
   exchangeRate?: number;
 }
 
-/** جسمُ طلب — `SettlementLineDto` في الخادم. */
+/** Request body: `SettlementLineDto` on the server. */
 export interface SettlementLineDto {
   label: string;
   amount: number;
 }
 
-/** جسمُ طلب — `SignHandoverDto` في الخادم. */
+/** Request body: `SignHandoverDto` on the server. */
 export interface SignHandoverDto {
   signedBy: string;
 }
 
-/** جسمُ طلب — `StartMaintenanceDto` في الخادم. */
+/** Request body: `StartMaintenanceDto` on the server. */
 export interface StartMaintenanceDto {
   startedAt: string;
 }
 
-/** جسمُ طلب — `StartOnboardingDto` في الخادم. */
+/** Request body: `StartOnboardingDto` on the server. */
 export interface StartOnboardingDto {
   environment?: 'SANDBOX' | 'SIMULATION' | 'PRODUCTION';
   branchName?: string;
@@ -1154,7 +1154,7 @@ export interface StartOnboardingDto {
   invoiceType?: string;
 }
 
-/** جسمُ طلب — `StockOpeningLineDto` في الخادم. */
+/** Request body: `StockOpeningLineDto` on the server. */
 export interface StockOpeningLineDto {
   productId: string;
   warehouseId: string;
@@ -1166,23 +1166,23 @@ export interface StockOpeningLineDto {
   evidenceRef?: string;
 }
 
-/** جسمُ طلب — `SubmitDeletionRequestDto` في الخادم. */
+/** Request body: `SubmitDeletionRequestDto` on the server. */
 export interface SubmitDeletionRequestDto {
   reason?: string;
 }
 
-/** جسمُ طلب — `SubmitOtpDto` في الخادم. */
+/** Request body: `SubmitOtpDto` on the server. */
 export interface SubmitOtpDto {
   otp: string;
 }
 
-/** جسمُ طلب — `SupplierAllocationDto` في الخادم. */
+/** Request body: `SupplierAllocationDto` on the server. */
 export interface SupplierAllocationDto {
   purchaseId: string;
   amount: number;
 }
 
-/** جسمُ طلب — `SupplierNoteLineDto` في الخادم. */
+/** Request body: `SupplierNoteLineDto` on the server. */
 export interface SupplierNoteLineDto {
   description: string;
   productId?: string;
@@ -1193,7 +1193,7 @@ export interface SupplierNoteLineDto {
   goodsReturned?: boolean;
 }
 
-/** جسمُ طلب — `SyncPosSaleDto` في الخادم. */
+/** Request body: `SyncPosSaleDto` on the server. */
 export interface SyncPosSaleDto {
   clientSaleId: string;
   offlineRef?: string;
@@ -1206,7 +1206,7 @@ export interface SyncPosSaleDto {
   cardDeviceReference?: string;
 }
 
-/** جسمُ طلب — `TransferBankDto` في الخادم. */
+/** Request body: `TransferBankDto` on the server. */
 export interface TransferBankDto {
   toBranchId: string;
   countedAmount?: number;
@@ -1214,7 +1214,7 @@ export interface TransferBankDto {
   name?: string;
 }
 
-/** جسمُ طلب — `TransferCashDrawerDto` في الخادم. */
+/** Request body: `TransferCashDrawerDto` on the server. */
 export interface TransferCashDrawerDto {
   toBranchId: string;
   countedAmount: number;
@@ -1222,25 +1222,25 @@ export interface TransferCashDrawerDto {
   name?: string;
 }
 
-/** جسمُ طلب — `TransferEmployeeDto` في الخادم. */
+/** Request body: `TransferEmployeeDto` on the server. */
 export interface TransferEmployeeDto {
   fromBranchId: string | null;
   toBranchId: string;
   loginAccountBranchIds?: string[];
 }
 
-/** جسمُ طلب — `TransitionTaskDto` في الخادم. */
+/** Request body: `TransitionTaskDto` on the server. */
 export interface TransitionTaskDto {
   to: 'OPEN' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CANCELLED';
   note?: string;
 }
 
-/** جسمُ طلب — `UnmatchStatementLineDto` في الخادم. */
+/** Request body: `UnmatchStatementLineDto` on the server. */
 export interface UnmatchStatementLineDto {
   transactionId: string;
 }
 
-/** جسمُ طلب — `UpdateAccountDto` في الخادم. */
+/** Request body: `UpdateAccountDto` on the server. */
 export interface UpdateAccountDto {
   name?: string;
   type?: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
@@ -1248,7 +1248,7 @@ export interface UpdateAccountDto {
   openingDate?: string;
 }
 
-/** جسمُ طلب — `UpdateActivityDto` في الخادم. */
+/** Request body: `UpdateActivityDto` on the server. */
 export interface UpdateActivityDto {
   name?: string;
   activityType?: string;
@@ -1256,7 +1256,7 @@ export interface UpdateActivityDto {
   disabled?: boolean;
 }
 
-/** جسمُ طلب — `UpdateAttendanceDto` في الخادم. */
+/** Request body: `UpdateAttendanceDto` on the server. */
 export interface UpdateAttendanceDto {
   status?: 'PRESENT' | 'ABSENT';
   checkIn?: string;
@@ -1264,7 +1264,7 @@ export interface UpdateAttendanceDto {
   notes?: string;
 }
 
-/** جسمُ طلب — `UpdateBankDto` في الخادم. */
+/** Request body: `UpdateBankDto` on the server. */
 export interface UpdateBankDto {
   name?: string;
   kind?: 'CASH_BOX' | 'BANK_ACCOUNT';
@@ -1273,7 +1273,7 @@ export interface UpdateBankDto {
   openingDate?: string;
 }
 
-/** جسمُ طلب — `UpdateBranchDto` في الخادم. */
+/** Request body: `UpdateBranchDto` on the server. */
 export interface UpdateBranchDto {
   name?: string;
   type?: string;
@@ -1283,13 +1283,13 @@ export interface UpdateBranchDto {
   hours?: string;
 }
 
-/** جسمُ طلب — `UpdateCashDrawerDto` في الخادم. */
+/** Request body: `UpdateCashDrawerDto` on the server. */
 export interface UpdateCashDrawerDto {
   name?: string;
   isActive?: boolean;
 }
 
-/** جسمُ طلب — `UpdateCompanyDto` في الخادم. */
+/** Request body: `UpdateCompanyDto` on the server. */
 export interface UpdateCompanyDto {
   orgName?: string;
   username?: string;
@@ -1297,7 +1297,7 @@ export interface UpdateCompanyDto {
   permissionTemplateId?: string;
 }
 
-/** جسمُ طلب — `UpdateCompanyProfileDto` في الخادم. */
+/** Request body: `UpdateCompanyProfileDto` on the server. */
 export interface UpdateCompanyProfileDto {
   legalName?: string;
   slug?: string;
@@ -1323,13 +1323,13 @@ export interface UpdateCompanyProfileDto {
   posOfflineGapMinutes?: number;
 }
 
-/** جسمُ طلب — `UpdateCompanySubscriptionDto` في الخادم. */
+/** Request body: `UpdateCompanySubscriptionDto` on the server. */
 export interface UpdateCompanySubscriptionDto {
   subStart?: string;
   subEnd?: string;
 }
 
-/** جسمُ طلب — `UpdateCompanyUserDto` في الخادم. */
+/** Request body: `UpdateCompanyUserDto` on the server. */
 export interface UpdateCompanyUserDto {
   name?: string;
   username?: string;
@@ -1341,7 +1341,7 @@ export interface UpdateCompanyUserDto {
   canEditMasterData?: boolean;
 }
 
-/** جسمُ طلب — `UpdateContractDto` في الخادم. */
+/** Request body: `UpdateContractDto` on the server. */
 export interface UpdateContractDto {
   customerId?: string;
   services?: string;
@@ -1357,14 +1357,14 @@ export interface UpdateContractDto {
   ownerVatNumber?: string;
 }
 
-/** جسمُ طلب — `UpdateCurrencyDto` في الخادم. */
+/** Request body: `UpdateCurrencyDto` on the server. */
 export interface UpdateCurrencyDto {
   name?: string;
   symbol?: string;
   rate?: number;
 }
 
-/** جسمُ طلب — `UpdateCustomerDto` في الخادم. */
+/** Request body: `UpdateCustomerDto` on the server. */
 export interface UpdateCustomerDto {
   name?: string;
   kind?: 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON';
@@ -1382,7 +1382,7 @@ export interface UpdateCustomerDto {
   allowSameName?: boolean;
 }
 
-/** جسمُ طلب — `UpdateEmployeeDto` في الخادم. */
+/** Request body: `UpdateEmployeeDto` on the server. */
 export interface UpdateEmployeeDto {
   status?: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   fullName?: string;
@@ -1396,27 +1396,27 @@ export interface UpdateEmployeeDto {
   socialInsuranceNo?: string;
 }
 
-/** جسمُ طلب — `UpdateFormSigningSettingsDto` في الخادم. */
+/** Request body: `UpdateFormSigningSettingsDto` on the server. */
 export interface UpdateFormSigningSettingsDto {
   nafathThreshold?: number | null;
   periods?: FormTypeSignPeriodDto[];
 }
 
-/** جسمُ طلب — `UpdateFormTemplateDto` في الخادم. */
+/** Request body: `UpdateFormTemplateDto` on the server. */
 export interface UpdateFormTemplateDto {
   name?: string;
   description?: string;
   items?: FormTemplateItemDto[];
 }
 
-/** جسمُ طلب — `UpdateFormTypeDto` في الخادم. */
+/** Request body: `UpdateFormTypeDto` on the server. */
 export interface UpdateFormTypeDto {
   name?: string;
   description?: string;
   sector?: 'REALESTATE' | 'RESTAURANT' | 'RETAIL' | 'PHARMACY' | 'CONTRACTING' | 'FREELANCE' | 'OTHER' | null;
 }
 
-/** جسمُ طلب — `UpdateHandoverDto` في الخادم. */
+/** Request body: `UpdateHandoverDto` on the server. */
 export interface UpdateHandoverDto {
   date?: string;
   electricityMeter?: string;
@@ -1425,7 +1425,7 @@ export interface UpdateHandoverDto {
   items?: HandoverItemDto[];
 }
 
-/** جسمُ طلب — `UpdateInvoiceDto` في الخادم. */
+/** Request body: `UpdateInvoiceDto` on the server. */
 export interface UpdateInvoiceDto {
   customerId?: string;
   issueDate?: string;
@@ -1437,14 +1437,14 @@ export interface UpdateInvoiceDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `UpdateLeaveTypeDto` في الخادم. */
+/** Request body: `UpdateLeaveTypeDto` on the server. */
 export interface UpdateLeaveTypeDto {
   name?: string;
   annualDays?: number;
   paid?: boolean;
 }
 
-/** جسمُ طلب — `UpdateMaintenanceDto` في الخادم. */
+/** Request body: `UpdateMaintenanceDto` on the server. */
 export interface UpdateMaintenanceDto {
   title?: string;
   description?: string;
@@ -1453,7 +1453,7 @@ export interface UpdateMaintenanceDto {
   notes?: string;
 }
 
-/** جسمُ طلب — `UpdateProductDto` في الخادم. */
+/** Request body: `UpdateProductDto` on the server. */
 export interface UpdateProductDto {
   name?: string;
   sku?: string;
@@ -1469,7 +1469,7 @@ export interface UpdateProductDto {
   barcode?: string;
 }
 
-/** جسمُ طلب — `UpdatePropertyDto` في الخادم. */
+/** Request body: `UpdatePropertyDto` on the server. */
 export interface UpdatePropertyDto {
   name?: string;
   address?: string;
@@ -1487,7 +1487,7 @@ export interface UpdatePropertyDto {
   lng?: number;
 }
 
-/** جسمُ طلب — `UpdatePurchaseDto` في الخادم. */
+/** Request body: `UpdatePurchaseDto` on the server. */
 export interface UpdatePurchaseDto {
   lines?: PurchaseLineDto[];
   warehouseId?: string;
@@ -1509,7 +1509,7 @@ export interface UpdatePurchaseDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `UpdateQuoteDto` في الخادم. */
+/** Request body: `UpdateQuoteDto` on the server. */
 export interface UpdateQuoteDto {
   customerId?: string;
   issueDate?: string;
@@ -1519,7 +1519,7 @@ export interface UpdateQuoteDto {
   lines?: QuoteLineDto[];
 }
 
-/** جسمُ طلب — `UpdateReminderPolicyDto` في الخادم. */
+/** Request body: `UpdateReminderPolicyDto` on the server. */
 export interface UpdateReminderPolicyDto {
   enabled?: boolean;
   daysBefore?: number;
@@ -1528,14 +1528,14 @@ export interface UpdateReminderPolicyDto {
   escalateToUserId?: string | null;
 }
 
-/** جسمُ طلب — `UpdateScriptDto` في الخادم. */
+/** Request body: `UpdateScriptDto` on the server. */
 export interface UpdateScriptDto {
   audience?: 'TENANT' | 'CUSTOMER' | 'EMPLOYEE';
   title?: string;
   text?: string;
 }
 
-/** جسمُ طلب — `UpdateSupplierDto` في الخادم. */
+/** Request body: `UpdateSupplierDto` on the server. */
 export interface UpdateSupplierDto {
   name?: string;
   vatNumber?: string;
@@ -1543,7 +1543,7 @@ export interface UpdateSupplierDto {
   category?: string;
 }
 
-/** جسمُ طلب — `UpdateTemplateDto` في الخادم. */
+/** Request body: `UpdateTemplateDto` on the server. */
 export interface UpdateTemplateDto {
   allowedScreens?: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms')[];
   name?: string;
@@ -1551,7 +1551,7 @@ export interface UpdateTemplateDto {
   screenActions?: Record<string, unknown>;
 }
 
-/** جسمُ طلب — `UpdateTransactionDto` في الخادم. */
+/** Request body: `UpdateTransactionDto` on the server. */
 export interface UpdateTransactionDto {
   bankId?: string;
   date?: string;
@@ -1563,7 +1563,7 @@ export interface UpdateTransactionDto {
   branchId?: string;
 }
 
-/** جسمُ طلب — `UpdateUnitDto` في الخادم. */
+/** Request body: `UpdateUnitDto` on the server. */
 export interface UpdateUnitDto {
   floor?: string;
   type?: string;
@@ -1573,14 +1573,14 @@ export interface UpdateUnitDto {
   roomDetails?: string;
 }
 
-/** جسمُ طلب — `UpdateWarehouseDto` في الخادم. */
+/** Request body: `UpdateWarehouseDto` on the server. */
 export interface UpdateWarehouseDto {
   name?: string;
   location?: string;
   manager?: string;
 }
 
-/** جسمُ طلب — `UpdateWarrantyDto` في الخادم. */
+/** Request body: `UpdateWarrantyDto` on the server. */
 export interface UpdateWarrantyDto {
   subject?: string;
   unitId?: string | null;
@@ -1593,7 +1593,7 @@ export interface UpdateWarrantyDto {
   notes?: string;
 }
 
-/** جسمُ طلب — `UpsertExchangeRateDto` في الخادم. */
+/** Request body: `UpsertExchangeRateDto` on the server. */
 export interface UpsertExchangeRateDto {
   fromCode: string;
   toCode: string;
@@ -1601,7 +1601,7 @@ export interface UpsertExchangeRateDto {
   date: string;
 }
 
-/** جسمُ طلب — `UpsertSubProcessorDto` في الخادم. */
+/** Request body: `UpsertSubProcessorDto` on the server. */
 export interface UpsertSubProcessorDto {
   id?: string;
   name: string;
@@ -1610,7 +1610,7 @@ export interface UpsertSubProcessorDto {
   dataCategories: string[];
 }
 
-/** جسمُ طلب — `VatDeclarationQueryDto` في الخادم. */
+/** Request body: `VatDeclarationQueryDto` on the server. */
 export interface VatDeclarationQueryDto {
   year: number;
   quarter?: 1 | 2 | 3 | 4;
@@ -1618,7 +1618,7 @@ export interface VatDeclarationQueryDto {
   periodChoice?: number;
 }
 
-/** جسمُ طلب — `VatFiledDto` في الخادم. */
+/** Request body: `VatFiledDto` on the server. */
 export interface VatFiledDto {
   year: number;
   quarter?: 1 | 2 | 3 | 4;
@@ -1627,61 +1627,61 @@ export interface VatFiledDto {
   refundRequested?: boolean;
 }
 
-/** جسمُ طلب — `VatRatioQueryDto` في الخادم. */
+/** Request body: `VatRatioQueryDto` on the server. */
 export interface VatRatioQueryDto {
   year: number;
 }
 
-/** جسمُ طلب — `VerifyFormOtpDto` في الخادم. */
+/** Request body: `VerifyFormOtpDto` on the server. */
 export interface VerifyFormOtpDto {
   challengeId: string;
   code: string;
 }
 
-/** جسمُ طلب — `VoidCashDepositDto` في الخادم. */
+/** Request body: `VoidCashDepositDto` on the server. */
 export interface VoidCashDepositDto {
   reason?: string;
 }
 
-/** جسمُ طلب — `VoidNetworkSettlementDto` في الخادم. */
+/** Request body: `VoidNetworkSettlementDto` on the server. */
 export interface VoidNetworkSettlementDto {
   reason?: string;
 }
 
-/** جسمُ طلب — `WaiveClaimDto` في الخادم. */
+/** Request body: `WaiveClaimDto` on the server. */
 export interface WaiveClaimDto {
   waivedAt: string;
   reason: string;
   note?: string;
 }
 
-/** وسائطُ استعلام `AccountsController_list`. */
+/** Query parameters of `AccountsController_list`. */
 export interface AccountsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `ActivitiesController_list`. */
+/** Query parameters of `ActivitiesController_list`. */
 export interface ActivitiesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `ActivitiesController_previewPrimary`. */
+/** Query parameters of `ActivitiesController_previewPrimary`. */
 export interface ActivitiesPreviewPrimaryQuery {
   activityId: string;
 }
 
-/** وسائطُ استعلام `AdminDeletionRequestsController_list`. */
+/** Query parameters of `AdminDeletionRequestsController_list`. */
 export interface AdminDeletionRequestsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `AttendanceController_list`. */
+/** Query parameters of `AttendanceController_list`. */
 export interface AttendanceListQuery {
   page?: number;
   pageSize?: number;
@@ -1690,7 +1690,7 @@ export interface AttendanceListQuery {
   employeeId?: string;
 }
 
-/** وسائطُ استعلام `AuditController_list`. */
+/** Query parameters of `AuditController_list`. */
 export interface AuditListQuery {
   actorId?: string;
   screen?: string;
@@ -1704,17 +1704,17 @@ export interface AuditListQuery {
   search?: string;
 }
 
-/** وسائطُ استعلام `BanksController_listCashDeposits`. */
+/** Query parameters of `BanksController_listCashDeposits`. */
 export interface BanksListCashDepositsQuery {
   bankId: string;
 }
 
-/** وسائطُ استعلام `BanksController_listNetworkSettlements`. */
+/** Query parameters of `BanksController_listNetworkSettlements`. */
 export interface BanksListNetworkSettlementsQuery {
   bankId: string;
 }
 
-/** وسائطُ استعلام `BanksController_list`. */
+/** Query parameters of `BanksController_list`. */
 export interface BanksListQuery {
   page?: number;
   pageSize?: number;
@@ -1722,62 +1722,62 @@ export interface BanksListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `BanksController_openNetworkReceipts`. */
+/** Query parameters of `BanksController_openNetworkReceipts`. */
 export interface BanksOpenNetworkReceiptsQuery {
   from?: string;
   to?: string;
   branchId?: string;
 }
 
-/** وسائطُ استعلام `BanksController_reconciliationOverview`. */
+/** Query parameters of `BanksController_reconciliationOverview`. */
 export interface BanksReconciliationOverviewQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `BranchesController_list`. */
+/** Query parameters of `BranchesController_list`. */
 export interface BranchesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `CashDrawersController_list`. */
+/** Query parameters of `CashDrawersController_list`. */
 export interface CashDrawersListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `CompaniesController_list`. */
+/** Query parameters of `CompaniesController_list`. */
 export interface CompaniesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `CompanyUsersController_list`. */
+/** Query parameters of `CompanyUsersController_list`. */
 export interface CompanyUsersListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `ContractsController_list`. */
+/** Query parameters of `ContractsController_list`. */
 export interface ContractsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `CurrenciesController_list`. */
+/** Query parameters of `CurrenciesController_list`. */
 export interface CurrenciesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `CurrenciesController_listRates`. */
+/** Query parameters of `CurrenciesController_listRates`. */
 export interface CurrenciesListRatesQuery {
   page?: number;
   pageSize?: number;
@@ -1786,7 +1786,7 @@ export interface CurrenciesListRatesQuery {
   toCode?: string;
 }
 
-/** وسائطُ استعلام `CustomersController_list`. */
+/** Query parameters of `CustomersController_list`. */
 export interface CustomersListQuery {
   page?: number;
   pageSize?: number;
@@ -1794,7 +1794,7 @@ export interface CustomersListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `EmployeesController_list`. */
+/** Query parameters of `EmployeesController_list`. */
 export interface EmployeesListQuery {
   page?: number;
   pageSize?: number;
@@ -1802,43 +1802,43 @@ export interface EmployeesListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `FilesController_downloadUrl`. */
+/** Query parameters of `FilesController_downloadUrl`. */
 export interface FilesDownloadUrlQuery {
   key: string;
 }
 
-/** وسائطُ استعلام `FiscalController_list`. */
+/** Query parameters of `FiscalController_list`. */
 export interface FiscalListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `IntegrationsController_list`. */
+/** Query parameters of `IntegrationsController_list`. */
 export interface IntegrationsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `InventoryController_batchBalances`. */
+/** Query parameters of `InventoryController_batchBalances`. */
 export interface InventoryBatchBalancesQuery {
   productId: string;
 }
 
-/** وسائطُ استعلام `InventoryController_expiring`. */
+/** Query parameters of `InventoryController_expiring`. */
 export interface InventoryExpiringQuery {
   withinDays: string;
 }
 
-/** وسائطُ استعلام `InventoryController_listMovements`. */
+/** Query parameters of `InventoryController_listMovements`. */
 export interface InventoryListMovementsQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `InventoryController_listWriteOffs`. */
+/** Query parameters of `InventoryController_listWriteOffs`. */
 export interface InventoryListWriteOffsQuery {
   page?: number;
   pageSize?: number;
@@ -1846,41 +1846,41 @@ export interface InventoryListWriteOffsQuery {
   status?: string;
 }
 
-/** وسائطُ استعلام `InventoryController_provisional`. */
+/** Query parameters of `InventoryController_provisional`. */
 export interface InventoryProvisionalQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `InventoryController_stockLevels`. */
+/** Query parameters of `InventoryController_stockLevels`. */
 export interface InventoryStockLevelsQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `InvoicesController_list`. */
+/** Query parameters of `InvoicesController_list`. */
 export interface InvoicesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `JournalController_list`. */
+/** Query parameters of `JournalController_list`. */
 export interface JournalListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `LeavesController_balance`. */
+/** Query parameters of `LeavesController_balance`. */
 export interface LeavesBalanceQuery {
   employeeId: string;
   year: string;
 }
 
-/** وسائطُ استعلام `LeavesController_listRequests`. */
+/** Query parameters of `LeavesController_listRequests`. */
 export interface LeavesListRequestsQuery {
   page?: number;
   pageSize?: number;
@@ -1889,43 +1889,43 @@ export interface LeavesListRequestsQuery {
   status?: string;
 }
 
-/** وسائطُ استعلام `LeavesController_listTypes`. */
+/** Query parameters of `LeavesController_listTypes`. */
 export interface LeavesListTypesQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `MaintenanceController_list`. */
+/** Query parameters of `MaintenanceController_list`. */
 export interface MaintenanceListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `NotificationsController_list`. */
+/** Query parameters of `NotificationsController_list`. */
 export interface NotificationsListQuery {
   unread: string;
 }
 
-/** وسائطُ استعلام `NotificationsController_runEscalation`. */
+/** Query parameters of `NotificationsController_runEscalation`. */
 export interface NotificationsRunEscalationQuery {
   contractId: string;
 }
 
-/** وسائطُ استعلام `ObligationsController_list`. */
+/** Query parameters of `ObligationsController_list`. */
 export interface ObligationsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `ObligationsController_listVatClosings`. */
+/** Query parameters of `ObligationsController_listVatClosings`. */
 export interface ObligationsListVatClosingsQuery {
   year: number;
 }
 
-/** وسائطُ استعلام `ObligationsController_unmarkFiled`. */
+/** Query parameters of `ObligationsController_unmarkFiled`. */
 export interface ObligationsUnmarkFiledQuery {
   year: number;
   quarter?: 1 | 2 | 3 | 4;
@@ -1934,7 +1934,7 @@ export interface ObligationsUnmarkFiledQuery {
   refundRequested?: boolean;
 }
 
-/** وسائطُ استعلام `ObligationsController_vatDeclaration`. */
+/** Query parameters of `ObligationsController_vatDeclaration`. */
 export interface ObligationsVatDeclarationQuery {
   year: number;
   quarter?: 1 | 2 | 3 | 4;
@@ -1942,17 +1942,17 @@ export interface ObligationsVatDeclarationQuery {
   periodChoice?: number;
 }
 
-/** وسائطُ استعلام `ObligationsController_vatRatio`. */
+/** Query parameters of `ObligationsController_vatRatio`. */
 export interface ObligationsVatRatioQuery {
   year: number;
 }
 
-/** وسائطُ استعلام `ObligationsController_vatSettlementPreview`. */
+/** Query parameters of `ObligationsController_vatSettlementPreview`. */
 export interface ObligationsVatSettlementPreviewQuery {
   year: number;
 }
 
-/** وسائطُ استعلام `PaymentsController_list`. */
+/** Query parameters of `PaymentsController_list`. */
 export interface PaymentsListQuery {
   page?: number;
   pageSize?: number;
@@ -1960,24 +1960,34 @@ export interface PaymentsListQuery {
   customerId?: string;
 }
 
-/** وسائطُ استعلام `PlatformDecisionsController_list`. */
+/** Query parameters of `PlatformAuditController_list`. */
+export interface PlatformAuditListQuery {
+  page?: number;
+  pageSize?: number;
+  adminId?: string;
+  companyId?: string;
+  from?: string;
+  to?: string;
+}
+
+/** Query parameters of `PlatformDecisionsController_list`. */
 export interface PlatformDecisionsListQuery {
   status: string;
 }
 
-/** وسائطُ استعلام `PosController_cardVerifications`. */
+/** Query parameters of `PosController_cardVerifications`. */
 export interface PosCardVerificationsQuery {
   state?: 'open' | 'overdue' | 'matched' | 'all';
 }
 
-/** وسائطُ استعلام `PosController_listShifts`. */
+/** Query parameters of `PosController_listShifts`. */
 export interface PosListShiftsQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `ProductsController_list`. */
+/** Query parameters of `ProductsController_list`. */
 export interface ProductsListQuery {
   page?: number;
   pageSize?: number;
@@ -1985,7 +1995,7 @@ export interface ProductsListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `PropertiesController_list`. */
+/** Query parameters of `PropertiesController_list`. */
 export interface PropertiesListQuery {
   page?: number;
   pageSize?: number;
@@ -1993,49 +2003,49 @@ export interface PropertiesListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `QuotesController_list`. */
+/** Query parameters of `QuotesController_list`. */
 export interface QuotesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `RemindersController_dueToday`. */
+/** Query parameters of `RemindersController_dueToday`. */
 export interface RemindersDueTodayQuery {
   contractId: string;
 }
 
-/** وسائطُ استعلام `ReportsController_balanceSheet`. */
+/** Query parameters of `ReportsController_balanceSheet`. */
 export interface ReportsBalanceSheetQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_branchSummary`. */
+/** Query parameters of `ReportsController_branchSummary`. */
 export interface ReportsBranchSummaryQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_cashFlow`. */
+/** Query parameters of `ReportsController_cashFlow`. */
 export interface ReportsCashFlowQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_dashboard`. */
+/** Query parameters of `ReportsController_dashboard`. */
 export interface ReportsDashboardQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_incomeStatement`. */
+/** Query parameters of `ReportsController_incomeStatement`. */
 export interface ReportsIncomeStatementQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_ledgerCsv`. */
+/** Query parameters of `ReportsController_ledgerCsv`. */
 export interface ReportsLedgerCsvQuery {
   from?: string;
   to?: string;
@@ -2045,7 +2055,7 @@ export interface ReportsLedgerCsvQuery {
   unitId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_ledger`. */
+/** Query parameters of `ReportsController_ledger`. */
 export interface ReportsLedgerQuery {
   from?: string;
   to?: string;
@@ -2055,14 +2065,14 @@ export interface ReportsLedgerQuery {
   unitId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_noteDeadlines`. */
+/** Query parameters of `ReportsController_noteDeadlines`. */
 export interface ReportsNoteDeadlinesQuery {
   from?: string;
   to?: string;
   branchId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_receivablesAgingCsv`. */
+/** Query parameters of `ReportsController_receivablesAgingCsv`. */
 export interface ReportsReceivablesAgingCsvQuery {
   asOf?: string;
   branchId?: string;
@@ -2070,7 +2080,7 @@ export interface ReportsReceivablesAgingCsvQuery {
   reconcile?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_receivablesAging`. */
+/** Query parameters of `ReportsController_receivablesAging`. */
 export interface ReportsReceivablesAgingQuery {
   asOf?: string;
   branchId?: string;
@@ -2078,14 +2088,14 @@ export interface ReportsReceivablesAgingQuery {
   reconcile?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_returns`. */
+/** Query parameters of `ReportsController_returns`. */
 export interface ReportsReturnsQuery {
   from?: string;
   to?: string;
   branchId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_statementCsv`. */
+/** Query parameters of `ReportsController_statementCsv`. */
 export interface ReportsStatementCsvQuery {
   from?: string;
   to?: string;
@@ -2094,7 +2104,7 @@ export interface ReportsStatementCsvQuery {
   supplierId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_statement`. */
+/** Query parameters of `ReportsController_statement`. */
 export interface ReportsStatementQuery {
   from?: string;
   to?: string;
@@ -2103,28 +2113,28 @@ export interface ReportsStatementQuery {
   supplierId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_trialBalanceCsv`. */
+/** Query parameters of `ReportsController_trialBalanceCsv`. */
 export interface ReportsTrialBalanceCsvQuery {
   from?: string;
   to?: string;
   branchId?: string;
 }
 
-/** وسائطُ استعلام `ReportsController_trialBalance`. */
+/** Query parameters of `ReportsController_trialBalance`. */
 export interface ReportsTrialBalanceQuery {
   from?: string;
   to?: string;
   branchId?: string;
 }
 
-/** وسائطُ استعلام `ReservationsController_list`. */
+/** Query parameters of `ReservationsController_list`. */
 export interface ReservationsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `ScriptsController_list`. */
+/** Query parameters of `ScriptsController_list`. */
 export interface ScriptsListQuery {
   page?: number;
   pageSize?: number;
@@ -2132,7 +2142,7 @@ export interface ScriptsListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `SupplierPaymentsController_list`. */
+/** Query parameters of `SupplierPaymentsController_list`. */
 export interface SupplierPaymentsListQuery {
   page?: number;
   pageSize?: number;
@@ -2140,7 +2150,7 @@ export interface SupplierPaymentsListQuery {
   supplierId?: string;
 }
 
-/** وسائطُ استعلام `SuppliersController_list`. */
+/** Query parameters of `SuppliersController_list`. */
 export interface SuppliersListQuery {
   page?: number;
   pageSize?: number;
@@ -2148,55 +2158,55 @@ export interface SuppliersListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `SuppliersController_summary`. */
+/** Query parameters of `SuppliersController_summary`. */
 export interface SuppliersSummaryQuery {
   from?: string;
   to?: string;
 }
 
-/** وسائطُ استعلام `SupportAccessAdminController_list`. */
+/** Query parameters of `SupportAccessAdminController_list`. */
 export interface SupportAccessAdminListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `SupportAccessOwnerController_log`. */
+/** Query parameters of `SupportAccessOwnerController_log`. */
 export interface SupportAccessOwnerLogQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `SupportAccessOwnerController_overview`. */
+/** Query parameters of `SupportAccessOwnerController_overview`. */
 export interface SupportAccessOwnerOverviewQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `TasksController_mine`. */
+/** Query parameters of `TasksController_mine`. */
 export interface TasksMineQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `TemplatesController_list`. */
+/** Query parameters of `TemplatesController_list`. */
 export interface TemplatesListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `TransactionsController_list`. */
+/** Query parameters of `TransactionsController_list`. */
 export interface TransactionsListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
 }
 
-/** وسائطُ استعلام `UnitsController_list`. */
+/** Query parameters of `UnitsController_list`. */
 export interface UnitsListQuery {
   page?: number;
   pageSize?: number;
@@ -2204,7 +2214,7 @@ export interface UnitsListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `WarehousesController_list`. */
+/** Query parameters of `WarehousesController_list`. */
 export interface WarehousesListQuery {
   page?: number;
   pageSize?: number;
@@ -2212,7 +2222,7 @@ export interface WarehousesListQuery {
   includeArchived?: 'true' | 'false';
 }
 
-/** وسائطُ استعلام `WarrantiesController_cover`. */
+/** Query parameters of `WarrantiesController_cover`. */
 export interface WarrantiesCoverQuery {
   page?: number;
   pageSize?: number;
@@ -2222,7 +2232,7 @@ export interface WarrantiesCoverQuery {
   date?: string;
 }
 
-/** وسائطُ استعلام `WarrantiesController_list`. */
+/** Query parameters of `WarrantiesController_list`. */
 export interface WarrantiesListQuery {
   page?: number;
   pageSize?: number;

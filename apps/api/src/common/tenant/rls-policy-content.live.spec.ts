@@ -112,6 +112,15 @@ const APPROVED: ApprovedSource[] = [
     why: 'ق-١٢٩١ — المفتاحُ يُقدَّم قبل أن يُعرف مستأجرُه: قراءةٌ فقط، ومسارٌ واحد (runAsApiKeyLookup)، وبالبادئة الفريدة. وتبقى القانونيّةُ بجواره لكلّ ما عدا ذلك. الهجرة 20260923000000_api_keys.',
   },
   {
+    table: 'platform_audit_logs',
+    name: 'platform_admin_only_platform_audit_logs',
+    cmd: 'ALL',
+    using: `current_setting('app.platform_admin', true) = 'true'`,
+    check: `current_setting('app.platform_admin', true) = 'true'`,
+    alongsideCanonical: false,
+    why: 'Platform data, not tenant data: no companyId column, read and written only inside runAsPlatformAdmin after the platform admin guard has identified the administrator. Migration 20261016100000_platform_audit_log.',
+  },
+  {
     table: 'form_signing_links',
     name: 'form_signing_link_lookup',
     cmd: 'SELECT',

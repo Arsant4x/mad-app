@@ -3,7 +3,8 @@ import type { AuditListQuery } from '@mad-app/shared/api/requests';
 
 export interface AuditEntry {
   id: string;
-  actorType: 'COMPANY' | 'COMPANY_USER';
+  /** PLATFORM_ADMIN: a platform administrator acted on this company from the platform side. */
+  actorType: 'COMPANY' | 'COMPANY_USER' | 'PLATFORM_ADMIN';
   actorId: string;
   actorName: string;
   screen: string;

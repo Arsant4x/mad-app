@@ -276,10 +276,53 @@ model PlatformAdmin {
   decisionsRequested PlatformDecision[] @relation("PlatformDecisionRequester")
   decisionsDecided   PlatformDecision[] @relation("PlatformDecisionDecider")
 
+  /// Every request this administrator made on a platform route. Restrict on the other side:
+  /// deleting an administrator cannot erase their trail.
+  platformAuditLogs PlatformAuditLog[]
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@map("platform_admins")
+}
+
+/// One request a platform administrator made on a route under the platform admin guard,
+/// read or write, success or failure, kept as it happened.
+///
+/// Append only in the database: triggers refuse UPDATE, DELETE and TRUNCATE, and stamp
+/// createdAt on insert, so no path around the service can rewrite it.
+/// Platform data, not tenant data: no companyId column, and the row level security policy
+/// admits only the platform administrator context (runAsPlatformAdmin). The company a route
+/// names is targetCompanyId, without a foreign key so the row outlives the company.
+model PlatformAuditLog {
+  id      String        @id @default(uuid())
+  adminId String
+  admin   PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  /// The administrator's login name at the time of the request.
+  adminName String
+  /// The role the guard read for this request.
+  adminRole PlatformRole
+
+  method String
+  /// The declared route pattern, for example /companies/:id.
+  route  String
+  params Json?
+
+  targetCompanyId String?
+
+  /// The status sent to the client; 499 when the client closed the connection first.
+  status  Int
+  /// The request body with secrets removed, kept only when the request succeeded.
+  details Json?
+  ip      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([adminId, createdAt])
+  @@index([targetCompanyId, createdAt])
+  @@map("platform_audit_logs")
 }
 
 /// A permission template controls which screens/modules an actor can access.

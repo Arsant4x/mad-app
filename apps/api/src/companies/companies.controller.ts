@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
+import { PlatformAuditTarget } from '../common/platform-admin/platform-audit-target.decorator';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
 import { PlatformRole } from '@mad-app/db';
 import { CompaniesService } from './companies.service';
@@ -21,6 +22,7 @@ import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.
 // **والميلادُ يبقى بالدورين معاً**: الفترةُ الأولى جزءٌ منه، **وتقسيمُه يجعل التسجيلَ
 // مستحيلاً على كلٍّ منهما وحدَه**. و`OWNER` يمرّ بتعريفه.
 @RequiresPlatformRole(PlatformRole.OPERATIONS, PlatformRole.FINANCE)
+@PlatformAuditTarget('id')
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
@@ -52,6 +54,7 @@ export class CompaniesController {
 @Controller('companies')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 @RequiresPlatformRole(PlatformRole.FINANCE)
+@PlatformAuditTarget('id')
 export class CompanySubscriptionController {
   constructor(private readonly companiesService: CompaniesService) {}
 

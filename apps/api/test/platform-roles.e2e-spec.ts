@@ -63,7 +63,7 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
   afterAll(async () => {
     // القراراتُ تشير إلى المديرَين بـ`Restrict` (`ق-١٣١٨`) — فتُزال قبلهما.
     await prisma.platformDecision.deleteMany({ where: { summary: { contains: suffix } } });
-    // حذفُ الهويّة يُسلسِل على `platform_admins` (Cascade) — فلا يبقى مديرٌ من صنع الحزمة.
+    // An administrator with rows in the platform audit log cannot be deleted (Restrict): the trail keeps them.
     for (const id of createdIdentityIds) await prisma.loginIdentity.delete({ where: { id } }).catch(() => undefined);
     await app.close();
   });
@@ -126,7 +126,10 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
   });
 
   it('🔴 ⑤ والدورُ يُقرأ حيّاً — سحبُه ينفذ في الطلب التالي بلا انتظار انتهاء الرمز', async () => {
-    const admin = await prisma.platformAdmin.findFirstOrThrow({ where: { displayName: `اختبار ${PlatformRole.SUPPORT}` }, select: { id: true } });
+    const admin = await prisma.platformAdmin.findFirstOrThrow({
+      where: { displayName: `اختبار ${PlatformRole.SUPPORT}`, loginIdentity: { username: `plat-${PlatformRole.SUPPORT.toLowerCase()}-${suffix}` } },
+      select: { id: true },
+    });
     await http().get('/support-access/admin').set('Authorization', as(PlatformRole.SUPPORT)).expect(200);
     await prisma.platformAdmin.update({ where: { id: admin.id }, data: { role: PlatformRole.FINANCE } });
     // **الرمزُ نفسُه** — ولم يُعد الدخول.
