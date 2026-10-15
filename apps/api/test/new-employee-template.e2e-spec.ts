@@ -80,9 +80,9 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
 
   async function employeeToken(templateId: string, tag: string): Promise<string> {
     const username = `emp-${tag}-${suffix}`;
-    await owner(http().post('/company-users')).send({ name: `موظّف ${tag}`, username, password: 'EmpPass123!', permissionTemplateId: templateId }).expect(201);
+    await owner(http().post('/company-users')).send({ name: `موظّف ${tag}`, username, password: 'EmpPass1234!', permissionTemplateId: templateId }).expect(201);
     // الدخولُ يردّ 200 لا 201 (مقروءٌ من سقوط أوّل تشغيلٍ في السير، ومن platform-admin.e2e-spec).
-    return (await http().post('/auth/login').send({ username, password: 'EmpPass123!' }).expect(200)).body.accessToken as string;
+    return (await http().post('/auth/login').send({ username, password: 'EmpPass1234!' }).expect(200)).body.accessToken as string;
   }
   const grantsOf = async (token: string): Promise<string[]> =>
     (await http().get('/me/permissions').set('Authorization', `Bearer ${token}`).expect(200)).body.grants as string[];
@@ -125,7 +125,7 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
   it('④ صاحبُ المنشأة شاملٌ في المسارين: لوحةُ المدير ترفض قالباً غيرَ شامل للمنشأة إنشاءً وتغييراً', async () => {
     const narrow = narrowId ?? (await tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.create({ data: { name: `ضيّق ${suffix}`, companyId: null, isAllScreens: false, allowedScreens: ['invoice'] } }))).id;
     narrowId = narrow;
-    const body = (tag: string, permissionTemplateId: string) => ({ username: `own-${tag}-${suffix}`, password: 'OwnPass123!', orgName: `منشأة ${tag} ${suffix}`, permissionTemplateId, subEnd: '2030-01-01' });
+    const body = (tag: string, permissionTemplateId: string) => ({ username: `own-${tag}-${suffix}`, password: 'OwnPass1234!', orgName: `منشأة ${tag} ${suffix}`, permissionTemplateId, subEnd: '2030-01-01' });
     const refused = await admin(http().post('/companies')).send(body('narrow', narrow));
     if (refused.status === 201) madeCompanies.push(refused.body.id);
     expect(refused.status).toBe(400);

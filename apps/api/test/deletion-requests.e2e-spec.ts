@@ -53,11 +53,11 @@ describe('Account deletion requests (e2e)', () => {
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
     const username = `del-co-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'DelPass123!', orgName: `منشأة حذف ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'DelPass1234!', orgName: `منشأة حذف ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
       .expect(201);
     cleanupCompanyIds.push(res.body.id);
     madeCompanyIds.push(res.body.id);
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'DelPass123!' });
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'DelPass1234!' });
     return { id: res.body.id, token: login.body.accessToken, username };
   }
 
@@ -180,7 +180,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(row?.archiveProducedAt).toBeTruthy();
     expect(row?.archiveExpiresAt?.getTime()).toBe(company!.retainUntil!.getTime());
     // والدخولُ باقٍ — إلى شاشة المغلق ونسختها.
-    await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
+    await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass1234!' }).expect(200);
     // ولوحةُ المنصّة ما زالت تراها — مغلقةً لا محذوفة.
     const companies = await admin(request(app.getHttpServer()).get('/companies')).expect(200);
     expect((companies.body as { id: string; status: string }[]).find((c) => c.id === co.id)?.status).toBe('CLOSED');
@@ -358,7 +358,7 @@ describe('Account deletion requests (e2e)', () => {
       .send({ name: `كاتب-${suffix}`, isAllScreens: false, allowedScreens: ['dashboard'], screenActions: { dashboard: ['view'] } })
       .expect(201);
     const clerk = await auth(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'كاتب', username: `del-clerk-${suffix}`, password: 'DelPass123!', permissionTemplateId: tpl.body.id })
+      .send({ name: 'كاتب', username: `del-clerk-${suffix}`, password: 'DelPass1234!', permissionTemplateId: tpl.body.id })
       .expect(201);
     await auth(request(app.getHttpServer()).post('/tasks'))
       .send({ title: 'مهمّة قبل الحذف', assigneeId: clerk.body.id, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-1' })
@@ -433,7 +433,7 @@ describe('Account deletion requests (e2e)', () => {
     expect((await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } }))?.archiveExpiresAt).toEqual(company!.retainUntil);
 
     // ⭐ النسخةُ حقيقيةٌ لا بيان: الملفُّ السنويُّ يُنزَّل من رابطه الموقَّع ويُفكّ ويُقرأ فيه عرضُ السعر.
-    const archive = await request(app.getHttpServer()).get('/deletion-request/archive').set('Authorization', `Bearer ${(await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' })).body.accessToken}`).expect(200);
+    const archive = await request(app.getHttpServer()).get('/deletion-request/archive').set('Authorization', `Bearer ${(await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass1234!' })).body.accessToken}`).expect(200);
     const names = (archive.body.files as { name: string }[]).map((f) => f.name);
     expect(names).toEqual(expect.arrayContaining(['README.md', 'manifest.json', 'master-data.json.gz', `years/${thisYear}.json.gz`]));
     const yearFile = (archive.body.files as { name: string; url: string; sha256: string }[]).find((f) => f.name === `years/${thisYear}.json.gz`)!;
@@ -451,7 +451,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(readme).toContain('من دوران النسخ الاحتياطية');
 
     // ③ الدخولُ مقطوع — والرسالةُ تجيب «وأين بياناتي؟» وبأجل — والتاجرُ يقرأ حالَه وحالَ طلبه.
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass1234!' }).expect(200);
     expect(login.body.user.status).toBe('CLOSED');
     const closedToken = login.body.accessToken as string;
     const blocked = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${closedToken}`).expect(403);
@@ -488,7 +488,7 @@ describe('Account deletion requests (e2e)', () => {
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
     await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'أُغلق' }).expect(201);
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass1234!' }).expect(200);
     expect(login.body.user.status).toBe('CLOSED');
     return login.body.accessToken as string;
   }
@@ -594,7 +594,7 @@ describe('Account deletion requests (e2e)', () => {
       .send({ name: `كاتب-محو-${suffix}`, isAllScreens: false, allowedScreens: ['dashboard'], screenActions: { dashboard: ['view'] } })
       .expect(201);
     const clerk = await keptAuth(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'كاتب', username: `erase-clerk-${suffix}`, password: 'DelPass123!', permissionTemplateId: tpl.body.id })
+      .send({ name: 'كاتب', username: `erase-clerk-${suffix}`, password: 'DelPass1234!', permissionTemplateId: tpl.body.id })
       .expect(201);
     await keptAuth(request(app.getHttpServer()).post('/tasks')).send({ title: 'مهمّة باقية', assigneeId: clerk.body.id, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-2' }).expect(201);
     await closeCompany(kept);

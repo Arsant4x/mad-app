@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 
+/** The server's minimum for a new password; its other rules come back as its message. */
+const MIN_PASSWORD_LENGTH = 12;
+
 /** Lands here from the emailed reset link (?token=…). One field, one job. */
 export function ResetPasswordPage() {
   const { t } = useTranslation();
@@ -49,7 +52,7 @@ export function ResetPasswordPage() {
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
             </label>
             {error && <p className="error-text">{error}</p>}
-            <button type="submit" disabled={submitting || password.length < 8 || !token}>
+            <button type="submit" disabled={submitting || [...password].length < MIN_PASSWORD_LENGTH || !token}>
               {t('reset_submit')}
             </button>
           </>

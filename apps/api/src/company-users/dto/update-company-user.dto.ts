@@ -1,4 +1,5 @@
-import { IsBoolean, IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsArray, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 
 const STATUSES = ['ACTIVE', 'FROZEN', 'STOPPED'] as const;
 
@@ -13,9 +14,10 @@ export class UpdateCompanyUserDto {
   @MinLength(3)
   username?: string;
 
+  /// Length and content rules are checked by the service (common/password).
   @IsOptional()
   @IsString()
-  @MinLength(8)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   password?: string;
 
   @IsOptional()

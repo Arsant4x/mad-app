@@ -36,7 +36,7 @@ describe('Subscription lifecycle (e2e)', () => {
   let seq = 0;
   async function createCompany(fields: Record<string, unknown>): Promise<{ id: string; username: string; password: string }> {
     const username = `sub-co-${suffix}-${seq++}`;
-    const password = 'SubPass123!';
+    const password = 'SubPass1234!';
     const res = await admin(request(app.getHttpServer()).post('/companies'))
       .send({ username, password, orgName: `منشأة اشتراك ${username}`, permissionTemplateId: templateId, ...fields });
     if (res.body?.id) createdCompanyIds.push(res.body.id);
@@ -80,7 +80,7 @@ describe('Subscription lifecycle (e2e)', () => {
   it('#1 fixes subStart to the activation day and refuses a backdated start', async () => {
     // Backdated → rejected.
     await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username: `sub-back-${suffix}`, password: 'SubPass123!', orgName: 'منشأة', permissionTemplateId: templateId, subStart: iso(-3), subEnd: iso(30) })
+      .send({ username: `sub-back-${suffix}`, password: 'SubPass1234!', orgName: 'منشأة', permissionTemplateId: templateId, subStart: iso(-3), subEnd: iso(30) })
       .expect(400);
 
     // Omitted → server anchors it to today.

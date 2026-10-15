@@ -42,7 +42,7 @@ describe('Granular action permissions (e2e)', () => {
 
   async function makeEmployeeToken(templateId: string): Promise<string> {
     const username = `emp-${suffix}-${userIds.length}`;
-    const password = 'EmpPass123!';
+    const password = 'EmpPass1234!';
     const res = await owner(request(app.getHttpServer()).post('/company-users')).send({ name: `موظف ${username}`, username, password, permissionTemplateId: templateId }).expect(201);
     userIds.push(res.body.id);
     return (await request(app.getHttpServer()).post('/auth/login').send({ username, password })).body.accessToken;

@@ -216,9 +216,9 @@ describe('Support mode (e2e)', () => {
       .expect(201);
     const username = `sup-emp-${suffix}`;
     const emp = await owner(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'موظف إعدادات', username, password: 'SupPass123!', permissionTemplateId: tpl.body.id })
+      .send({ name: 'موظف إعدادات', username, password: 'SupPass1234!', permissionTemplateId: tpl.body.id })
       .expect(201);
-    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'SupPass123!' })).body.accessToken;
+    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'SupPass1234!' })).body.accessToken;
 
     await request(app.getHttpServer()).get('/support-access').set('Authorization', `Bearer ${empToken}`).expect(403);
 

@@ -151,6 +151,10 @@ model LoginIdentity {
   /// رموزُ الاسترداد **مهشَّمةً** (SHA-256 لعشوائيٍّ عالي العشوائية — كنمط رمز الاستعادة)،
   /// ويُحذف المستعمَلُ منها. **فمن فقد هاتفَه يدخل، ومن سرق القاعدةَ لا يدخل.**
   mfaRecoveryHashes String[] @default([])
+  /// Wrong second-factor codes in a row since the last accepted one; every fifth sets a lock.
+  mfaFailedCount Int @default(0)
+  /// No code, right or wrong, is accepted before this time.
+  mfaLockedUntil DateTime?
 
   platformAdmin PlatformAdmin?
   company       Company?

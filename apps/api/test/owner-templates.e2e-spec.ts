@@ -63,10 +63,10 @@ describe('Owner-scoped permission templates (e2e)', () => {
   it('[SPEC 1.4 1.5] that template governs the employee it is assigned to', async () => {
     const username = `tpl-emp-${suffix}`;
     const created = await authA(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: `موظف ${username}`, username, password: 'TplPass123!', permissionTemplateId: tplId })
+      .send({ name: `موظف ${username}`, username, password: 'TplPass1234!', permissionTemplateId: tplId })
       .expect(201);
     empId = created.body.id;
-    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'TplPass123!' })).body.accessToken;
+    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'TplPass1234!' })).body.accessToken;
     const emp = (r: request.Test) => r.set('Authorization', `Bearer ${empToken}`);
 
     // كتابة العقود: read passes, create passes the guard (400 = validation,
@@ -99,9 +99,9 @@ describe('Owner-scoped permission templates (e2e)', () => {
   it('an employee can read the list but never write it', async () => {
     const username = `tpl-emp2-${suffix}`;
     const created = await authA(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: `موظف ${username}`, username, password: 'TplPass123!', permissionTemplateId: tplId })
+      .send({ name: `موظف ${username}`, username, password: 'TplPass1234!', permissionTemplateId: tplId })
       .expect(201);
-    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'TplPass123!' })).body.accessToken;
+    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'TplPass1234!' })).body.accessToken;
 
     await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${empToken}`).expect(200);
     await request(app.getHttpServer()).post('/templates').set('Authorization', `Bearer ${empToken}`).send({ name: 'محاولة موظف', allowedScreens: ['contracts'] }).expect(403);

@@ -204,9 +204,9 @@ describe('POS cashier (e2e)', () => {
       .expect(201);
     const username = `no-pos-${suffix}`;
     const emp = await auth(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'موظف بلا كاشير', username, password: 'PosPass123!', permissionTemplateId: tpl.body.id })
+      .send({ name: 'موظف بلا كاشير', username, password: 'PosPass1234!', permissionTemplateId: tpl.body.id })
       .expect(201);
-    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'PosPass123!' })).body.accessToken;
+    const empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'PosPass1234!' })).body.accessToken;
 
     await request(app.getHttpServer()).get('/pos/shifts').set('Authorization', `Bearer ${empToken}`).expect(403);
 

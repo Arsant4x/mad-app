@@ -108,8 +108,8 @@ describe('معرّفُ النطاق الفرعيّ (e2e)', () => {
   it('⑦ والموظّفُ يقرأ ولا يكتب', async () => {
     const template = await auth(http().post('/templates')).send({ name: `قالبٌ ${suffix}`, isAllScreens: true }).expect(201);
     const username = `emp-slug-${suffix}`;
-    await auth(http().post('/company-users')).send({ name: 'موظف', username, password: 'EmpPass123!', permissionTemplateId: template.body.id }).expect(201);
-    const employee = (await http().post('/auth/login').send({ username, password: 'EmpPass123!' }).expect(200)).body.accessToken as string;
+    await auth(http().post('/company-users')).send({ name: 'موظف', username, password: 'EmpPass1234!', permissionTemplateId: template.body.id }).expect(201);
+    const employee = (await http().post('/auth/login').send({ username, password: 'EmpPass1234!' }).expect(200)).body.accessToken as string;
     const read = await http().get('/company-profile').set('Authorization', `Bearer ${employee}`).expect(200);
     expect(read.body.slug).toBe(next);
     await http().patch('/company-profile').set('Authorization', `Bearer ${employee}`).send({ slug: `emp-${suffix}` }).expect(403);

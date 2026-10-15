@@ -7,6 +7,7 @@ import { assertBranchIdsAssignable, assertNoOpenShiftOutside, replaceBranchAssig
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
 import { UpdateCompanyUserDto } from './dto/update-company-user.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { assertPasswordPolicy } from '../common/password/password-policy';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
@@ -69,6 +70,7 @@ export class CompanyUsersService {
     actor?: { id: string; name: string },
   ) {
     assertIsCompanyOwner(actorType);
+    assertPasswordPolicy(dto.password, { username: dto.username });
 
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const template = await tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
@@ -146,6 +148,11 @@ export class CompanyUsersService {
         // in another company's template (actor rule, §3.5).
         if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
         if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
+      }
+
+      if (dto.password) {
+        const identity = await tx.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
+        assertPasswordPolicy(dto.password, { username: dto.username ?? identity.username });
       }
 
       if (dto.username) {

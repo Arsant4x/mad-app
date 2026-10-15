@@ -6,6 +6,7 @@ import { createCompanyDefaults } from './company-defaults';
 import { createBirthFiscalYear } from '../fiscal/fiscal-calendar.util';
 import { regionForNewCompany } from '../common/region/regions';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { assertPasswordPolicy } from '../common/password/password-policy';
 
 /**
  * إنشاء حساب منشأة — **النواة الوحيدة**.
@@ -78,6 +79,7 @@ export async function createCompanyAccount(
   prisma: PrismaService,
   input: CreateCompanyAccountInput,
 ): Promise<{ companyId: string; identityId: string }> {
+  assertPasswordPolicy(input.password, { username: input.username, email: input.email });
   const clash = await prisma.loginIdentity.findUnique({ where: { username: input.username } });
   if (clash) {
     throw new ConflictException(

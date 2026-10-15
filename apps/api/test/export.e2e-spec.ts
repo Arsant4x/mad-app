@@ -51,7 +51,7 @@ describe('Data export (e2e)', () => {
   async function registerCompany(username: string) {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ orgName: `منشأة تصدير ${username}`, username, password: 'ExpPass123!', email: `${username}@example.com` })
+      .send({ orgName: `منشأة تصدير ${username}`, username, password: 'ExpPass1234!', email: `${username}@example.com` })
       .expect(201);
     cleanupCompanyIds.push(res.body.user.companyId);
     return res.body.accessToken as string;
@@ -82,9 +82,9 @@ describe('Data export (e2e)', () => {
     const tpl = (templates.body as { id: string; isAllScreens: boolean; isSystem: boolean }[]).find((t) => t.isAllScreens && !t.isSystem);
     const username = `exp-emp-${suffix}`;
     await authA(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: `موظف ${username}`, username, password: 'ExpPass123!', permissionTemplateId: tpl!.id })
+      .send({ name: `موظف ${username}`, username, password: 'ExpPass1234!', permissionTemplateId: tpl!.id })
       .expect(201);
-    empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ExpPass123!' })).body.accessToken;
+    empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ExpPass1234!' })).body.accessToken;
   }, 60000);
 
   afterAll(async () => {

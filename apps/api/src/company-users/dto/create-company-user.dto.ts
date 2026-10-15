@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 
 export class CreateCompanyUserDto {
   @IsString()
@@ -9,8 +10,9 @@ export class CreateCompanyUserDto {
   @MinLength(3)
   username!: string;
 
+  /// Length and content rules are checked by the service (common/password).
   @IsString()
-  @MinLength(8)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
 
   @IsString()
