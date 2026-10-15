@@ -88,17 +88,18 @@ describe('Processing agreement acceptance records the trusted client address (e2
     await app.close();
   });
 
-  it('stores the address the trusted proxy appended, not the forged first entry of X-Forwarded-For', async () => {
+  it('stores the address the trusted proxy appended, not a forged forwarding header value', async () => {
     const co = await makeCompany();
     await request(app.getHttpServer())
       .post('/processing-agreement/accept')
       .set('Authorization', `Bearer ${co.token}`)
       .set('X-Forwarded-For', '203.0.113.66, 198.51.100.7')
+      .set('X-Real-IP', '203.0.113.67')
       .send({ version })
       .expect(201);
     const ip = await storedIp(co.id);
     expect(ip).toBe('198.51.100.7');
-    expect(ip).not.toBe('203.0.113.66');
+    expect(['203.0.113.66', '203.0.113.67']).not.toContain(ip);
   });
 
   it('stores the socket address when no forwarding header is sent', async () => {
