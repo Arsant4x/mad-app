@@ -652,6 +652,30 @@ export interface PagedPosShiftResponse {
   pageSize: number;
 }
 
+/** ردٌّ — `PlatformAuditPageResponse` في الخادم (ق-١٤٣٨). */
+export interface PlatformAuditPageResponse {
+  items: PlatformAuditRowResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** ردٌّ — `PlatformAuditRowResponse` في الخادم (ق-١٤٣٨). */
+export interface PlatformAuditRowResponse {
+  adminRole: 'OWNER' | 'SUPPORT' | 'FINANCE' | 'OPERATIONS' | 'COMPLIANCE';
+  params: Record<string, string> | null;
+  details: Record<string, unknown> | null;
+  id: string;
+  adminId: string;
+  adminName: string;
+  method: string;
+  route: string;
+  targetCompanyId: string | null;
+  status: number;
+  ip: string | null;
+  createdAt: string;
+}
+
 /** ردٌّ — `PosAttemptEvidenceResponse` في الخادم (ق-١٤٣٨). */
 export interface PosAttemptEvidenceResponse {
   deviceReference: string | null;

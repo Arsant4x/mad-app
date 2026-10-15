@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { PlatformRole } from '@mad-app/db';
 import { Request } from 'express';
 import { JwtPayload } from '../../auth/types';
+import { PlatformAuditService } from '../../audit/platform-audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { formatMessage, MSG } from '../i18n/messages';
 import { PLATFORM_ROLES_KEY } from './platform-role.decorator';
@@ -31,6 +32,7 @@ export class PlatformAdminGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    private readonly platformAudit: PlatformAuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -49,6 +51,9 @@ export class PlatformAdminGuard implements CanActivate {
     const admin = await this.prisma.platformAdmin.findUnique({ where: { id: payload.profileId }, select: { role: true } });
     // مديرٌ حُذف ورمزُه حيّ — يُردّ بالاسم لا بخطأ قاعدة.
     if (!admin) throw new ForbiddenException(MSG.platform_admin_only);
+
+    // Every request of a known administrator is recorded, the refusal below included.
+    this.platformAudit.track(context, { id: payload.profileId, role: admin.role });
 
     if (admin.role === PlatformRole.OWNER || allowed.includes(admin.role)) return true;
     throw new ForbiddenException(formatMessage(MSG.platform_role_denied, { role: PLATFORM_ROLE_LABEL[admin.role] }));

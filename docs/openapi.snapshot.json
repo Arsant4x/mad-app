@@ -458,6 +458,20 @@
       "200"
     ]
   },
+  "GET /v1/admin/platform-audit-log": {
+    "parameters": [
+      "query:adminId",
+      "query:companyId",
+      "query:from",
+      "query:page",
+      "query:pageSize",
+      "query:to"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/admin/processing-agreement": {
     "parameters": [],
     "requiredBody": [],

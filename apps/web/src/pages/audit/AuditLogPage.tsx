@@ -131,6 +131,7 @@ export function AuditLogPage() {
                       <td>
                         {r.actorName}
                         {r.actorType === 'COMPANY' && <span className="hint">{t('audit.owner_suffix')}</span>}
+                        {r.actorType === 'PLATFORM_ADMIN' && <span className="hint">{t('audit.platform_admin_suffix')}</span>}
                       </td>
                       <td>{SCREEN_LABELS[r.screen as keyof typeof SCREEN_LABELS] ?? r.screen}</td>
                       <td>

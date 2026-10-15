@@ -1960,6 +1960,16 @@ export interface PaymentsListQuery {
   customerId?: string;
 }
 
+/** وسائطُ استعلام `PlatformAuditController_list`. */
+export interface PlatformAuditListQuery {
+  page?: number;
+  pageSize?: number;
+  adminId?: string;
+  companyId?: string;
+  from?: string;
+  to?: string;
+}
+
 /** وسائطُ استعلام `PlatformDecisionsController_list`. */
 export interface PlatformDecisionsListQuery {
   status: string;
