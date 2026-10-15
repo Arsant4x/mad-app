@@ -95,7 +95,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     await registerCompany(username);
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ orgName: 'أخرى', username, password: 'SelfServe123!' })
+      .send({ orgName: 'أخرى', username, password: 'SelfServe123!', email: `${username}-again@example.com` })
       .expect(409);
   }, 60000);
 

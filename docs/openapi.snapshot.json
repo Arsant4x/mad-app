@@ -2697,6 +2697,7 @@
   "POST /v1/auth/register": {
     "parameters": [],
     "requiredBody": [
+      "email",
       "orgName",
       "password",
       "username"
@@ -2887,6 +2888,7 @@
   "POST /v1/companies": {
     "parameters": [],
     "requiredBody": [
+      "email",
       "orgName",
       "password",
       "permissionTemplateId",
@@ -2894,6 +2896,15 @@
     ],
     "responses": [
       "201"
+    ]
+  },
+  "POST /v1/companies/{id}/password-reset": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
     ]
   },
   "POST /v1/company-users": {

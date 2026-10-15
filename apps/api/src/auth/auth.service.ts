@@ -417,27 +417,44 @@ export class AuthService {
     });
     const email = identity?.actorType === 'COMPANY' ? identity.company?.email : null;
     if (!identity || !email) return;
+    await this.sendResetLink({ identityId: identity.id, email, orgName: identity.company?.orgName ?? '' }, 'owner');
+  }
 
+  /**
+   * Issues a reset link and mails it to the owner's address. The platform calls this too when its
+   * support asks for a link on the owner's behalf: the token rules are the same, only the text says
+   * who asked. Nothing about the account changes until the link is used.
+   */
+  async sendResetLink(owner: { identityId: string; email: string; orgName: string }, requestedBy: 'owner' | 'platform'): Promise<void> {
     // One live token per identity: a fresh request invalidates older links,
     // so the newest email is always the one that works.
-    await this.prisma.passwordResetToken.deleteMany({ where: { loginIdentityId: identity.id, usedAt: null } });
+    await this.prisma.passwordResetToken.deleteMany({ where: { loginIdentityId: owner.identityId, usedAt: null } });
 
     const token = crypto.randomBytes(32).toString('base64url');
     await this.prisma.passwordResetToken.create({
       data: {
-        loginIdentityId: identity.id,
+        loginIdentityId: owner.identityId,
         tokenHash: this.hashToken(token),
         expiresAt: new Date(Date.now() + AuthService.RESET_TOKEN_TTL_MS),
       },
     });
 
     const link = `${this.config.get<string>('WEB_ORIGIN', 'http://localhost:5173')}/reset-password?token=${token}`;
+    const open = `لتعيين كلمة مرور جديدة افتح الرابط التالي خلال 30 دقيقة:\n${link}\n\n`;
+    if (requestedBy === 'platform') {
+      await this.mail.send(
+        owner.email,
+        'رابط استعادة كلمة المرور بطلب من دعم المنصة — mad-app',
+        `طلب فريق دعم المنصة إرسال رابط لاستعادة كلمة مرور حساب «${owner.orgName}».\n\n` +
+          open +
+          `كلمة مرورك لم تتغير، وفريق الدعم لا يعرفها ولا يستطيع تغييرها. إن لم تطلب المساعدة من الدعم فتجاهل هذه الرسالة وتواصل معنا.`,
+      );
+      return;
+    }
     await this.mail.send(
-      email,
+      owner.email,
       'استعادة كلمة المرور — mad-app',
-      `وصلنا طلب لاستعادة كلمة مرور حساب «${identity.company?.orgName}».\n\n` +
-        `لتعيين كلمة مرور جديدة افتح الرابط التالي خلال 30 دقيقة:\n${link}\n\n` +
-        `إن لم تطلب ذلك فتجاهل هذه الرسالة — كلمة مرورك لم تتغير.`,
+      `وصلنا طلب لاستعادة كلمة مرور حساب «${owner.orgName}».\n\n` + open + `إن لم تطلب ذلك فتجاهل هذه الرسالة — كلمة مرورك لم تتغير.`,
     );
   }
 
@@ -478,7 +495,7 @@ export class AuthService {
    * واختيار النشاط عند التسجيل (بند ٢ في ترتيب التنفيذ المعتمد) لم يُبنَ بعد —
    * وقد صار قراراً محسوماً لا معلَّقاً، فيُضاف **داخل** النواة لا هنا.
    */
-  async register(orgName: string, username: string, password: string, email?: string, country?: string): Promise<LoginResult> {
+  async register(orgName: string, username: string, password: string, email: string, country?: string): Promise<LoginResult> {
     if (this.config.get<string>('REGISTRATION_ENABLED', 'true') === 'false') {
       throw new ForbiddenException(MSG.register_disabled);
     }

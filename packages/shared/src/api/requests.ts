@@ -192,6 +192,7 @@ export interface CreateCompanyDto {
   orgName: string;
   username: string;
   password: string;
+  email: string;
   permissionTemplateId: string;
   subStart?: string;
   subEnd?: string;
@@ -1000,7 +1001,7 @@ export interface RegisterDto {
   orgName: string;
   username: string;
   password: string;
-  email?: string;
+  email: string;
   country?: string;
 }
 
@@ -1292,8 +1293,6 @@ export interface UpdateCashDrawerDto {
 /** Request body: `UpdateCompanyDto` on the server. */
 export interface UpdateCompanyDto {
   orgName?: string;
-  username?: string;
-  password?: string;
   permissionTemplateId?: string;
 }
 
@@ -1305,6 +1304,7 @@ export interface UpdateCompanyProfileDto {
   crNumber?: string;
   phone?: string;
   email?: string;
+  currentPassword?: string;
   website?: string;
   address?: string;
   street?: string;

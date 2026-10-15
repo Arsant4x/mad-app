@@ -1,4 +1,5 @@
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { MSG } from '../../common/i18n/messages';
 import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 
 export class ForgotPasswordDto {
@@ -34,10 +35,10 @@ export class RegisterDto {
   @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
 
-  /// Optional but strongly encouraged — it's what password recovery uses.
-  @IsOptional()
-  @IsEmail()
-  email?: string;
+  /// Required: a password reset link is only ever sent to this address.
+  @IsNotEmpty({ message: MSG.owner_email_required })
+  @IsEmail({}, { message: MSG.email_invalid })
+  email!: string;
 
   /// 🔴 `ق-١٣٦٨` — دولةُ المنشأة (ISO 3166-1 alpha-2). اختياريّةٌ ما دامت المنصّةُ تخدم إقليماً واحداً، وتصير إلزاميةً وحدَها حين
   /// يُضاف ثانٍ (`regionForNewCompany`). والتحقّقُ من دعمها هناك لا هنا — فرسالتُه تسمّي الدولة.

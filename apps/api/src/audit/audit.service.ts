@@ -122,6 +122,7 @@ const SUB_RESOURCE_LABELS: Record<string, string> = {
   values: 'قيم نموذج',
   seal: 'ختم نموذج',
   subscription: 'الاشتراك',
+  'password-reset': 'طلب رابط استعادة كلمة المرور',
 };
 
 @Injectable()

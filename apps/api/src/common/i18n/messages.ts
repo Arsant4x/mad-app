@@ -437,6 +437,9 @@ export const MSG = {
   company_not_found: 'companies.not_found',
   company_delete_blocked: 'companies.delete_blocked',
   username_taken: 'companies.username_taken',
+  owner_email_required: 'companies.owner_email_required',
+  owner_email_missing: 'companies.owner_email_missing',
+  owner_reset_mail_failed: 'companies.owner_reset_mail_failed',
   /** ق-١٣٦٨ — إقليمُ المنشأة عند ميلادها. */
   region_required: 'companies.region_required',
   region_unsupported: 'companies.region_unsupported',
@@ -539,6 +542,8 @@ export const MSG = {
   slug_taken: 'companyProfile.slug_taken',
   slug_reserved: 'companyProfile.slug_reserved',
   slug_not_cleared: 'companyProfile.slug_not_cleared',
+  profile_email_password_required: 'companyProfile.email_password_required',
+  profile_email_not_cleared: 'companyProfile.email_not_cleared',
 
   // zatca
   zatca_profile_incomplete: 'zatca.profile_incomplete',
@@ -1688,6 +1693,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The company cannot be deleted: it holds records that are never deleted ({records}) — its data stays',
   },
   [MSG.username_taken]: { ar: 'اسم المستخدم "{username}" مستخدَم بالفعل', en: 'Username "{username}" is already taken' },
+  [MSG.owner_email_required]: {
+    ar: 'أدخل البريد الإلكتروني لصاحب الحساب، فإليه وحده يُرسل رابط استعادة كلمة المرور',
+    en: "Enter the account owner's e-mail address: a password reset link is only ever sent there",
+  },
+  [MSG.owner_email_missing]: {
+    ar: 'لا بريد إلكتروني لصاحب هذه المنشأة، فلا يمكن إرسال رابط الاستعادة. يضيفه صاحب المنشأة من بيانات المنشأة',
+    en: 'This company has no owner e-mail address, so no reset link can be sent. The owner can add one in the company profile',
+  },
+  [MSG.owner_reset_mail_failed]: {
+    ar: 'تعذّر إرسال رسالة الاستعادة إلى بريد صاحب المنشأة، حاول مرة أخرى بعد قليل',
+    en: "The reset e-mail to the company owner could not be sent; try again shortly",
+  },
   [MSG.region_required]: {
     ar: 'اختر دولة المنشأة — المنصّة تخدم أكثر من دولة، فلا تُفترض دولةٌ لم تُعلَن',
     en: 'Choose the company country — the platform serves more than one, so none is assumed',
@@ -1882,6 +1899,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.slug_not_cleared]: {
     ar: 'لا يُمحى معرّف النطاق بعد اختياره — يُستبدل بغيره، والقديم يبقى محجوزاً',
     en: 'A subdomain cannot be cleared once chosen — replace it instead; the old one stays reserved',
+  },
+  [MSG.profile_email_password_required]: {
+    ar: 'أدخل كلمة المرور الحالية لتغيير البريد الإلكتروني، فهو الذي يصله رابط استعادة كلمة المرور',
+    en: 'Enter your current password to change the e-mail address: it is where a password reset link is sent',
+  },
+  [MSG.profile_email_not_cleared]: {
+    ar: 'لا يُمحى البريد الإلكتروني للمنشأة لأنه طريق استعادة كلمة المرور، ويمكن استبداله ببريد آخر',
+    en: 'The company e-mail cannot be cleared because it is how the password is recovered; replace it with another address instead',
   },
 
   [MSG.zatca_profile_incomplete]: { ar: 'أكمل الاسم القانوني والرقم الضريبي في بيانات المنشأة قبل الإرسال لهيئة الزكاة', en: 'Complete the legal name and VAT number in the company profile before submitting to ZATCA' },

@@ -35,7 +35,7 @@ describe('Processing agreement acceptance records the trusted client address (e2
   async function makeCompany(): Promise<{ id: string; token: string }> {
     const username = `consent-ip-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'ConsentPass123!', orgName: `Consent IP ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'ConsentPass123!', orgName: `Consent IP ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
       .expect(201);
     companyIds.push(res.body.id);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ConsentPass123!' }).expect(200);

@@ -1,6 +1,13 @@
-import { IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 
+/**
+ * What the platform changes on a company account: its name and its template.
+ *
+ * The owner's login name and password are not here: only the owner sets them, and the platform can
+ * send the owner a reset link instead (POST /companies/:id/password-reset). Nor are subStart and
+ * subEnd: the subscription has its own route for the finance role. Sending any of them is refused
+ * with 400 by name, because the global pipe forbids unknown fields.
+ */
 export class UpdateCompanyDto {
   @IsOptional()
   @IsString()
@@ -9,20 +16,5 @@ export class UpdateCompanyDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(3)
-  username?: string;
-
-  /// Length and content rules are checked by the service (common/password).
-  @IsOptional()
-  @IsString()
-  @MaxLength(PASSWORD_MAX_LENGTH)
-  password?: string;
-
-  @IsOptional()
-  @IsString()
   permissionTemplateId?: string;
-
-  // ⛔ **ولا `subStart`/`subEnd` هنا** (`ق-١٣١٧`): تغييرُ الاشتراك **للمالية وحدَها**، وله
-  //    مسارُه `PATCH /companies/:id/subscription` بدوره. ومن أرسلهما هنا يُردّ `400`
-  //    باسمهما (`forbidNonWhitelisted`) — **فالتضييقُ يُعلَن ولا يُتجاهَل صامتاً**.
 }

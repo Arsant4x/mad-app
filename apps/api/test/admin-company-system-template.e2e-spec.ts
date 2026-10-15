@@ -32,6 +32,7 @@ describe('مسارُ المدير لا يركّب منشأةً على قالب �
     username: `sys-tpl-${tag}-${suffix}`,
     password: 'SysTpl12345!',
     orgName: `منشأة قالب ${tag} ${suffix}`,
+    email: `sys-tpl-${tag}-${suffix}@example.com`,
     permissionTemplateId,
     subEnd: '2030-01-01',
   });

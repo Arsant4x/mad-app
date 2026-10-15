@@ -76,7 +76,7 @@
   "err_customer_name_required": "Please enter the customer name",
   "err_customer_save": "Could not save the customer",
   "err_customer_delete": "Could not delete the customer",
-  "err_company_fields": "Please complete the name, username and password",
+  "err_company_fields": "Please complete the name, username, password and the account owner's email",
   "err_template_delete": "Could not delete the template",
   "err_template_name_required": "Please enter the template name",
   "err_template_screen_required": "Choose at least one screen",

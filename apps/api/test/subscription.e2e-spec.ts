@@ -38,7 +38,7 @@ describe('Subscription lifecycle (e2e)', () => {
     const username = `sub-co-${suffix}-${seq++}`;
     const password = 'SubPass1234!';
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password, orgName: `منشأة اشتراك ${username}`, permissionTemplateId: templateId, ...fields });
+      .send({ username, password, orgName: `منشأة اشتراك ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, ...fields });
     if (res.body?.id) createdCompanyIds.push(res.body.id);
     return { id: res.body?.id, username, password, ...({ status: res.status } as object) } as { id: string; username: string; password: string };
   }
@@ -80,7 +80,7 @@ describe('Subscription lifecycle (e2e)', () => {
   it('#1 fixes subStart to the activation day and refuses a backdated start', async () => {
     // Backdated → rejected.
     await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username: `sub-back-${suffix}`, password: 'SubPass1234!', orgName: 'منشأة', permissionTemplateId: templateId, subStart: iso(-3), subEnd: iso(30) })
+      .send({ username: `sub-back-${suffix}`, password: 'SubPass1234!', orgName: 'منشأة', email: `sub-back-${suffix}@example.com`, permissionTemplateId: templateId, subStart: iso(-3), subEnd: iso(30) })
       .expect(400);
 
     // Omitted → server anchors it to today.

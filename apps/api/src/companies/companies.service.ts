@@ -1,7 +1,7 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Company, Prisma } from '@mad-app/db';
-import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
+import { AuthService } from '../auth/auth.service';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { createCompanyAccount } from './create-company-account';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,9 +10,7 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.dto';
 import { PlatformDecisionsService } from '../platform/platform-decisions.service';
-import { CredentialChange, CredentialChangeService } from '../common/credentials/credential-change.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { assertPasswordPolicy } from '../common/password/password-policy';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listItems, listOrPage, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
@@ -60,12 +58,14 @@ function resolveSubStart(dtoSubStart?: string): Date {
 
 @Injectable()
 export class CompaniesService {
+  private readonly logger = new Logger(CompaniesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly config: ConfigService,
     private readonly decisions: PlatformDecisionsService,
-    private readonly credentials: CredentialChangeService,
+    private readonly auth: AuthService,
   ) {}
 
   /**
@@ -146,6 +146,7 @@ export class CompaniesService {
       username: dto.username,
       password: dto.password,
       orgName: dto.orgName,
+      email: dto.email,
       // ق-١٣٦٨ — الدولةُ المعلَنة، وغيابُها يأخذ الإقليمَ الوحيد ما دام وحيداً.
       country: dto.country,
       permissionTemplateId: dto.permissionTemplateId,
@@ -159,6 +160,7 @@ export class CompaniesService {
     return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, include: COMPANY_INCLUDE });
   }
 
+  /** The account name and template. The owner's sign-in details are not the platform's to change. */
   async update(id: string, dto: UpdateCompanyDto) {
     const existing = await this.prisma.company.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.company_not_found);
@@ -167,36 +169,33 @@ export class CompaniesService {
     // «والقائمون لا يُمسّون».
     if (dto.permissionTemplateId && dto.permissionTemplateId !== existing.permissionTemplateId) await this.assertCompanyTemplate(dto.permissionTemplateId);
 
-    const current = await this.prisma.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
-    // Checked before any write, against the username the account will have after this update.
-    if (dto.password) assertPasswordPolicy(dto.password, { username: dto.username ?? current.username, email: existing.email });
-
-    const username = dto.username && dto.username !== current.username ? dto.username : undefined;
-    if (username) {
-      const clash = await this.prisma.loginIdentity.findUnique({ where: { username } });
-      if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username }));
-    }
-    const passwordHash = dto.password ? await argon2.hash(dto.password) : undefined;
-
-    const changes: CredentialChange[] = [];
-    if (username) changes.push('username');
-    if (passwordHash) changes.push('password');
-    const { company, notice } = await this.prisma.$transaction(async (tx) => {
-      if (changes.length) await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username, passwordHash } });
-      // A change of the owner's sign-in details ends every session the owner had before it.
-      const notice = changes.length ? await this.credentials.record(tx, existing.loginIdentityId, changes) : null;
-      const company = await tx.company.update({
-        where: { id },
-        data: {
-          orgName: dto.orgName,
-          permissionTemplateId: dto.permissionTemplateId,
-        },
-        include: COMPANY_INCLUDE,
-      });
-      return { company, notice };
+    return this.prisma.company.update({
+      where: { id },
+      data: {
+        orgName: dto.orgName,
+        permissionTemplateId: dto.permissionTemplateId,
+      },
+      include: COMPANY_INCLUDE,
     });
-    if (notice) this.credentials.notify(notice);
-    return company;
+  }
+
+  /**
+   * Mails the owner a password reset link, the same single-use link the owner can ask for. The
+   * password stays as it is until the owner uses the link, and using it goes through the one
+   * credential change path, so it ends the earlier sessions and tells the owner.
+   */
+  async sendOwnerResetLink(id: string): Promise<{ sentTo: string }> {
+    const company = await this.prisma.company.findUnique({ where: { id }, select: { loginIdentityId: true, email: true, orgName: true } });
+    if (!company) throw new NotFoundException(MSG.company_not_found);
+    const email = company.email?.trim();
+    if (!email) throw new ConflictException(MSG.owner_email_missing);
+    try {
+      await this.auth.sendResetLink({ identityId: company.loginIdentityId, email, orgName: company.orgName }, 'platform');
+    } catch (e) {
+      this.logger.warn(`owner reset link for company ${id} not sent: ${(e as Error).message}`);
+      throw new ServiceUnavailableException(MSG.owner_reset_mail_failed);
+    }
+    return { sentTo: email };
   }
 
   /**

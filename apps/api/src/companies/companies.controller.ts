@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
@@ -7,6 +9,7 @@ import { RequiresPlatformRole } from '../common/platform-admin/platform-role.dec
 import { PlatformRole } from '@mad-app/db';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { OwnerResetLinkResponse } from './dto/owner-reset-link-response.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.dto';
 
@@ -17,7 +20,8 @@ import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.
  */
 @Controller('companies')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
-// ⑪A2 (`ق-١٣١٢`): حسابُ المنشأة نفسُه **تشغيلٌ** — اسمُها وقالبُها واسمُ دخولها.
+// The company account itself is an operations matter: its name and its template. The owner's login
+// name and password are the owner's alone; the platform can only have a reset link sent to the owner.
 // ⚠️ **واشتراكُها خرج من هنا** (`ق-١٣١٧`) إلى مسارٍ بدوره: **مالٌ يُحصَّل ويُردّ**.
 // **والميلادُ يبقى بالدورين معاً**: الفترةُ الأولى جزءٌ منه، **وتقسيمُه يجعل التسجيلَ
 // مستحيلاً على كلٍّ منهما وحدَه**. و`OWNER` يمرّ بتعريفه.
@@ -39,6 +43,15 @@ export class CompaniesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCompanyDto) {
     return this.companiesService.update(id, dto);
+  }
+
+  /** Sends the owner a password reset link by e-mail. Five a minute for one administrator. */
+  @Post(':id/password-reset')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: OwnerResetLinkResponse })
+  sendOwnerResetLink(@Param('id') id: string): Promise<OwnerResetLinkResponse> {
+    return this.companiesService.sendOwnerResetLink(id);
   }
 }
 

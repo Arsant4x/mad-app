@@ -1,9 +1,51 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Company, CompanyInput } from '../../api/companies';
+import { sendOwnerResetLink, type Company, type CompanyInput } from '../../api/companies';
 import { companyTemplateChoices, type PermissionTemplate } from '../../api/templates';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
+
+function serverMessage(e: unknown): string | undefined {
+  const message = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+  return Array.isArray(message) ? message.join(' · ') : message;
+}
+
+/**
+ * The owner's login name and password are the owner's alone, so editing an account shows no field for
+ * them. What the platform can do for an owner who cannot sign in is have a reset link mailed to the owner.
+ */
+function OwnerSignInPanel({ company }: { company: Company }) {
+  const { t } = useTranslation();
+  const [sending, setSending] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSend() {
+    setError(null);
+    setSentTo(null);
+    setSending(true);
+    try {
+      setSentTo((await sendOwnerResetLink(company.id)).sentTo);
+    } catch (e) {
+      setError(serverMessage(e) ?? i18n.t('developer.company_modal.reset_link_failed'));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="field">
+      <label>{t('developer.company_modal.sign_in_title')}</label>
+      <p className="hint">{t('developer.company_modal.sign_in_hint')}</p>
+      <p className="hint">{company.email ? t('developer.company_modal.owner_email', { email: company.email }) : t('developer.company_modal.owner_email_none')}</p>
+      <button type="button" className="btn btn-sm btn-ghost" onClick={handleSend} disabled={sending || !company.email}>
+        {sending ? t('developer.company_modal.sending_reset_link') : t('developer.company_modal.send_reset_link')}
+      </button>
+      {sentTo && <p className="hint">{t('developer.company_modal.reset_link_sent', { email: sentTo })}</p>}
+      {error && <p className="error-text">{error}</p>}
+    </div>
+  );
+}
 
 export function CompanyModal({
   templates,
@@ -20,6 +62,7 @@ export function CompanyModal({
   const [orgName, setOrgName] = useState(editing?.orgName ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
   // A company owner gets a full public template, so the choice is among those only. An existing
   // company on a narrower template still sees it listed, and it is not sent unless it changes.
   const choices = companyTemplateChoices(templates);
@@ -33,7 +76,7 @@ export function CompanyModal({
 
   async function handleSubmit() {
     setError(null);
-    if (!orgName.trim() || (!editing && (!username.trim() || !password))) {
+    if (!orgName.trim() || (!editing && (!username.trim() || !password || !email.trim()))) {
       setError(i18n.t('err_company_fields'));
       return;
     }
@@ -41,15 +84,14 @@ export function CompanyModal({
     try {
       await onSave({
         orgName: orgName.trim(),
-        ...(username.trim() ? { username: username.trim() } : {}),
-        ...(password ? { password } : {}),
+        // The owner's sign-in details and e-mail are set once, when the account is created.
+        ...(editing ? {} : { username: username.trim(), password, email: email.trim() }),
         ...(permissionTemplateId !== editing?.permissionTemplateId ? { permissionTemplateId } : {}),
         subStart: subStart || undefined,
         subEnd: subEnd || undefined,
       });
     } catch (e) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? i18n.t('err_account_save'));
+      setError(serverMessage(e) ?? i18n.t('err_account_save'));
     } finally {
       setSaving(false);
     }
@@ -68,16 +110,25 @@ export function CompanyModal({
           <label>{t('developer.company_modal.org_name')}</label>
           <input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder={t('developer.company_modal.org_name_placeholder')} />
         </div>
-        <div className="two-col">
-          <div className="field">
-            <label>{t('developer.company_modal.username')}</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={editing ? t('developer.company_modal.username_keep') : t('developer.company_modal.username_placeholder')} />
-          </div>
-          <div className="field">
-            <label>{t('developer.company_modal.password')}</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={editing ? t('developer.company_modal.password_keep') : t('developer.company_modal.password')} />
-          </div>
-        </div>
+        {!editing && (
+          <>
+            <div className="two-col">
+              <div className="field">
+                <label htmlFor="company-username">{t('developer.company_modal.username')}</label>
+                <input id="company-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t('developer.company_modal.username_placeholder')} />
+              </div>
+              <div className="field">
+                <label htmlFor="company-password">{t('developer.company_modal.password')}</label>
+                <input id="company-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('developer.company_modal.password')} />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="company-email">{t('developer.company_modal.email')}</label>
+              <input id="company-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('developer.company_modal.email_placeholder')} />
+              <p className="hint">{t('developer.company_modal.email_hint')}</p>
+            </div>
+          </>
+        )}
         <div className="field">
           <label>{t('developer.company_modal.template')}</label>
           <select value={permissionTemplateId} onChange={(e) => setPermissionTemplateId(e.target.value)}>
@@ -99,6 +150,7 @@ export function CompanyModal({
           </div>
         </div>
         <p className="field hint">{t('developer.company_modal.hint')}</p>
+        {editing && <OwnerSignInPanel company={editing} />}
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>

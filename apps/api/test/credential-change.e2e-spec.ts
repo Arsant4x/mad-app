@@ -159,17 +159,16 @@ describe('Credential changes end earlier sessions (e2e)', () => {
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   });
 
-  it('ends every owner session when the platform admin sets the owner password', async () => {
-    const owner = await registerOwner('admin-pass');
-    await bearer(adminToken)(http().patch(`/companies/${owner.companyId}`)).send({ password: 'AdminSet123!' }).expect(200);
-    expect(await refreshStatus(owner.cookie)).toBe(401);
-    await bearer(owner.token)(http().get('/auth/me')).expect(401);
-    expect(await mailTo(owner.email)).toBeDefined();
-  });
-
-  it('ends every owner session when the platform admin changes the owner username', async () => {
-    const owner = await registerOwner('admin-user');
-    await bearer(adminToken)(http().patch(`/companies/${owner.companyId}`)).send({ username: `${owner.username}-renamed` }).expect(200);
+  it('ends every owner session when the owner uses a reset link the platform sent', async () => {
+    const owner = await registerOwner('admin-link');
+    await bearer(adminToken)(http().post(`/companies/${owner.companyId}/password-reset`)).expect(200);
+    // Sending the link changes nothing: the owner's sessions still work.
+    await bearer(owner.token)(http().get('/auth/me')).expect(200);
+    const link = (await mailTo(owner.email)) as [string, string, string] | undefined;
+    const token = /token=([A-Za-z0-9_-]+)/.exec(link?.[2] ?? '')?.[1];
+    expect(token).toBeTruthy();
+    sendMail.mockClear();
+    await http().post('/auth/reset-password').send({ token, newPassword: 'OwnerChose123!' }).expect(200);
     expect(await refreshStatus(owner.cookie)).toBe(401);
     await bearer(owner.token)(http().get('/auth/me')).expect(401);
     expect(await mailTo(owner.email)).toBeDefined();

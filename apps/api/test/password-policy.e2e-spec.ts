@@ -33,7 +33,7 @@ describe('New password rules (e2e)', () => {
   const admin = (r: request.Test) => r.set('Authorization', `Bearer ${adminToken}`);
   const asOwner = (r: request.Test) => r.set('Authorization', `Bearer ${owner.token}`);
 
-  async function register(username: string, password: string, email?: string) {
+  async function register(username: string, password: string, email = `${username}@example.com`) {
     const res = await http().post('/auth/register').send({ orgName: `pw ${username}`, username, password, email });
     if (res.status === 201 && res.body.user?.companyId) createdCompanies.push(res.body.user.companyId);
     return res;
@@ -111,13 +111,12 @@ describe('New password rules (e2e)', () => {
     expect(named.status).toBe(400);
   });
 
-  it('the platform admin cannot create or update a company with a short password', async () => {
+  // The platform admin no longer sets an owner password on update at all (owner-reset-link.e2e-spec.ts).
+  it('the platform admin cannot create a company with a short password', async () => {
     const username = `pw-admin-co-${stamp}`;
-    const created = await admin(http().post('/companies')).send({ username, password: 'Abcdefgh12!', orgName: `pw ${username}`, permissionTemplateId: companyTemplateId, subEnd: '2030-01-01' });
+    const created = await admin(http().post('/companies')).send({ username, password: 'Abcdefgh12!', orgName: `pw ${username}`, email: `${username}@example.com`, permissionTemplateId: companyTemplateId, subEnd: '2030-01-01' });
     if (created.status === 201) createdCompanies.push(created.body.id);
     expect(created.status).toBe(400);
-    const updated = await admin(http().patch(`/companies/${owner.companyId}`)).send({ password: 'Abcdefgh12!' });
-    expect(updated.status).toBe(400);
   });
 
   it('the owner cannot create or update an employee with a short password', async () => {

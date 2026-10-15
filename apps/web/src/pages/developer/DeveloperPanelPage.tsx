@@ -61,9 +61,10 @@ export function DeveloperPanelPage() {
 
   async function handleSaveCompany(data: Partial<CompanyInput>) {
     if (companyModal?.mode === 'edit') {
-      // The subscription has its own route and role, so money is never sent with the name.
-      const { subStart, subEnd, ...profile } = data;
-      await updateCompany(companyModal.company.id, profile);
+      // The subscription has its own route and role, so money is never sent with the name. The owner's
+      // sign-in details are never sent: the edit form has none.
+      const { subStart, subEnd, orgName, permissionTemplateId } = data;
+      await updateCompany(companyModal.company.id, { orgName, permissionTemplateId });
       // Call the billing route only when the date actually changed, so someone who edits the
       // name alone under an operations role is not refused on a subscription they did not touch.
       const current = companyModal.company.subEnd?.slice(0, 10) ?? '';

@@ -174,7 +174,7 @@ async function main(): Promise<void> {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const prisma = app.get(dist.PrismaService as never) as { $queryRaw: (s: TemplateStringsArray) => Promise<unknown>; company: { count: (a: object) => Promise<number> } };
   await prisma.$queryRaw`SELECT 1`;
-  const reg = await http().post('/v1/auth/register').send({ orgName: `حارس الصدق ${stamp}`, username: `truth-${stamp}`, password: 'TruthPass123!' });
+  const reg = await http().post('/v1/auth/register').send({ orgName: `حارس الصدق ${stamp}`, username: `truth-${stamp}`, password: 'TruthPass123!', email: `truth-${stamp}@example.com` });
   if (reg.status !== 201) throw new Error(`التسجيلُ ردّ ${reg.status}: ${reg.text.slice(0, 200)}`);
   const companyId = reg.body.user?.companyId as string;
   const token = reg.body.accessToken as string;

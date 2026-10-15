@@ -154,7 +154,7 @@ export function LoginPage() {
         {mode === 'register' && (
           <label>
             {t('register_email')}
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
         )}
 
