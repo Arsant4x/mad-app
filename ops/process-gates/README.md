@@ -9,6 +9,7 @@ and pull request.
 | `registry-decisions-only.test.mjs` | `docs/decisions.md` holds decisions only |
 | `registry-numbering.test.mjs` | registry ids are unique; plans and index match |
 | `rule-extension-attached.test.mjs` | a decision that extends a rule is attached to it in `CLAUDE.md` |
+| `decision-research-linked.test.mjs` | every decision from 1705 on names an existing research file under `docs/research/` with the required headings |
 | `registry-not-with-code.test.mjs` | a branch never mixes the registries with code |
 | `attribution-ci.test.mjs` | no agent signature in a pull request title, description, commits or merge message |
 | `commit-msg-attribution.test.mjs` | the commit-msg hook removes signature lines, and the tool signature is off |
