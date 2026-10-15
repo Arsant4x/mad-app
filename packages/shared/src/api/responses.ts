@@ -3,7 +3,7 @@
 // يُعاد توليدُه بـ: npm run openapi:snapshot  (من apps/api)
 // والحارسُ خطوةُ openapi:check نفسُها — وصدقُه يشهد به scripts/response-truth.ts على التطبيق المبنيّ.
 
-/** ردٌّ — `BankAccountTransferResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `BankAccountTransferResponse` on the server. */
 export interface BankAccountTransferResponse {
   kind: 'BANK_ACCOUNT';
   fromBranchId: string | null;
@@ -11,7 +11,7 @@ export interface BankAccountTransferResponse {
   bank: BankRowResponse;
 }
 
-/** ردٌّ — `BankRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `BankRowResponse` on the server. */
 export interface BankRowResponse {
   kind: 'CASH_BOX' | 'BANK_ACCOUNT' | 'LEGACY_UNDECLARED';
   id: string;
@@ -29,13 +29,13 @@ export interface BankRowResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `BanksRefResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `BanksRefResponse` on the server. */
 export interface BanksRefResponse {
   id: string;
   name: string;
 }
 
-/** ردٌّ — `BankStatementLineResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `BankStatementLineResponse` on the server. */
 export interface BankStatementLineResponse {
   id: string;
   bankId: string;
@@ -55,14 +55,14 @@ export interface BankStatementLineResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `BankTransferEntriesResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `BankTransferEntriesResponse` on the server. */
 export interface BankTransferEntriesResponse {
   variance: string | null;
   out: string | null;
   in: string | null;
 }
 
-/** ردٌّ — `BranchResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `BranchResponse` on the server. */
 export interface BranchResponse {
   id: string;
   name: string;
@@ -76,7 +76,7 @@ export interface BranchResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `CashBoxTransferResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CashBoxTransferResponse` on the server. */
 export interface CashBoxTransferResponse {
   kind: 'CASH_BOX';
   from: BankRowResponse;
@@ -87,13 +87,13 @@ export interface CashBoxTransferResponse {
   entries: BankTransferEntriesResponse;
 }
 
-/** ردٌّ — `CashDepositListResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CashDepositListResponse` on the server. */
 export interface CashDepositListResponse {
   items: CashDepositResponse[];
   inTransit: CashInTransitResponse;
 }
 
-/** ردٌّ — `CashDepositResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CashDepositResponse` on the server. */
 export interface CashDepositResponse {
   status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
   drawer: BanksRefResponse;
@@ -114,14 +114,14 @@ export interface CashDepositResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `CashInTransitResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CashInTransitResponse` on the server. */
 export interface CashInTransitResponse {
   ledger: string;
   documents: string;
   matched: boolean;
 }
 
-/** ردٌّ — `CodeBandStatusResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CodeBandStatusResponse` on the server. */
 export interface CodeBandStatusResponse {
   key: string;
   name: string;
@@ -132,7 +132,7 @@ export interface CodeBandStatusResponse {
   warn: boolean;
 }
 
-/** ردٌّ — `ContractFeeResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ContractFeeResponse` on the server. */
 export interface ContractFeeResponse {
   id: string;
   contractId: string;
@@ -142,7 +142,7 @@ export interface ContractFeeResponse {
   endedAt: string | null;
 }
 
-/** ردٌّ — `CreatedCashDepositResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CreatedCashDepositResponse` on the server. */
 export interface CreatedCashDepositResponse {
   status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
   drawer: BanksRefResponse;
@@ -164,7 +164,7 @@ export interface CreatedCashDepositResponse {
   entryNo: string;
 }
 
-/** ردٌّ — `CreatedContractFeeResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CreatedContractFeeResponse` on the server. */
 export interface CreatedContractFeeResponse {
   id: string;
   contractId: string;
@@ -175,7 +175,7 @@ export interface CreatedContractFeeResponse {
   raisedClaims: number;
 }
 
-/** ردٌّ — `CreatedNetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CreatedNetworkSettlementResponse` on the server. */
 export interface CreatedNetworkSettlementResponse {
   status: 'POSTED' | 'VOID';
   id: string;
@@ -197,7 +197,7 @@ export interface CreatedNetworkSettlementResponse {
   entryNo: string;
 }
 
-/** ردٌّ — `CustomerDetailResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `CustomerDetailResponse` on the server. */
 export interface CustomerDetailResponse {
   kind: 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON' | 'LEGACY_UNDECLARED';
   id: string;
@@ -219,21 +219,21 @@ export interface CustomerDetailResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `EmployeeIdentityOnFileResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `EmployeeIdentityOnFileResponse` on the server. */
 export interface EmployeeIdentityOnFileResponse {
   nationalId: boolean;
   salaryIban: boolean;
   socialInsuranceNo: boolean;
 }
 
-/** ردٌّ — `EmployeeLoginAccountResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `EmployeeLoginAccountResponse` on the server. */
 export interface EmployeeLoginAccountResponse {
   id: string;
   name: string;
   branchIds: string[];
 }
 
-/** ردٌّ — `EmployeeWithLoginAccountResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `EmployeeWithLoginAccountResponse` on the server. */
 export interface EmployeeWithLoginAccountResponse {
   status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   loginAccount: EmployeeLoginAccountResponse | null;
@@ -247,13 +247,13 @@ export interface EmployeeWithLoginAccountResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `FormDeviceLinkResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormDeviceLinkResponse` on the server. */
 export interface FormDeviceLinkResponse {
   url: string;
   expiresAt: string;
 }
 
-/** ردٌّ — `FormInstanceItemResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormInstanceItemResponse` on the server. */
 export interface FormInstanceItemResponse {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
   itemId: string;
@@ -272,7 +272,7 @@ export interface FormInstanceItemResponse {
   outOfRange: boolean;
 }
 
-/** ردٌّ — `FormInstanceObjectionResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormInstanceObjectionResponse` on the server. */
 export interface FormInstanceObjectionResponse {
   note: string;
   byName: string;
@@ -281,7 +281,7 @@ export interface FormInstanceObjectionResponse {
   objectedAt: string;
 }
 
-/** ردٌّ — `FormInstanceResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormInstanceResponse` on the server. */
 export interface FormInstanceResponse {
   status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
   id: string;
@@ -310,7 +310,7 @@ export interface FormInstanceResponse {
   items: FormInstanceItemResponse[];
 }
 
-/** ردٌّ — `FormInstanceSignatureResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormInstanceSignatureResponse` on the server. */
 export interface FormInstanceSignatureResponse {
   role: 'STAFF' | 'COUNTERPARTY' | 'SUBSTITUTE' | 'REPRESENTATIVE';
   level: 'DRAWN_STAFF_SESSION' | 'DRAWN_OTP' | 'DRAWN_NAFATH' | 'PAPER_WITNESSED';
@@ -325,7 +325,7 @@ export interface FormInstanceSignatureResponse {
   signedAt: string;
 }
 
-/** ردٌّ — `FormInstanceTemplateRefResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormInstanceTemplateRefResponse` on the server. */
 export interface FormInstanceTemplateRefResponse {
   id: string;
   familyId: string;
@@ -334,20 +334,20 @@ export interface FormInstanceTemplateRefResponse {
   formType: FormInstanceTypeRefResponse;
 }
 
-/** ردٌّ — `FormInstanceTypeRefResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormInstanceTypeRefResponse` on the server. */
 export interface FormInstanceTypeRefResponse {
   id: string;
   code: string;
   name: string;
 }
 
-/** ردٌّ — `FormLinkMethodsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormLinkMethodsResponse` on the server. */
 export interface FormLinkMethodsResponse {
   otp: boolean;
   nafath: boolean;
 }
 
-/** ردٌّ — `FormLinkOpenResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormLinkOpenResponse` on the server. */
 export interface FormLinkOpenResponse {
   state: 'ACTIVE' | 'CLOSED';
   purpose: 'SIGN' | 'FINAL_COPY' | 'SUBSTITUTE_CONSENT';
@@ -356,36 +356,36 @@ export interface FormLinkOpenResponse {
   identityProvider: string | null;
 }
 
-/** ردٌّ — `FormNafathPollResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormNafathPollResponse` on the server. */
 export interface FormNafathPollResponse {
   state: 'PENDING' | 'APPROVED';
   session: FormSessionResponse | null;
 }
 
-/** ردٌّ — `FormNafathStartResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormNafathStartResponse` on the server. */
 export interface FormNafathStartResponse {
   displayCode: string;
 }
 
-/** ردٌّ — `FormObjectedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormObjectedResponse` on the server. */
 export interface FormObjectedResponse {
   status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
 }
 
-/** ردٌّ — `FormOtpIssuedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormOtpIssuedResponse` on the server. */
 export interface FormOtpIssuedResponse {
   challengeId: string;
   expiresAt: string;
   mobileMasked: string;
 }
 
-/** ردٌّ — `FormPaperSignedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormPaperSignedResponse` on the server. */
 export interface FormPaperSignedResponse {
   finalCopy: 'SENT' | 'FAILED' | 'NONE';
   form: FormInstanceResponse;
 }
 
-/** ردٌّ — `FormPublicItemResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormPublicItemResponse` on the server. */
 export interface FormPublicItemResponse {
   lineNo: number;
   label: string;
@@ -397,7 +397,7 @@ export interface FormPublicItemResponse {
   note: string | null;
 }
 
-/** ردٌّ — `FormPublicSealResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormPublicSealResponse` on the server. */
 export interface FormPublicSealResponse {
   no: string;
   contentHash: string;
@@ -405,7 +405,7 @@ export interface FormPublicSealResponse {
   valid: boolean | null;
 }
 
-/** ردٌّ — `FormPublicSignatureResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormPublicSignatureResponse` on the server. */
 export interface FormPublicSignatureResponse {
   role: 'STAFF' | 'COUNTERPARTY' | 'SUBSTITUTE' | 'REPRESENTATIVE';
   level: 'DRAWN_STAFF_SESSION' | 'DRAWN_OTP' | 'DRAWN_NAFATH' | 'PAPER_WITNESSED';
@@ -414,13 +414,13 @@ export interface FormPublicSignatureResponse {
   signedAt: string;
 }
 
-/** ردٌّ — `FormPublicSubstituteResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormPublicSubstituteResponse` on the server. */
 export interface FormPublicSubstituteResponse {
   name: string;
   mobileMasked: string;
 }
 
-/** ردٌّ — `FormPublicViewResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormPublicViewResponse` on the server. */
 export interface FormPublicViewResponse {
   purpose: 'SIGN' | 'FINAL_COPY' | 'SUBSTITUTE_CONSENT';
   status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
@@ -436,25 +436,25 @@ export interface FormPublicViewResponse {
   substitute: FormPublicSubstituteResponse | null;
 }
 
-/** ردٌّ — `FormSentResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormSentResponse` on the server. */
 export interface FormSentResponse {
   delivery: 'SENT' | 'FAILED';
   form: FormInstanceResponse;
 }
 
-/** ردٌّ — `FormSessionResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormSessionResponse` on the server. */
 export interface FormSessionResponse {
   session: string;
   expiresAt: string;
 }
 
-/** ردٌّ — `FormSignedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormSignedResponse` on the server. */
 export interface FormSignedResponse {
   status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
   finalCopy: 'SENT' | 'FAILED' | 'NONE';
 }
 
-/** ردٌّ — `FormSigningEventResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormSigningEventResponse` on the server. */
 export interface FormSigningEventResponse {
   kind: string;
   actor: string;
@@ -464,7 +464,7 @@ export interface FormSigningEventResponse {
   revisionNo: number;
 }
 
-/** ردٌّ — `FormSigningSettingsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormSigningSettingsResponse` on the server. */
 export interface FormSigningSettingsResponse {
   nafathThreshold: string | null;
   currency: string;
@@ -472,13 +472,13 @@ export interface FormSigningSettingsResponse {
   types: FormTypeSigningSettingResponse[];
 }
 
-/** ردٌّ — `FormSubstituteDecidedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormSubstituteDecidedResponse` on the server. */
 export interface FormSubstituteDecidedResponse {
   decision: 'APPROVED' | 'REJECTED';
   delivery: 'SENT' | 'FAILED' | 'NONE';
 }
 
-/** ردٌّ — `FormTemplateItemResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormTemplateItemResponse` on the server. */
 export interface FormTemplateItemResponse {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
   id: string;
@@ -492,7 +492,7 @@ export interface FormTemplateItemResponse {
   helpText: string | null;
 }
 
-/** ردٌّ — `FormTemplateResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormTemplateResponse` on the server. */
 export interface FormTemplateResponse {
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   id: string;
@@ -510,7 +510,7 @@ export interface FormTemplateResponse {
   items: FormTemplateItemResponse[];
 }
 
-/** ردٌّ — `FormTemplateRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormTemplateRowResponse` on the server. */
 export interface FormTemplateRowResponse {
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   id: string;
@@ -529,7 +529,7 @@ export interface FormTemplateRowResponse {
   sourceLatestVersion: number | null;
 }
 
-/** ردٌّ — `FormTypeResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormTypeResponse` on the server. */
 export interface FormTypeResponse {
   id: string;
   code: string;
@@ -540,7 +540,7 @@ export interface FormTypeResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `FormTypeSigningSettingResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormTypeSigningSettingResponse` on the server. */
 export interface FormTypeSigningSettingResponse {
   formTypeId: string;
   code: string;
@@ -549,7 +549,7 @@ export interface FormTypeSigningSettingResponse {
   isDefault: boolean;
 }
 
-/** ردٌّ — `FormVerificationResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `FormVerificationResponse` on the server. */
 export interface FormVerificationResponse {
   no: string;
   contentHash: string;
@@ -559,20 +559,20 @@ export interface FormVerificationResponse {
   valid: boolean;
 }
 
-/** ردٌّ — `LedgerSourceResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `LedgerSourceResponse` on the server. */
 export interface LedgerSourceResponse {
   type: string;
   id: string;
   no: string;
 }
 
-/** ردٌّ — `NetworkSettlementListResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `NetworkSettlementListResponse` on the server. */
 export interface NetworkSettlementListResponse {
   items: NetworkSettlementResponse[];
   summary: NetworkTransitSummaryResponse;
 }
 
-/** ردٌّ — `NetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `NetworkSettlementResponse` on the server. */
 export interface NetworkSettlementResponse {
   status: 'POSTED' | 'VOID';
   id: string;
@@ -593,7 +593,7 @@ export interface NetworkSettlementResponse {
   receiptCount: number;
 }
 
-/** ردٌّ — `NetworkTransitSummaryResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `NetworkTransitSummaryResponse` on the server. */
 export interface NetworkTransitSummaryResponse {
   ledger: string;
   open: string;
@@ -601,7 +601,7 @@ export interface NetworkTransitSummaryResponse {
   matched: boolean;
 }
 
-/** ردٌّ — `NumberGapSeriesResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `NumberGapSeriesResponse` on the server. */
 export interface NumberGapSeriesResponse {
   kind: string;
   year: number;
@@ -613,13 +613,13 @@ export interface NumberGapSeriesResponse {
   pending: TakenNumberResponse[];
 }
 
-/** ردٌّ — `NumberGapsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `NumberGapsResponse` on the server. */
 export interface NumberGapsResponse {
   asOf: string;
   series: NumberGapSeriesResponse[];
 }
 
-/** ردٌّ — `OpenNetworkReceiptResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `OpenNetworkReceiptResponse` on the server. */
 export interface OpenNetworkReceiptResponse {
   id: string;
   no: string;
@@ -629,14 +629,14 @@ export interface OpenNetworkReceiptResponse {
   signed: string;
 }
 
-/** ردٌّ — `OpenNetworkReceiptsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `OpenNetworkReceiptsResponse` on the server. */
 export interface OpenNetworkReceiptsResponse {
   receipts: OpenNetworkReceiptResponse[];
   gross: string;
   summary: NetworkTransitSummaryResponse;
 }
 
-/** ردٌّ — `PagedBankRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PagedBankRowResponse` on the server. */
 export interface PagedBankRowResponse {
   items: BankRowResponse[];
   total: number;
@@ -644,7 +644,7 @@ export interface PagedBankRowResponse {
   pageSize: number;
 }
 
-/** ردٌّ — `PagedPosShiftResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PagedPosShiftResponse` on the server. */
 export interface PagedPosShiftResponse {
   items: PosShiftWithTotalsResponse[];
   total: number;
@@ -652,7 +652,7 @@ export interface PagedPosShiftResponse {
   pageSize: number;
 }
 
-/** ردٌّ — `PlatformAuditPageResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PlatformAuditPageResponse` on the server. */
 export interface PlatformAuditPageResponse {
   items: PlatformAuditRowResponse[];
   total: number;
@@ -660,7 +660,7 @@ export interface PlatformAuditPageResponse {
   pageSize: number;
 }
 
-/** ردٌّ — `PlatformAuditRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PlatformAuditRowResponse` on the server. */
 export interface PlatformAuditRowResponse {
   adminRole: 'OWNER' | 'SUPPORT' | 'FINANCE' | 'OPERATIONS' | 'COMPLIANCE';
   params: Record<string, string> | null;
@@ -676,21 +676,21 @@ export interface PlatformAuditRowResponse {
   createdAt: string;
 }
 
-/** ردٌّ — `PosAttemptEvidenceResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosAttemptEvidenceResponse` on the server. */
 export interface PosAttemptEvidenceResponse {
   deviceReference: string | null;
   approvalCode: string | null;
   note: string | null;
 }
 
-/** ردٌّ — `PosCardVerificationListResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosCardVerificationListResponse` on the server. */
 export interface PosCardVerificationListResponse {
   settlementDays: number;
   items: PosCardVerificationRowResponse[];
   unresolvedAttempts: PosUnresolvedAttemptRowResponse[];
 }
 
-/** ردٌّ — `PosCardVerificationRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosCardVerificationRowResponse` on the server. */
 export interface PosCardVerificationRowResponse {
   verification: 'DEVICE_REFERENCE' | 'MANUAL_EVIDENCE';
   posPaymentId: string;
@@ -709,14 +709,14 @@ export interface PosCardVerificationRowResponse {
   overdue: boolean;
 }
 
-/** ردٌّ — `PosClearanceResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosClearanceResponse` on the server. */
 export interface PosClearanceResponse {
   status?: 'NOT_SUBMITTED' | 'SUBMITTING' | 'STAMPED' | 'CLEARED' | 'REJECTED';
   required: boolean;
   message?: string;
 }
 
-/** ردٌّ — `PosClosedShiftResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosClosedShiftResponse` on the server. */
 export interface PosClosedShiftResponse {
   status: 'OPEN' | 'CLOSED';
   salesCount: number;
@@ -737,12 +737,12 @@ export interface PosClosedShiftResponse {
   pendingAttempts: PosPendingAttemptResponse[];
 }
 
-/** ردٌّ — `PosCurrentShiftResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosCurrentShiftResponse` on the server. */
 export interface PosCurrentShiftResponse {
   shift: PosShiftWithTotalsResponse | null;
 }
 
-/** ردٌّ — `PosIncidentItemResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosIncidentItemResponse` on the server. */
 export interface PosIncidentItemResponse {
   id: string;
   startedAt: string;
@@ -753,14 +753,14 @@ export interface PosIncidentItemResponse {
   salesCount: number;
 }
 
-/** ردٌّ — `PosIncidentsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosIncidentsResponse` on the server. */
 export interface PosIncidentsResponse {
   inferred: true;
   gapMinutes: number;
   items: PosIncidentItemResponse[];
 }
 
-/** ردٌّ — `PosOpenPaymentAttemptResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosOpenPaymentAttemptResponse` on the server. */
 export interface PosOpenPaymentAttemptResponse {
   status: 'CREATED' | 'CHARGING' | 'APPROVED' | 'COMPLETED' | 'DECLINED' | 'UNKNOWN' | 'CANCELLED';
   paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
@@ -785,7 +785,7 @@ export interface PosOpenPaymentAttemptResponse {
   cashierName: string;
 }
 
-/** ردٌّ — `PosPaymentAttemptResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosPaymentAttemptResponse` on the server. */
 export interface PosPaymentAttemptResponse {
   status: 'CREATED' | 'CHARGING' | 'APPROVED' | 'COMPLETED' | 'DECLINED' | 'UNKNOWN' | 'CANCELLED';
   paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
@@ -809,7 +809,7 @@ export interface PosPaymentAttemptResponse {
   createdAt: string;
 }
 
-/** ردٌّ — `PosPaymentAttemptWithSaleResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosPaymentAttemptWithSaleResponse` on the server. */
 export interface PosPaymentAttemptWithSaleResponse {
   status: 'CREATED' | 'CHARGING' | 'APPROVED' | 'COMPLETED' | 'DECLINED' | 'UNKNOWN' | 'CANCELLED';
   paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
@@ -834,14 +834,14 @@ export interface PosPaymentAttemptWithSaleResponse {
   sale: PosSaleReceiptResponse | null;
 }
 
-/** ردٌّ — `PosPaymentModeResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosPaymentModeResponse` on the server. */
 export interface PosPaymentModeResponse {
   active: boolean;
   provider?: string;
   deadlineMs?: number;
 }
 
-/** ردٌّ — `PosPaymentRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosPaymentRowResponse` on the server. */
 export interface PosPaymentRowResponse {
   method: 'CASH' | 'CARD';
   verification: 'PROVIDER_APPROVED' | 'DEVICE_REFERENCE' | 'MANUAL_EVIDENCE' | 'CASHIER_CONFIRMED' | null;
@@ -854,7 +854,7 @@ export interface PosPaymentRowResponse {
   createdAt: string;
 }
 
-/** ردٌّ — `PosPendingAttemptResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosPendingAttemptResponse` on the server. */
 export interface PosPendingAttemptResponse {
   status: 'CHARGING' | 'UNKNOWN' | 'APPROVED';
   id: string;
@@ -863,7 +863,7 @@ export interface PosPendingAttemptResponse {
   createdAt: string;
 }
 
-/** ردٌّ — `PosSaleCustomerResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosSaleCustomerResponse` on the server. */
 export interface PosSaleCustomerResponse {
   kind: 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON' | 'LEGACY_UNDECLARED';
   id: string;
@@ -874,7 +874,7 @@ export interface PosSaleCustomerResponse {
   country: string;
 }
 
-/** ردٌّ — `PosSaleLineResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosSaleLineResponse` on the server. */
 export interface PosSaleLineResponse {
   taxCategory: 'S' | 'Z' | 'E' | 'O' | 'LEGACY_STANDARD' | 'LEGACY_ZERO';
   id: string;
@@ -890,7 +890,7 @@ export interface PosSaleLineResponse {
   taxExemptionReason: string | null;
 }
 
-/** ردٌّ — `PosSaleReceiptResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosSaleReceiptResponse` on the server. */
 export interface PosSaleReceiptResponse {
   docType: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
   status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
@@ -920,7 +920,7 @@ export interface PosSaleReceiptResponse {
   posPayments: PosPaymentRowResponse[];
 }
 
-/** ردٌّ — `PosSaleResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosSaleResponse` on the server. */
 export interface PosSaleResponse {
   docType: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
   status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
@@ -953,7 +953,7 @@ export interface PosSaleResponse {
   posPayments: PosPaymentRowResponse[];
 }
 
-/** ردٌّ — `PosShiftResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosShiftResponse` on the server. */
 export interface PosShiftResponse {
   status: 'OPEN' | 'CLOSED';
   id: string;
@@ -968,7 +968,7 @@ export interface PosShiftResponse {
   notes: string | null;
 }
 
-/** ردٌّ — `PosShiftWithTotalsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosShiftWithTotalsResponse` on the server. */
 export interface PosShiftWithTotalsResponse {
   status: 'OPEN' | 'CLOSED';
   salesCount: number;
@@ -987,13 +987,13 @@ export interface PosShiftWithTotalsResponse {
   notes: string | null;
 }
 
-/** ردٌّ — `PosStockBelowZeroResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosStockBelowZeroResponse` on the server. */
 export interface PosStockBelowZeroResponse {
   productId: string;
   resultingQty: string;
 }
 
-/** ردٌّ — `PosStockDeductedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosStockDeductedResponse` on the server. */
 export interface PosStockDeductedResponse {
   deducted: true;
   warehouseId: string;
@@ -1003,13 +1003,13 @@ export interface PosStockDeductedResponse {
   zeroCostProvisional: PosZeroCostProvisionalResponse[];
 }
 
-/** ردٌّ — `PosStockSkippedResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosStockSkippedResponse` on the server. */
 export interface PosStockSkippedResponse {
   deducted: false;
   reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS';
 }
 
-/** ردٌّ — `PosSyncedSaleResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosSyncedSaleResponse` on the server. */
 export interface PosSyncedSaleResponse {
   docType: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
   status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
@@ -1042,7 +1042,7 @@ export interface PosSyncedSaleResponse {
   posPayments: PosPaymentRowResponse[];
 }
 
-/** ردٌّ — `PosUnresolvedAttemptRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosUnresolvedAttemptRowResponse` on the server. */
 export interface PosUnresolvedAttemptRowResponse {
   status: 'CHARGING' | 'UNKNOWN' | 'APPROVED';
   attemptId: string;
@@ -1054,14 +1054,14 @@ export interface PosUnresolvedAttemptRowResponse {
   shiftClosedAt: string | null;
 }
 
-/** ردٌّ — `PosZeroCostProvisionalResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `PosZeroCostProvisionalResponse` on the server. */
 export interface PosZeroCostProvisionalResponse {
   costSource: 'WAREHOUSE_LAYER' | 'PRODUCT_LAYER' | 'PRODUCT_CARD' | 'NONE';
   productId: string;
   qty: string;
 }
 
-/** ردٌّ — `ReconciliationBankResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationBankResponse` on the server. */
 export interface ReconciliationBankResponse {
   id: string;
   name: string;
@@ -1070,7 +1070,7 @@ export interface ReconciliationBankResponse {
   mirrorBalance: string;
 }
 
-/** ردٌّ — `ReconciliationLedgerResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationLedgerResponse` on the server. */
 export interface ReconciliationLedgerResponse {
   opening: string;
   closing: string;
@@ -1078,7 +1078,7 @@ export interface ReconciliationLedgerResponse {
   truncated: boolean;
 }
 
-/** ردٌّ — `ReconciliationLedgerRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationLedgerRowResponse` on the server. */
 export interface ReconciliationLedgerRowResponse {
   lineId: string;
   entryId: string;
@@ -1100,7 +1100,7 @@ export interface ReconciliationLedgerRowResponse {
   matched: boolean;
 }
 
-/** ردٌّ — `ReconciliationOverviewResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationOverviewResponse` on the server. */
 export interface ReconciliationOverviewResponse {
   bank: ReconciliationBankResponse;
   from: string | null;
@@ -1111,7 +1111,7 @@ export interface ReconciliationOverviewResponse {
   totals: ReconciliationTotalsResponse;
 }
 
-/** ردٌّ — `ReconciliationStatementRowResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationStatementRowResponse` on the server. */
 export interface ReconciliationStatementRowResponse {
   id: string;
   date: string;
@@ -1122,19 +1122,19 @@ export interface ReconciliationStatementRowResponse {
   source: string | null;
 }
 
-/** ردٌّ — `ReconciliationStateResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationStateResponse` on the server. */
 export interface ReconciliationStateResponse {
   bankId: string;
   reconciledUntil: string | null;
 }
 
-/** ردٌّ — `ReconciliationSuggestionResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationSuggestionResponse` on the server. */
 export interface ReconciliationSuggestionResponse {
   transactionId: string;
   lineIds: string[];
 }
 
-/** ردٌّ — `ReconciliationTotalsResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `ReconciliationTotalsResponse` on the server. */
 export interface ReconciliationTotalsResponse {
   unmatchedStatement: string;
   unmatchedStatementCount: number;
@@ -1142,14 +1142,14 @@ export interface ReconciliationTotalsResponse {
   unmatchedLedgerCount: number;
 }
 
-/** ردٌّ — `TakenNumberResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `TakenNumberResponse` on the server. */
 export interface TakenNumberResponse {
   no: string;
   number: number;
   allocatedAt: string;
 }
 
-/** ردٌّ — `VoidedCashDepositResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `VoidedCashDepositResponse` on the server. */
 export interface VoidedCashDepositResponse {
   status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
   voidEntryNo: string;
@@ -1169,7 +1169,7 @@ export interface VoidedCashDepositResponse {
   updatedAt: string;
 }
 
-/** ردٌّ — `VoidedNetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
+/** Response: `VoidedNetworkSettlementResponse` on the server. */
 export interface VoidedNetworkSettlementResponse {
   status: 'POSTED' | 'VOID';
   id: string;
