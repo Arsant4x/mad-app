@@ -1,33 +1,29 @@
 /**
- * حارس الإقلاع: **لا تُقلع بيانات افتراضية**.
+ * Boot guard: production does not start on default or published values.
  *
- * القصة التي يمنعها هذا الملف: ينسخ المشغّل `.env.production.example` إلى
- * `.env.production`، يفوته سطر أو سطران، فتُقلع المنصة **خضراء تماماً** —
- * بمفتاح توقيع جلسات منشورٍ نصّه في المستودع العام، وبمفتاح تشفير بيانات
- * بوابات الدفع مثبَّتٍ في الكود. لا رسالة، لا تحذير، فقط «API listening».
- * العطل الصامت هنا أخطر من رفض الإقلاع بمراحل.
+ * The failure it prevents: the operator copies an example env file to .env.production,
+ * misses a line or two, and the platform boots green with a session signing key whose text
+ * is in the repository and an encryption key fixed in the code. No message, no warning, only
+ * "API listening". A silent fault here is far worse than a refused boot.
  *
- * ثلاث قواعد في التصميم:
- *
- * ① **يجمع كل الأخطاء ثم يرمي مرة واحدة.** إصلاحُ سرٍّ ثم اكتشافُ التالي عند
- *    الإقلاع التالي دورةٌ بائسة على خادم بعيد — القائمة كاملة من أول محاولة.
- *
- * ② **لا يطبع قيمة سرٍّ قط.** الرسالة تسمّي المتغير وسبب الرفض فقط، لأن
- *    مخرجات الحاوية تُلتقط وتُحفظ.
- *
- * ③ **يسري في الإنتاج وحده.** التطوير والاختبار يعملان بقيم مريحة كما هي،
- *    وإلا تحوّل الحارس إلى عائق يومي فيُعطَّل — وحارسٌ معطَّل ليس حارساً.
- *
- * ④ **وما يحرس ميزةً تُفعَّل يسري حين تُفعَّل وحدَها** (⑬A1 · `ق-١٣٣٣`): بلا `SMTP_HOST` لا بريد، فلا
- *    مرسِلَ ولا حدَّ يُطلبان؛ **ومعه يُطلبان** — فالبريدُ لا يخرج من نطاقٍ افتراضيٍّ لا يُصادَق، ولا بحدٍّ لم يُعلَن.
+ * Design rules:
+ * 1. Collect every problem, then throw once. Fixing one secret and finding the next on the
+ *    next boot of a remote server is a miserable loop; the whole list comes at the first try.
+ * 2. Never print a secret value. The message names the variable and the reason only, because
+ *    container output is captured and kept.
+ * 3. Production only. Development and tests run on convenient values; a guard that gets in the
+ *    way every day gets switched off, and a switched off guard guards nothing.
+ * 4. What guards an optional feature applies only when that feature is switched on: without
+ *    SMTP_HOST there is no mail, so no sender and no limit are required; with it, both are.
  */
 
 import { blindKeyProblem, keyringProblem } from '../crypto/field-cipher.util';
 import { parseDsn } from '../error-tracking/error-event.util';
 import { parseMailDailyLimit } from '../mail/mail-quota.util';
 import { providerProblem } from '../../verification/providers';
+import { isPublishedTestValue } from './published-test-values';
 
-/** قيم المثال والتطوير المعروفة — وجودها في الإنتاج يعني أن الملف نُسخ ولم يُملأ. */
+/** Known example and development values: seeing one in production means the file was copied and not filled. */
 const KNOWN_PLACEHOLDERS = [
   'change-me',
   'app_user_dev_password',
@@ -39,9 +35,9 @@ const KNOWN_PLACEHOLDERS = [
 interface SecretRule {
   name: string;
   minLength?: number;
-  /** لماذا يهمّ — يظهر في رسالة الرفض ليعرف المشغّل ما الذي يحميه. */
+  /** Why it matters, shown in the refusal so the operator knows what it protects. */
   why: string;
-  /** فحص إضافي خاص؛ يعيد نص الخطأ أو null — والبيئةُ كاملةً لقاعدةٍ تقرأ متغيّراً ثانياً (حلقةُ المفاتيح ومعرّفُها). */
+  /** An extra check; returns the problem text or null. Gets the whole env for rules that read a second variable. */
   extra?: (value: string, env: NodeJS.ProcessEnv) => string | null;
 }
 
@@ -67,13 +63,12 @@ const REQUIRED: SecretRule[] = [
   {
     name: 'DATABASE_URL',
     why: 'اتصال قاعدة البيانات',
-    // الدور الأعلى يتجاوز RLS بصمت — وهي الطبقة الثانية من عزل المستأجرين.
+    // The owner role bypasses row level security silently, and that is the second layer of tenant isolation.
     extra: (v) => (v.includes('://app_user:') ? null : 'يجب أن يتصل بدور app_user لا بالدور الأعلى (الأعلى يتجاوز RLS بصمت)'),
   },
-  /**
-   * ⚖️ `ق-١٣٤٥` (الحزمة م①) — **مفاتيحُ تشفير الحقول الحسّاسة في التطبيق**، خارج القاعدة. وتُفحص بالتحليل نفسِه الذي يرمي
-   * عند أوّل حقل (`field-cipher.util`)، **قبل الإقلاع لا عند أوّل موظف**؛ ومفتاحُ الاختبار (بايتٌ واحدٌ مكرَّر) يُرفض هنا.
-   */
+  // Keys for the sensitive field encryption done in the application, outside the database. They are
+  // parsed with the same function that throws on the first field (field-cipher.util), before boot
+  // rather than at the first employee; the test key (one repeated byte) is refused here.
   {
     name: 'PII_ENCRYPTION_KEYS',
     why: 'حلقةُ مفاتيح تشفير هويّة الموظف وحسابه ورقم تأميناته («معرّفٌ:مفتاح» مفصولةً بفواصل) — ضياعُها ضياعُ تلك الحقول، فتُحفظ نسختُها خارج الخادم',
@@ -90,7 +85,7 @@ const REQUIRED: SecretRule[] = [
   },
 ];
 
-/** نطاقُ عنوان المرسِل — «اسمٌ <no-reply@rikzapp.com>» أو «no-reply@rikzapp.com» — أو `null` بلا عنوان. */
+/** Domain of the sender address ("Name <no-reply@rikzapp.com>" or "no-reply@rikzapp.com"), or null without one. */
 function senderDomain(from: string): string | null {
   const open = from.lastIndexOf('<');
   const close = from.lastIndexOf('>');
@@ -102,11 +97,12 @@ function senderDomain(from: string): string | null {
 }
 
 /**
- * ⑬A1 (`ق-١٣٣٣`) — **ما يُطلب حين يُفعَّل البريد** (`SMTP_HOST` مضبوط):
+ * What is required once mail is switched on (SMTP_HOST set).
  *
- * ⚠️ **وغيابُ `SMTP_HOST` نفسِه لا يُرفض هنا** — وهو قرارُ `ق-١١٧` («حارسُ إقلاعٍ يمنع الإقلاع بلا
- *    `SMTP_HOST`») **ولم يُبنَ بعد**: بناؤه قبل أن يُنشئ المالكُ حجرةَ البريد في وحدة التحكّم يُسقط أوّلَ إقلاعٍ
- *    بعده. يُفعَّل بأمرٍ حين تكتمل خطواتُ `DEPLOY.md` (البريد).
+ * A missing SMTP_HOST itself is not refused here. A boot guard that refuses to start without it
+ * was decided and is not built yet: building it before the mail zone exists in the provider's
+ * console would fail the first boot after it. It is switched on when the mail steps in DEPLOY.md
+ * are done.
  */
 const WHEN_MAIL: SecretRule[] = [
   {
@@ -127,8 +123,9 @@ const WHEN_MAIL: SecretRule[] = [
 ];
 
 /**
- * ③ (`ق-١٣٣١`) — **متتبّعُ الأخطاء حين يُضبط**: عنوانٌ يُقرأ ويُرسَل إليه عبر `https` وحدَه — فحدثُ الخطأ لا يعبر
- * الشبكةَ مكشوفاً، و`DSN` مكسورٌ لا يُقلع كأن التتبّعَ يعمل وهو صامت. وغيابُه جائز: **الخادمُ المستقلّ شرطُ تشغيل**.
+ * The error tracker, once set: an address that parses and is reached over https only, so an error
+ * event never crosses the network in the clear and a broken DSN does not boot as if tracking worked.
+ * Leaving it unset is allowed: the separate tracking server is a condition of operation.
  */
 const WHEN_ERROR_TRACKING: SecretRule[] = [
   {
@@ -139,9 +136,10 @@ const WHEN_ERROR_TRACKING: SecretRule[] = [
 ];
 
 /**
- * ⚖️ توجيه ٢٨٧ ⑩ — **مزوّدا الرسائل والتحقّق من الهويّة حين يُضبطان**: محوّلٌ مسجَّلٌ غيرُ تجريبيّ، فالتجريبيُّ (يُرسل لا شيء، ويوافق بلا
- * تحقّق) لا يُقلع في الإنتاج — **الحاجزُ الأوّل**، والثاني عند كلِّ استعمال (`VerificationGateway`). **وغيابُهما جائز**: لم يُتعاقد بعد،
- * والمسارُ يُرفض باسمه حين يُستعمل؛ والتعاقدُ شرطُ تشغيل (القاعدة الدائمة ١٩).
+ * The message and identity providers, once set: a registered adapter that is not a test one, since a
+ * test adapter (sends nothing, approves without checking) must not boot in production. This is the
+ * first barrier; the second is at every use (VerificationGateway). Leaving them unset is allowed: no
+ * contract yet, and the route is refused by name when used.
  */
 const WHEN_SMS: SecretRule[] = [
   { name: 'SMS_PROVIDER', why: 'مزوّدُ الرسائل الذي يحمل رمزَ التحقّق ورابطَ التوقيع إلى جوال العميل', extra: (v) => providerProblem('SMS', v) },
@@ -154,9 +152,9 @@ const WHEN_AUTHORITY: SecretRule[] = [
 ];
 
 /**
- * **كلُّ متغيّرٍ يقرؤه هذا الحارس** — ليُفحص أنه **يبلغ الحاوية** (`boot-vars-reach-container.spec.ts`):
- * `docker-compose.prod.yml` يسرد بيئةَ `api` بالاسم، **فمتغيّرٌ يطلبه الحارسُ ولا يمرّره التركيبُ يُسقط الإقلاعَ
- * ولو ضُبط في `.env.production`** — والمشغِّلُ يرى «غير مضبوط» عن قيمةٍ كتبها بيده.
+ * Every variable this guard reads, so boot-vars-reach-container.spec.ts can check it reaches the
+ * container: docker-compose.prod.yml lists the api environment by name, and a variable the guard
+ * needs that the compose file does not pass fails the boot even when set in .env.production.
  */
 export function bootGuardedVariables(): string[] {
   return [
@@ -171,11 +169,22 @@ export function bootGuardedVariables(): string[] {
   ];
 }
 
+/**
+ * A value that must never reach production: an example placeholder, or a secret published in the
+ * repository's test and example files. Returns the problem text, or null.
+ */
+export function knownValueProblem(value: string): string | null {
+  const hit = KNOWN_PLACEHOLDERS.find((p) => value.toLowerCase().includes(p));
+  if (hit) return `ما زال يحمل قيمة المثال («${hit}»)`;
+  if (isPublishedTestValue(value)) return 'يحمل قيمةً منشورةً في ملفّات الاختبار والأمثلة في المستودع';
+  return null;
+}
+
 export class ProductionSecretsError extends Error {}
 
 /**
- * يفحص أسرار الإنتاج ويرمي `ProductionSecretsError` بقائمة كاملة عند أي خلل.
- * لا يفعل شيئاً خارج `NODE_ENV=production`.
+ * Checks the production secrets and throws ProductionSecretsError with the full list on any problem.
+ * Does nothing outside NODE_ENV=production.
  */
 export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV !== 'production') return;
@@ -198,9 +207,9 @@ export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): v
       problems.push(`${rule.name} — غير مضبوط. ${rule.why}`);
       continue;
     }
-    const hit = KNOWN_PLACEHOLDERS.find((p) => value.toLowerCase().includes(p));
-    if (hit) {
-      problems.push(`${rule.name} — ما زال يحمل قيمة المثال («${hit}»). ${rule.why}`);
+    const known = knownValueProblem(value);
+    if (known) {
+      problems.push(`${rule.name} — ${known}. ${rule.why}`);
       continue;
     }
     if (rule.minLength && value.length < rule.minLength) {
