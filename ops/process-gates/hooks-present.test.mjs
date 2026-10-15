@@ -11,7 +11,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO } from './repo.mjs';
+import { REPO, runsHook } from './repo.mjs';
 
 const settingsPath = join(REPO, '.claude', 'settings.json');
 const wiredCommands = (matcher) => {
@@ -30,10 +30,17 @@ describe('the shell gate exists and is wired', () => {
     assert.ok(existsSync(hookPath));
   });
 
+  it('the wiring check needs the exact hook file, so a renamed or missing one does not count', () => {
+    assert.ok(runsHook('node .claude/hooks/block-shell-text-writes.mjs', 'block-shell-text-writes.mjs'));
+    assert.ok(!runsHook('node .claude/hooks/block-shell-text-writes.mjs.off', 'block-shell-text-writes.mjs'));
+    assert.ok(!runsHook('node .claude/hooks/missing/block-shell-text-writes.mjs', 'block-shell-text-writes.mjs'));
+    assert.ok(!runsHook('echo block-shell-text-writes.mjs', 'block-shell-text-writes.mjs'));
+  });
+
   it('it is wired in settings.json on PreToolUse for Bash', () => {
     const commands = wiredCommands('Bash');
     assert.ok(commands.length > 0);
-    assert.ok(commands.some((c) => c.includes('block-shell-text-writes.mjs')));
+    assert.ok(commands.some((c) => runsHook(c, 'block-shell-text-writes.mjs')));
   });
 
   // Each gate by its marker: the marker is the deciding condition, read from the file,
@@ -112,7 +119,7 @@ describe('the edit while reading gate exists and is wired', () => {
     it(`it is wired in settings.json on PreToolUse for "${matcher}"`, () => {
       const commands = wiredCommands(matcher);
       assert.ok(commands.length > 0);
-      assert.ok(commands.some((c) => c.includes('block-edit-while-reading.mjs')));
+      assert.ok(commands.some((c) => runsHook(c, 'block-edit-while-reading.mjs')));
     });
   }
 

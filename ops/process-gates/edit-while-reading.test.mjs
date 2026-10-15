@@ -22,7 +22,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { REPO } from './repo.mjs';
+import { REPO, runsHook } from './repo.mjs';
 
 const HOOK = join(REPO, '.claude', 'hooks', 'block-edit-while-reading.mjs');
 
@@ -170,7 +170,7 @@ describe('the "no edit to a tree while it is read" gate', () => {
     assert.ok(existsSync(HOOK));
     const settings = JSON.parse(readFileSync(join(REPO, '.claude', 'settings.json'), 'utf8'));
     const pre = settings.hooks?.PreToolUse ?? [];
-    const wiredOn = (matcher) => pre.some((e) => e.matcher === matcher && (e.hooks ?? []).some((h) => (h.command ?? '').includes('block-edit-while-reading.mjs')));
+    const wiredOn = (matcher) => pre.some((e) => e.matcher === matcher && (e.hooks ?? []).some((h) => runsHook(h.command ?? '', 'block-edit-while-reading.mjs')));
     assert.ok(wiredOn('Bash'));
     assert.ok(wiredOn('Edit|Write|MultiEdit|NotebookEdit'));
   });
