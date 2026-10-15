@@ -40,8 +40,8 @@ export class ConsentController {
   @OwnerOnly(MSG.consent_owner_only)
   accept(@Req() req: Request, @CurrentTenant() tenant: TenantContext, @Body() dto: AcceptConsentDto) {
     const payload = req.user as JwtPayload;
-    // العنوانُ الشبكيّ يُكتب على القبول كما يُكتب على سطر التدقيق — شاهدٌ لا تتبّع.
-    const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() || req.ip || null;
+    // The address comes from the trusted proxy (trust proxy in main.ts), as on the audit row, never from a raw header.
+    const ip = req.ip ?? null;
     return this.service.accept(tenant.companyId, tenant.actorType, dto.version, { id: payload.profileId, username: payload.username }, ip);
   }
 }
