@@ -10,7 +10,16 @@ export interface JwtPayload {
   /** PlatformAdmin.id | Company.id | CompanyUser.id — the profile row id. */
   profileId: string;
   username: string;
+  /** LoginIdentity.credentialVersion when the token was issued; a later credential change makes the token stale. */
+  cv?: number;
+  /** The refresh token issued with this access token, so a change made from this session can keep it. */
+  sid?: string;
+  /** Set only on the short session a platform administrator gets to turn the second factor on. */
+  scope?: typeof MFA_ENROLMENT_SCOPE;
 }
+
+/** Scope of the enrolment-only session: it reaches the second factor enrolment routes and nothing else. */
+export const MFA_ENROLMENT_SCOPE = 'mfa-enrolment' as const;
 
 /** Resolved, freshly-checked request-scoped tenant context (set by TenantGuard). */
 export interface TenantContext {

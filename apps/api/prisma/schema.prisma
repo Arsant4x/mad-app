@@ -155,6 +155,8 @@ model LoginIdentity {
   mfaFailedCount Int @default(0)
   /// No code, right or wrong, is accepted before this time.
   mfaLockedUntil DateTime?
+  /// Raised on every change of sign-in credentials; an access token issued with an older value is refused.
+  credentialVersion Int @default(0)
 
   platformAdmin PlatformAdmin?
   company       Company?

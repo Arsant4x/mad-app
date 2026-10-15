@@ -28,6 +28,7 @@ import { SupportAccessModule } from './support-access/support-access.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './common/mail/mail.module';
+import { CredentialsModule } from './common/credentials/credentials.module';
 import { TrashModule } from './trash/trash.module';
 import { DeletionRequestsModule } from './deletion-requests/deletion-requests.module';
 import { ExportModule } from './export/export.module';
@@ -101,6 +102,7 @@ import { ShutdownLogService } from './common/lifecycle/shutdown-log.service';
     PrismaModule,
     TenantPrismaModule,
     MailModule,
+    CredentialsModule,
     AuditModule,
     TrashModule,
     DeletionRequestsModule,

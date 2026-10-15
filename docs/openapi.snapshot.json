@@ -2656,7 +2656,8 @@
   "POST /v1/auth/mfa/confirm": {
     "parameters": [],
     "requiredBody": [
-      "code"
+      "code",
+      "currentPassword"
     ],
     "responses": [
       "201"
@@ -2665,7 +2666,8 @@
   "POST /v1/auth/mfa/disable": {
     "parameters": [],
     "requiredBody": [
-      "code"
+      "code",
+      "currentPassword"
     ],
     "responses": [
       "201"

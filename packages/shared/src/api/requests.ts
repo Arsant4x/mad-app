@@ -852,6 +852,7 @@ export interface MatchStatementLineDto {
 /** جسمُ طلب — `MfaCodeDto` في الخادم. */
 export interface MfaCodeDto {
   code: string;
+  currentPassword: string;
 }
 
 /** جسمُ طلب — `OpenShiftDto` في الخادم. */

@@ -1,8 +1,9 @@
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
-import { apiClient } from '../api/client';
+import { apiClient, setAccessToken } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { MfaCard } from '../components/MfaCard';
 import { setLanguage } from '../i18n';
 import i18n from '../i18n';
 
@@ -27,6 +28,9 @@ export function LoginPage() {
   /** العاملُ الثاني (`ق-١٣١٨` · ⑨A1) — لا يظهر حتى يطلبه الخادم. */
   const [mfaNeeded, setMfaNeeded] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
+  // A platform account that must turn the second factor on first gets a short enrolment-only session.
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrolledCodes, setEnrolledCodes] = useState<string[] | null>(null);
 
   if (!bootLoading && user) return <Navigate to="/" replace />;
 
@@ -34,6 +38,15 @@ export function LoginPage() {
     setMode(next);
     setError(null);
     setInfo(null);
+  }
+
+  function leaveEnrolment(enrolled: boolean) {
+    setAccessToken(null);
+    setEnrolling(false);
+    setEnrolledCodes(null);
+    setInfo(null);
+    setMfaCode('');
+    if (enrolled) setMfaNeeded(true);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -55,14 +68,53 @@ export function LoginPage() {
     } catch (e) {
       // Prefer the server's message — it's already localized to the language
       // this client asked for (see api/client.ts's Accept-Language header).
-      const data = (e as { response?: { data?: { message?: string | string[]; mfaRequired?: boolean } } })?.response?.data;
+      const data = (e as { response?: { data?: { message?: string | string[]; mfaRequired?: boolean; mfaEnrolmentRequired?: boolean; enrolmentToken?: string } } })?.response?.data;
       const message = Array.isArray(data?.message) ? data.message.join(' — ') : data?.message;
       // ⑨A1 (`ق-١٣١٨`): الخادمُ يقول «يلزم رمز» — **فيُعرض الحقلُ ولا يُخمّن المستخدم**.
       if (data?.mfaRequired) setMfaNeeded(true);
+      if (data?.mfaEnrolmentRequired && data.enrolmentToken) {
+        setAccessToken(data.enrolmentToken);
+        setEnrolling(true);
+        setInfo(message ?? null);
+        return;
+      }
       setError(message ?? t('login_error_generic'));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (enrolling) {
+    return (
+      <div className="login-screen">
+        <div className="login-card">
+          <h1>{t('app_name')}</h1>
+          {enrolledCodes ? (
+            <>
+              <p className="error-text">{t('common.mfa.save_codes')}</p>
+              <p className="num" style={{ fontSize: 13, lineHeight: 1.9 }}>{enrolledCodes.join(' · ')}</p>
+              <button type="button" onClick={() => leaveEnrolment(true)}>
+                {t('common.mfa.continue_to_sign_in')}
+              </button>
+            </>
+          ) : (
+            <>
+              {info && <p className="hint">{info}</p>}
+              <MfaCard
+                onEnrolled={(codes) => {
+                  // The enrolment session ends with the change; signing in with a code comes next.
+                  setAccessToken(null);
+                  setEnrolledCodes(codes);
+                }}
+              />
+              <button type="button" className="link-btn" onClick={() => leaveEnrolment(false)}>
+                {t('common.mfa.cancel_enrolment')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CredentialChangeService } from '../credentials/credential-change.service';
 import { decryptSecret, encryptSecret } from '../crypto/secret.util';
 import { MSG } from '../i18n/messages';
 import { mfaLockDurationMs, mfaLockedException } from './mfa-lock.util';
@@ -17,15 +19,27 @@ import { generateRecoveryCodes, generateTotpSecret, normalizeRecoveryCode, otpau
  *   حكمُ المُخزِّن. **ومن التقط رمزاً من فوق الكتف لا يُعيده في نافذته.**
  * ③ **ورمزُ الاسترداد يُستهلك**: يُحذف من القائمة عند قبوله — فورقةٌ مسروقة تعمل مرّةً لكلِّ سطر.
  *
- * ## ⛔ والإلزامُ علَمٌ مطفأٌ افتراضياً
+ * ## The requirement for platform accounts
  *
- * `MFA_REQUIRED_FOR_PLATFORM_ADMIN` — **مطفأً يُسجَّل من شاء**، ومُشعَلاً لا يدخل مديرُ منصّةٍ
- * بلا تسجيل. **والافتراضُ مطفأ** لأن إشعالَه على خادمٍ حيٍّ بلا تسجيلٍ مسبق **يُغلق المنصّة
- * على صاحبها** — فالقرارُ للمالك لا للترحيل (نمطُ `ق-١٤٣`).
+ * `MFA_REQUIRED_FOR_PLATFORM_ADMIN`: production refuses to boot unless it is true. A platform
+ * administrator who has not enrolled gets, at sign-in, an enrolment-only session instead of a
+ * session, so the requirement never locks the platform away from its operator.
+ *
+ * Turning the factor on or off needs the current password and goes through the credential change
+ * path: the account's other sessions end and its e-mail address is told.
  */
 @Injectable()
 export class MfaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly credentials: CredentialChangeService,
+  ) {}
+
+  private async assertCurrentPassword(identityId: string, currentPassword: string): Promise<void> {
+    const row = await this.prisma.loginIdentity.findUnique({ where: { id: identityId }, select: { passwordHash: true } });
+    if (!row) throw new NotFoundException(MSG.session_invalid);
+    if (!(await argon2.verify(row.passwordHash, currentPassword))) throw new UnauthorizedException(MSG.current_password_invalid);
+  }
 
   /** التهشيمُ لرمز الاسترداد — عاليُ العشوائية، فالسريعُ يكفي (نمطُ رمز الاستعادة). */
   private hashRecovery(code: string): string {
@@ -60,29 +74,43 @@ export class MfaService {
     return { secret, otpauth: otpauthUrl(secret, username) };
   }
 
-  /** **يُكمل التسجيل برمزٍ من التطبيق** — فيُثبت أن صاحبَه قرأ السرَّ فعلاً، ثم تُسلَّم رموزُ الاسترداد. */
-  async confirm(identityId: string, code: string) {
+  /**
+   * Completes enrolment with a code from the app, which proves the owner read the secret, then hands the
+   * recovery codes once. `keepSessionId` is the session making the change; the account's other sessions end.
+   */
+  async confirm(identityId: string, code: string, currentPassword: string, keepSessionId?: string) {
     const row = await this.prisma.loginIdentity.findUnique({ where: { id: identityId }, select: { mfaSecret: true, mfaEnrolledAt: true } });
     if (!row) throw new NotFoundException(MSG.session_invalid);
     if (row.mfaEnrolledAt) throw new ConflictException(MSG.mfa_already_enrolled);
     if (!row.mfaSecret) throw new BadRequestException(MSG.mfa_not_started);
+    await this.assertCurrentPassword(identityId, currentPassword);
 
     const verdict = verifyTotp(decryptSecret(row.mfaSecret), code);
     if (!verdict.ok) throw new UnauthorizedException(MSG.mfa_code_invalid);
 
     const codes = generateRecoveryCodes();
-    await this.prisma.loginIdentity.update({
-      where: { id: identityId },
-      data: { mfaEnrolledAt: new Date(), mfaLastStep: verdict.step, mfaRecoveryHashes: codes.map((c) => this.hashRecovery(c)) },
+    const notice = await this.prisma.$transaction(async (tx) => {
+      await tx.loginIdentity.update({
+        where: { id: identityId },
+        data: { mfaEnrolledAt: new Date(), mfaLastStep: verdict.step, mfaRecoveryHashes: codes.map((c) => this.hashRecovery(c)) },
+      });
+      return this.credentials.record(tx, identityId, ['mfa_enabled'], keepSessionId);
     });
-    // **تُعرض مرّةً واحدة** — ولا تُخزَّن إلا مهشَّمة، فلا مسارَ يُعيد عرضها.
+    this.credentials.notify(notice);
+    // Shown once and stored only hashed, so no route can show them again.
     return { recoveryCodes: codes };
   }
 
-  /** **يُلغي التسجيل** — بعد التحقّق من رمزٍ حيّ، فلا يُلغيه من استولى على جلسةٍ مفتوحة. */
-  async disable(identityId: string, code: string) {
+  /** Turns the factor off, with the current password and a live code, so an open session alone cannot remove it. */
+  async disable(identityId: string, code: string, currentPassword: string, keepSessionId?: string) {
+    // The password first: a wrong one does not count against the code lock.
+    await this.assertCurrentPassword(identityId, currentPassword);
     await this.assertCode(identityId, code);
-    await this.prisma.loginIdentity.update({ where: { id: identityId }, data: { mfaSecret: null, mfaEnrolledAt: null, mfaLastStep: null, mfaRecoveryHashes: [] } });
+    const notice = await this.prisma.$transaction(async (tx) => {
+      await tx.loginIdentity.update({ where: { id: identityId }, data: { mfaSecret: null, mfaEnrolledAt: null, mfaLastStep: null, mfaRecoveryHashes: [] } });
+      return this.credentials.record(tx, identityId, ['mfa_disabled'], keepSessionId);
+    });
+    this.credentials.notify(notice);
     return { enrolled: false };
   }
 

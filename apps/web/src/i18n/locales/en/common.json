@@ -58,7 +58,10 @@
     "confirm": "Confirm and turn on",
     "enable": "Turn on two step sign in",
     "save_codes": "Save the recovery codes now — they will not be shown again. Each code works once.",
-    "request_failed": "The request could not be completed"
+    "request_failed": "The request could not be completed",
+    "current_password": "Current password",
+    "continue_to_sign_in": "Continue to sign in",
+    "cancel_enrolment": "Back to sign in"
   },
   "pager": {
     "previous": "← Previous",

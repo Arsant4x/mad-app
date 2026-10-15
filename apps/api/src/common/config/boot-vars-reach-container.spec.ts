@@ -71,3 +71,14 @@ describe('⑬A1 — ما يطلبه حارسُ الإقلاع يبلغ حاوي�
     expect(guarded.filter((name) => !keys.has(name))).toEqual([]);
   });
 });
+
+describe('second factor required for platform accounts reaches production', () => {
+  it('the compose file passes MFA_REQUIRED_FOR_PLATFORM_ADMIN to the api with true as its default', () => {
+    expect(COMPOSE.split(/\r?\n/)).toContain('      MFA_REQUIRED_FOR_PLATFORM_ADMIN: ${MFA_REQUIRED_FOR_PLATFORM_ADMIN:-true}');
+  });
+
+  it('the production example file sets it to true', () => {
+    const example = readFileSync(join(REPO_ROOT, '.env.production.example'), 'utf8');
+    expect(example.split(/\r?\n/)).toContain('MFA_REQUIRED_FOR_PLATFORM_ADMIN=true');
+  });
+});

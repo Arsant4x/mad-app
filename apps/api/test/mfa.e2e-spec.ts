@@ -24,10 +24,17 @@ describe('المصادقةُ المتعدّدة (e2e)', () => {
   let co: IsolatedCompany;
   let secret: string;
   let recoveryCodes: string[];
+  // The session the changes are made from; turning the factor on or off ends the access token, and a refresh renews it.
+  let session: { token: string; cookie: string };
 
   const http = () => request(app.getHttpServer());
-  const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+  const auth = (r: request.Test) => r.set('Authorization', `Bearer ${session.token}`);
   const login = (body: Record<string, unknown>) => http().post('/auth/login').send({ username: co.username, password: ISOLATED_PASSWORD, ...body });
+  const cookieOf = (res: request.Response) => ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith('refresh_token='))!.split(';')[0];
+  const renew = async () => {
+    const res = await http().post('/auth/refresh').set('Cookie', session.cookie).expect(200);
+    session = { token: res.body.accessToken as string, cookie: cookieOf(res) };
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -37,6 +44,8 @@ describe('المصادقةُ المتعدّدة (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
     co = await registerIsolatedCompany(app, 'mfa');
+    const signedIn = await login({}).expect(200);
+    session = { token: signedIn.body.accessToken as string, cookie: cookieOf(signedIn) };
   });
 
   afterAll(async () => {
@@ -60,14 +69,15 @@ describe('المصادقةُ المتعدّدة (e2e)', () => {
   });
 
   it('③ ورمزٌ خاطئ لا يُكمل التسجيل', async () => {
-    await auth(http().post('/auth/mfa/confirm')).send({ code: '000000' }).expect(401);
+    await auth(http().post('/auth/mfa/confirm')).send({ code: '000000', currentPassword: ISOLATED_PASSWORD }).expect(401);
     expect((await auth(http().get('/auth/mfa')).expect(200)).body.enrolled).toBe(false);
   });
 
   it('⭐ ④ والتأكيدُ برمزٍ صحيح يُفعّلها ويُسلّم رموزَ الاسترداد مرّةً', async () => {
-    const confirmed = await auth(http().post('/auth/mfa/confirm')).send({ code: totp(secret) }).expect(201);
+    const confirmed = await auth(http().post('/auth/mfa/confirm')).send({ code: totp(secret), currentPassword: ISOLATED_PASSWORD }).expect(201);
     recoveryCodes = confirmed.body.recoveryCodes as string[];
     expect(recoveryCodes).toHaveLength(8);
+    await renew();
     const status = await auth(http().get('/auth/mfa')).expect(200);
     expect(status.body.enrolled).toBe(true);
     expect(status.body.recoveryCodesLeft).toBe(8);
@@ -101,14 +111,15 @@ describe('المصادقةُ المتعدّدة (e2e)', () => {
   });
 
   it('⑨ والإلغاءُ برمزٍ حيّ وحدَه — ثم يعود الدخولُ بلا رمز', async () => {
-    await auth(http().post('/auth/mfa/disable')).send({ code: '000000' }).expect(401);
+    await auth(http().post('/auth/mfa/disable')).send({ code: '000000', currentPassword: ISOLATED_PASSWORD }).expect(401);
     /**
      * ⚠️ **وبرمز استرداد لا برمز التطبيق — لسببٍ مقيس**: خطوةُ التطبيق الحالية وما بعدها
      * استُهلكتا في ⑦، **والنافذةُ خطوةٌ واحدة** فما بعدهما خارجَها. وهذا **سلوكٌ صحيح لا
      * عائق**: من استعمل رمزاً ينتظر الذي يليه (RFC 6238 §5.2) — والاختبارُ لا يزيّف ساعة.
      * **ورمزُ الاسترداد اعتمادٌ حيٌّ كذلك**، وهو المسارُ الواقعيّ لمن فقد هاتفه.
      */
-    await auth(http().post('/auth/mfa/disable')).send({ code: recoveryCodes[1] }).expect(201);
+    await auth(http().post('/auth/mfa/disable')).send({ code: recoveryCodes[1], currentPassword: ISOLATED_PASSWORD }).expect(201);
+    await renew();
     expect((await auth(http().get('/auth/mfa')).expect(200)).body.enrolled).toBe(false);
     await login({}).expect(200);
   });

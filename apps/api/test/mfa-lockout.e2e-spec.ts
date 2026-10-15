@@ -24,6 +24,7 @@ describe('Second factor attempt lock (e2e)', () => {
   let secret: string;
   let identityId: string;
   let recoveryCodes: string[];
+  let sessionToken: string;
 
   const http = () => request(app.getHttpServer());
   const login = (body: Record<string, unknown>) => http().post('/auth/login').send({ username: co.username, password: ISOLATED_PASSWORD, ...body });
@@ -50,9 +51,13 @@ describe('Second factor attempt lock (e2e)', () => {
     await app.init();
     prisma = app.get(PrismaService);
     co = await registerIsolatedCompany(app, 'mfa-lock');
-    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const signedIn = await login({}).expect(200);
+    const cookie = ([] as string[]).concat(signedIn.headers['set-cookie'] ?? []).find((c) => c.startsWith('refresh_token='))!.split(';')[0];
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${signedIn.body.accessToken}`);
     secret = (await auth(http().post('/auth/mfa/begin')).expect(201)).body.secret as string;
-    recoveryCodes = (await auth(http().post('/auth/mfa/confirm')).send({ code: totp(secret) }).expect(201)).body.recoveryCodes as string[];
+    recoveryCodes = (await auth(http().post('/auth/mfa/confirm')).send({ code: totp(secret), currentPassword: ISOLATED_PASSWORD }).expect(201)).body.recoveryCodes as string[];
+    // Turning the factor on ends the access token it was turned on with; this session continues after a refresh.
+    sessionToken = (await http().post('/auth/refresh').set('Cookie', cookie).expect(200)).body.accessToken as string;
     identityId = (await prisma.loginIdentity.findUniqueOrThrow({ where: { username: co.username }, select: { id: true } })).id;
   });
 
@@ -128,9 +133,9 @@ describe('Second factor attempt lock (e2e)', () => {
   });
 
   it('refuses turning the factor off while locked', async () => {
-    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${sessionToken}`);
     await forgetUsedSteps();
-    await auth(http().post('/auth/mfa/disable')).send({ code: totp(secret) }).expect(429);
+    await auth(http().post('/auth/mfa/disable')).send({ code: totp(secret), currentPassword: ISOLATED_PASSWORD }).expect(429);
   });
 
   it('a right code after the lock ends clears the counter', async () => {

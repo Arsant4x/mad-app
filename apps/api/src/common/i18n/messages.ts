@@ -50,6 +50,7 @@ export const MSG = {
   mfa_enrolment_required: 'auth.mfa_enrolment_required',
   mfa_locked_minutes: 'auth.mfa_locked_minutes',
   mfa_locked_hours: 'auth.mfa_locked_hours',
+  current_password_invalid: 'auth.current_password_invalid',
   password_too_short: 'auth.password_too_short',
   password_too_long: 'auth.password_too_long',
   password_single_character: 'auth.password_single_character',
@@ -829,9 +830,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.mfa_code_invalid]: { ar: 'الرمز غير صحيح', en: 'Invalid code' },
   [MSG.mfa_required]: { ar: 'أدخل رمز المصادقة من تطبيق المصادقة أو أحد رموز الاسترداد', en: 'Enter the code from your authenticator app, or one of your recovery codes' },
   [MSG.mfa_enrolment_required]: {
-    ar: 'المصادقة المتعددة إلزامية لحسابات المنصّة — فعّلها من إعدادات حسابك قبل الدخول',
-    en: 'Multi-factor authentication is mandatory for platform accounts — enable it from your account settings first',
+    ar: 'المصادقة المتعددة إلزامية لحسابات المنصّة. فعّلها الآن، ثم ادخل بالرمز من تطبيق المصادقة',
+    en: 'Multi-factor authentication is mandatory for platform accounts. Set it up now, then sign in with a code from your authenticator app',
   },
+  [MSG.current_password_invalid]: { ar: 'كلمة المرور الحالية غير صحيحة', en: 'The current password is not correct' },
   [MSG.mfa_locked_minutes]: {
     ar: 'أُدخل رمز خاطئ عدة مرات، فأُوقف الدخول مؤقتاً. حاول مرة أخرى بعد {minutes} دقيقة',
     en: 'A wrong code was entered too many times, so sign-in is paused. Try again in {minutes} minutes',
