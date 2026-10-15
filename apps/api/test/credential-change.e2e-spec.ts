@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { PrismaClient } from '@mad-app/db';
 import cookieParser from 'cookie-parser';
 import * as crypto from 'crypto';
 import request from 'supertest';
@@ -24,6 +25,7 @@ describe('Credential changes end earlier sessions (e2e)', () => {
   let prisma: PrismaService;
   let sendMail: jest.SpyInstance;
   let adminToken: string;
+  const side = new PrismaClient();
   const companyIds: string[] = [];
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -36,6 +38,11 @@ describe('Credential changes end earlier sessions (e2e)', () => {
     return cookie.split(';')[0];
   };
   const refreshStatus = async (cookie: string) => (await http().post('/auth/refresh').set('Cookie', cookie)).status;
+  const waitingOnLocks = async (): Promise<number> => {
+    const rows = await side.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*)::bigint AS n FROM pg_stat_activity WHERE "datname" = current_database() AND "wait_event_type" = 'Lock'`;
+    return Number(rows[0].n);
+  };
 
   async function registerOwner(tag: string) {
     const username = `cred-${tag}-${stamp}`;
@@ -94,6 +101,7 @@ describe('Credential changes end earlier sessions (e2e)', () => {
   });
 
   afterAll(async () => {
+    await side.$disconnect();
     for (const id of companyIds) await hardDeleteCompanyForTest(prisma, id);
     await app.close();
   });
@@ -121,28 +129,32 @@ describe('Credential changes end earlier sessions (e2e)', () => {
     const { token, hash } = await plantResetToken(owner.username);
     const auth = app.get(AuthService);
 
-    // Hold the token row so both requests pass their reads and queue at the write.
+    // Hold the token row so both requests pass their reads and queue at the write. The holder and the
+    // probe use their own client: the two waiting requests already hold two of the app pool connections.
     let release!: () => void;
     const released = new Promise<void>((resolve) => (release = resolve));
-    const holder = prisma.$transaction(
+    let locked!: (rows: number) => void;
+    const lockTaken = new Promise<number>((resolve) => (locked = resolve));
+    const holder = side.$transaction(
       async (tx) => {
-        await tx.$queryRaw`SELECT "id" FROM "password_reset_tokens" WHERE "tokenHash" = ${hash} FOR UPDATE`;
+        const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "password_reset_tokens" WHERE "tokenHash" = ${hash} FOR UPDATE`;
+        locked(rows.length);
         await released;
       },
-      { timeout: 60000 },
+      { timeout: 60000, maxWait: 10000 },
     );
+    expect(await lockTaken).toBe(1);
+    const baseline = await waitingOnLocks();
     const both = Promise.allSettled([auth.resetPassword(token, 'RaceFirst123!'), auth.resetPassword(token, 'RaceSecond123!')]);
 
     let waiting = 0;
-    for (let i = 0; i < 200 && waiting < 2; i += 1) {
-      await new Promise((r) => setTimeout(r, 50));
-      const rows = await prisma.$queryRaw<{ n: bigint }[]>`
-        SELECT count(*)::bigint AS n FROM pg_stat_activity WHERE "datname" = current_database() AND "wait_event_type" = 'Lock'`;
-      waiting = Number(rows[0].n);
+    try {
+      for (let i = 0; i < 200 && (waiting = await waitingOnLocks()) < baseline + 2; i += 1) await new Promise((r) => setTimeout(r, 50));
+    } finally {
+      release();
     }
-    release();
     await holder;
-    expect(waiting).toBe(2);
+    expect(waiting - baseline).toBe(2);
     const results = await both;
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   });
