@@ -1,7 +1,7 @@
 # Work method gates, run apart from the product tests.
 #
 # These gates guard how the project is run (the decisions registry, CLAUDE.md,
-# the pre-push hook), not what the product does. They live in ops/process-gates
+# the pre-push hook, the agent's hooks and signature rule), not what the product does. They live in ops/process-gates
 # and use only node:test, so they need no install and no product toolchain.
 name: process-gates
 

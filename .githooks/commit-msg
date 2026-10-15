@@ -15,7 +15,7 @@ export LC_ALL=C.UTF-8
 #
 # وما سواها يبقى كما هو بايتاً بايتاً، ومنه سطرٌ يذكر أحدَ الاسمين في وسطه.
 # والبوّابةُ الأولى `attribution` بقيمتين فارغتين في `.claude/settings.json`.
-# ويحرسهما `apps/api/src/common/commit-msg-attribution.spec.ts` بالتزامٍ حقيقيّ.
+# ويحرسهما `ops/process-gates/commit-msg-attribution.test.mjs` بالتزامٍ حقيقيّ.
 #
 # ⚠️ وحدُّه: لا يعمل بلا core.hooksPath ولا مع --no-verify، ولا يرى وصفَ طلب الدمج
 #    على GitHub؛ فوصفُ الطلب يُكتب بلا توقيعٍ باليد.
