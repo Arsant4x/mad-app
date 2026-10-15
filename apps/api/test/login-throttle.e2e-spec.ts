@@ -50,21 +50,24 @@ d('Unauthenticated route throttling (e2e)', () => {
     await app?.close();
   });
 
+  // A different username on every attempt, so only the per-address counter can stop the eleventh;
+  // Retry-After (without a suffix) names the default, per-address throttler as the one that did.
   it('counts login attempts by address even when each carries a different made-up API key', async () => {
     const ip = freshIp();
-    const codes: number[] = [];
+    const responses: request.Response[] = [];
     for (let i = 0; i < 11; i += 1) {
-      codes.push((await http().post('/auth/login').set('X-Forwarded-For', ip).set('X-Api-Key', fakeKey()).send({ username: `nobody-${ip}`, password: 'wrong-password' })).status);
+      responses.push(await http().post('/auth/login').set('X-Forwarded-For', ip).set('X-Api-Key', fakeKey()).send({ username: `nobody-${ip}-${i}`, password: 'wrong-password' }));
     }
-    expect(codes.slice(0, 10).every((c) => c === 401)).toBe(true);
-    expect(codes[10]).toBe(429);
+    expect(responses.slice(0, 10).every((r) => r.status === 401)).toBe(true);
+    expect(responses[10].status).toBe(429);
+    expect(responses[10].headers['retry-after']).toBeDefined();
   });
 
   it('counts login attempts by address when the made-up key comes in the Authorization header', async () => {
     const ip = freshIp();
     const codes: number[] = [];
     for (let i = 0; i < 11; i += 1) {
-      codes.push((await http().post('/auth/login').set('X-Forwarded-For', ip).set('Authorization', `ApiKey ${fakeKey()}`).send({ username: `nobody-${ip}`, password: 'wrong-password' })).status);
+      codes.push((await http().post('/auth/login').set('X-Forwarded-For', ip).set('Authorization', `ApiKey ${fakeKey()}`).send({ username: `nobody-${ip}-${i}`, password: 'wrong-password' })).status);
     }
     expect(codes.slice(0, 10).every((c) => c === 401)).toBe(true);
     expect(codes[10]).toBe(429);
@@ -74,21 +77,22 @@ d('Unauthenticated route throttling (e2e)', () => {
     const ip = freshIp();
     const codes: number[] = [];
     for (let i = 0; i < 10; i += 1) {
-      codes.push((await http().post('/auth/login').set('X-Forwarded-For', ip).send({ username: `nobody-${ip}`, password: 'wrong-password' })).status);
+      codes.push((await http().post('/auth/login').set('X-Forwarded-For', ip).send({ username: `nobody-${ip}-${i}`, password: 'wrong-password' })).status);
     }
     expect(codes.every((c) => c === 401)).toBe(true);
-    const withToken = await http().post('/auth/login').set('X-Forwarded-For', ip).set('Authorization', `Bearer ${validToken}`).send({ username: `nobody-${ip}`, password: 'wrong-password' });
+    const withToken = await http().post('/auth/login').set('X-Forwarded-For', ip).set('Authorization', `Bearer ${validToken}`).send({ username: `nobody-${ip}-token`, password: 'wrong-password' });
     expect(withToken.status).toBe(429);
   });
 
   it('limits attempts on one username across many addresses', async () => {
     const username = `target-${Date.now()}`;
-    const codes: number[] = [];
+    const responses: request.Response[] = [];
     for (let i = 0; i < 11; i += 1) {
-      codes.push((await http().post('/auth/login').set('X-Forwarded-For', freshIp()).send({ username, password: 'wrong-password' })).status);
+      responses.push(await http().post('/auth/login').set('X-Forwarded-For', freshIp()).send({ username, password: 'wrong-password' }));
     }
-    expect(codes.slice(0, 10).every((c) => c === 401)).toBe(true);
-    expect(codes[10]).toBe(429);
+    expect(responses.slice(0, 10).every((r) => r.status === 401)).toBe(true);
+    expect(responses[10].status).toBe(429);
+    expect(responses[10].headers['retry-after-account']).toBeDefined();
     // Another account from a fresh address is not affected.
     const other = await http().post('/auth/login').set('X-Forwarded-For', freshIp()).send({ username: `${username}-other`, password: 'wrong-password' });
     expect(other.status).toBe(401);
