@@ -123,7 +123,7 @@ describe('Audit log (e2e)', () => {
 
     // اسمٌ مأخوذٌ فعلاً ⇒ `409`. والمحاولةُ هي الحدث، لا الحساب.
     await authA(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'محاولةٌ مرفوضة', username: 'demo-company-a', password: 'AnyPass123!', permissionTemplateId: template.id })
+      .send({ name: 'محاولةٌ مرفوضة', username: 'demo-company-a', password: 'AnyPass1234!', permissionTemplateId: template.id })
       .expect((res) => {
         if (res.status !== 409 && res.status !== 403) throw new Error(`توقّعنا رفضاً بالحالة أو الصلاحية، فجاء ${res.status}`);
       });
@@ -136,7 +136,7 @@ describe('Audit log (e2e)', () => {
     expect((entry!.details as { status?: number }).status).toBeGreaterThanOrEqual(400);
     // ⚠️ ولا اسمَ محاولٍ ولا كلمةَ مرور — والقيدُ لا يحمل جسمَ الطلب أصلاً.
     expect(JSON.stringify(entry!.details)).not.toContain('demo-company-a');
-    expect(JSON.stringify(entry!.details)).not.toContain('AnyPass123!');
+    expect(JSON.stringify(entry!.details)).not.toContain('AnyPass1234!');
   }, 40000);
 
   it('never stores a secret, even when the request carried one', async () => {

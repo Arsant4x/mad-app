@@ -30,7 +30,7 @@ describe('مسارُ المدير لا يركّب منشأةً على قالب �
 
   const createBody = (tag: string, permissionTemplateId: string) => ({
     username: `sys-tpl-${tag}-${suffix}`,
-    password: 'SysTpl123!',
+    password: 'SysTpl12345!',
     orgName: `منشأة قالب ${tag} ${suffix}`,
     permissionTemplateId,
     subEnd: '2030-01-01',

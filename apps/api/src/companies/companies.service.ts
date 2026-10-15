@@ -11,6 +11,7 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.dto';
 import { PlatformDecisionsService } from '../platform/platform-decisions.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { assertPasswordPolicy } from '../common/password/password-policy';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listItems, listOrPage, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
@@ -163,6 +164,12 @@ export class CompaniesService {
     // يُفحص القالبُ حين يتغيّر وحدَه: منشأةٌ قائمةٌ على قالبٍ أضيق (قبل ق-١٦٠١) تُعدَّل بقيّةُ حقولها ولا تُجبَر على تغييره —
     // «والقائمون لا يُمسّون».
     if (dto.permissionTemplateId && dto.permissionTemplateId !== existing.permissionTemplateId) await this.assertCompanyTemplate(dto.permissionTemplateId);
+
+    // Checked before any write, against the username the account will have after this update.
+    if (dto.password) {
+      const identity = await this.prisma.loginIdentity.findUniqueOrThrow({ where: { id: existing.loginIdentityId }, select: { username: true } });
+      assertPasswordPolicy(dto.password, { username: dto.username ?? identity.username, email: existing.email });
+    }
 
     if (dto.username) {
       const clash = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });

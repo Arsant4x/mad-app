@@ -19,7 +19,7 @@ export interface IsolatedCompany {
   username: string;
 }
 
-export const ISOLATED_PASSWORD = 'IsoPass123!';
+export const ISOLATED_PASSWORD = 'IsoPass1234!';
 
 export async function registerIsolatedCompany(app: INestApplication, tag: string): Promise<IsolatedCompany> {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;

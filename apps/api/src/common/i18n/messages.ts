@@ -48,6 +48,13 @@ export const MSG = {
   mfa_code_invalid: 'auth.mfa_code_invalid',
   mfa_required: 'auth.mfa_required',
   mfa_enrolment_required: 'auth.mfa_enrolment_required',
+  mfa_locked_minutes: 'auth.mfa_locked_minutes',
+  mfa_locked_hours: 'auth.mfa_locked_hours',
+  password_too_short: 'auth.password_too_short',
+  password_too_long: 'auth.password_too_long',
+  password_single_character: 'auth.password_single_character',
+  password_contains_username: 'auth.password_contains_username',
+  password_contains_email: 'auth.password_contains_email',
   reset_token_invalid: 'auth.reset_token_invalid',
   register_disabled: 'auth.register_disabled',
   register_unavailable: 'auth.register_unavailable',
@@ -825,6 +832,19 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'المصادقة المتعددة إلزامية لحسابات المنصّة — فعّلها من إعدادات حسابك قبل الدخول',
     en: 'Multi-factor authentication is mandatory for platform accounts — enable it from your account settings first',
   },
+  [MSG.mfa_locked_minutes]: {
+    ar: 'أُدخل رمز خاطئ عدة مرات، فأُوقف الدخول مؤقتاً. حاول مرة أخرى بعد {minutes} دقيقة',
+    en: 'A wrong code was entered too many times, so sign-in is paused. Try again in {minutes} minutes',
+  },
+  [MSG.mfa_locked_hours]: {
+    ar: 'أُدخل رمز خاطئ عدة مرات، فأُوقف الدخول مؤقتاً. حاول مرة أخرى بعد {hours} ساعة',
+    en: 'A wrong code was entered too many times, so sign-in is paused. Try again in {hours} hours',
+  },
+  [MSG.password_too_short]: { ar: 'كلمة المرور يجب ألا تقل عن {min} حرفاً', en: 'The password must be at least {min} characters' },
+  [MSG.password_too_long]: { ar: 'كلمة المرور يجب ألا تزيد على {max} حرفاً', en: 'The password must be at most {max} characters' },
+  [MSG.password_single_character]: { ar: 'كلمة المرور لا تصح حرفاً واحداً مكرراً', en: 'The password cannot be one character repeated' },
+  [MSG.password_contains_username]: { ar: 'كلمة المرور لا يصح أن تحتوي اسم المستخدم', en: 'The password cannot contain the username' },
+  [MSG.password_contains_email]: { ar: 'كلمة المرور لا يصح أن تحتوي اسم البريد الإلكتروني (ما قبل @)', en: 'The password cannot contain the e-mail name (the part before @)' },
 
   [MSG.ledger_filter_required]: {
     ar: 'دفتر الأستاذ يحتاج حساباً أو بُعداً (عقار · وحدة · عميل · مورّد) — بلا مرشّح هو ميزان المراجعة لا الأستاذ',

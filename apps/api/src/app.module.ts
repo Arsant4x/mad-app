@@ -7,7 +7,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from './accounts/accounts.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
-import { tenantTracker } from './common/throttle/tenant-tracker';
+import { throttlerOptions } from './common/throttle/throttler-options';
 import { BanksModule } from './banks/banks.module';
 import { CompaniesModule } from './companies/companies.module';
 import { PlatformModule } from './platform/platform.module';
@@ -90,21 +90,13 @@ import { ShutdownLogService } from './common/lifecycle/shutdown-log.service';
     // اختبارٍ متقلّب.
     ...(process.env.NODE_ENV === 'test' ? [] : [ScheduleModule.forRoot()]),
     // Flood protection: a generous global ceiling (normal use never hits it),
-    // with a much stricter per-route limit on login (see AuthController) so
-    // password guessing is throttled hard. Skipped entirely under Jest — the
-    // e2e suite fires hundreds of requests from one IP by design, and rate
-    // limiting is not the behaviour those tests exist to verify.
-    //
-    // **والمفتاحُ بالمنشأة والمستخدم، والعنوانُ للمجهول وحدَه** (`ق-١٢٧١`/ب): كان العنوانَ للجميع، فمنشأتان
-    // خلف عنوانٍ واحد كانت تحجب إحداهما الأخرى — `tenantTracker` يقرأ هويّةَ الطالب من رمزه بتوقيعه.
+    // with much stricter per-route limits on the sign-in routes (see AuthController),
+    // counted by address and, for login, by username. Skipped under Jest; the rules
+    // live in throttlerOptions so the suites that test them use the same ones.
     ThrottlerModule.forRootAsync({
       imports: [AuthModule],
       inject: [JwtService],
-      useFactory: (jwt: JwtService) => ({
-        throttlers: [{ limit: 600, ttl: 60_000 }],
-        skipIf: () => process.env.NODE_ENV === 'test',
-        getTracker: tenantTracker(jwt),
-      }),
+      useFactory: (jwt: JwtService) => throttlerOptions(jwt),
     }),
     PrismaModule,
     TenantPrismaModule,

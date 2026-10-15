@@ -70,9 +70,9 @@ describe('Form signing settings — period per type and identity threshold (e2e)
     await http()
       .post('/company-users')
       .set('Authorization', bearer(a.token))
-      .send({ name: 'موظّفُ الإعداد', username, password: 'SignSet123!', permissionTemplateId: noScreens!.id })
+      .send({ name: 'موظّفُ الإعداد', username, password: 'SignSet1234!', permissionTemplateId: noScreens!.id })
       .expect(201);
-    employeeToken = (await http().post('/auth/login').send({ username, password: 'SignSet123!' }).expect(200)).body.accessToken;
+    employeeToken = (await http().post('/auth/login').send({ username, password: 'SignSet1234!' }).expect(200)).body.accessToken;
   });
 
   afterAll(async () => {

@@ -5,10 +5,9 @@ import { randomBytes } from 'node:crypto';
  *
  * ## لماذا ثلاثةُ أجزاء لا سرٌّ واحد
  *
- * **البادئةُ تُقرأ بلا قاعدة**: المقنِّنُ العامّ (`APP_GUARD`) يسبق حرّاسَ المتحكّم فلا
- * سياقَ مستأجرٍ عنده ولا استعلام (`tenant-tracker.ts`) — فيعدّ على البادئة. **وهي
- * عشوائيةٌ لا معرّفُ الصفّ**: فلا يستهلك أحدٌ حصّةَ مفتاحٍ لا يملكه، وهو ما يمنعه
- * توقيعُ الرمز في حالة `JWT`.
+ * The prefix finds the row with one indexed lookup, and it is random rather than the row id.
+ * The rate limiter does not count by it: a prefix is not verified before the global guard runs,
+ * so a request with a key is counted by address (tenant-tracker.ts).
  *
  * **والسرُّ مهشَّمٌ بـ`argon2`** كما كلماتُ المرور (`CLAUDE §6.5`) — فلا يُقرأ من قاعدةٍ
  * مسرَّبة، **ولا يُعرض إلا مرّةً واحدةً لحظةَ الإنشاء**.

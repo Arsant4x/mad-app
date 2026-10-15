@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@mad-app/db';
 import * as argon2 from 'argon2';
+import { resolveMessage } from '../common/i18n/messages';
+import { passwordPolicyViolation } from '../common/password/password-policy';
 
 /**
  * التمهيد **الأدنى** الذي تحتاجه منصة حيّة كي تعمل: قالبا الصلاحيات العامّان
@@ -22,6 +24,12 @@ export interface BootstrapResult {
 
 export async function bootstrapPlatform(prisma: PrismaClient, admin: { username: string; password: string }): Promise<BootstrapResult> {
   if (!admin.password) throw new Error('كلمة مرور مدير المنصة مطلوبة — لا قيمة افتراضية لها.');
+  // Only a new administrator gets a password from here (an existing one keeps its own), checked before any write.
+  const existing = await prisma.loginIdentity.findUnique({ where: { username: admin.username }, select: { id: true } });
+  if (!existing) {
+    const violation = passwordPolicyViolation(admin.password, { username: admin.username });
+    if (violation) throw new Error(`PLATFORM_ADMIN_PASSWORD: ${resolveMessage(violation, 'en')}`);
+  }
 
   // 🔴 القوالبُ العامّة تُكتب **بمسنَد الإدارة** (`ق-٦٧٥` · المرحلة ③): `permission_templates`
   //    تحت `FORCE`، وسياستُها لا تقبل كتابةَ صفٍّ بلا منشأة إلا في معاملةٍ تحمل
@@ -47,7 +55,6 @@ export async function bootstrapPlatform(prisma: PrismaClient, admin: { username:
     });
   });
 
-  const existing = await prisma.loginIdentity.findUnique({ where: { username: admin.username }, select: { id: true } });
   await prisma.loginIdentity.upsert({
     where: { username: admin.username },
     // لا يُعاد ضبط كلمة المرور على حساب قائم: إعادة التشغيل بعد التحديث

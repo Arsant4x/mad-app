@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decryptSecret, encryptSecret } from '../crypto/secret.util';
 import { MSG } from '../i18n/messages';
+import { mfaLockDurationMs, mfaLockedException } from './mfa-lock.util';
 import { generateRecoveryCodes, generateTotpSecret, normalizeRecoveryCode, otpauthUrl, verifyTotp } from './totp.util';
 
 /**
@@ -92,28 +93,45 @@ export class MfaService {
   }
 
   /**
-   * 🔴 **التحقّق عند الدخول** — يقبل رمزَ التطبيق أو رمزَ استرداد، **ويستهلك ما قَبِل**.
-   *
-   * ويرمي `401` مسمّىً — **ولا يقول أيَّهما كان خطأً**: تمييزُ «الرمزُ خاطئ» عن «انتهت
-   * رموزُ استردادك» يُعلّم المهاجمَ أكثر مما يُعلّم صاحبَ الحساب.
+   * Checks a code at sign-in: an authenticator code or a recovery code, and spends the one it accepts.
+   * A wrong code is 401 without saying which kind was wrong; a lock is 429 with the time left.
    */
   async assertCode(identityId: string, code: string): Promise<void> {
-    const row = await this.prisma.loginIdentity.findUnique({ where: { id: identityId }, select: { mfaSecret: true, mfaLastStep: true, mfaRecoveryHashes: true } });
+    const row = await this.prisma.loginIdentity.findUnique({ where: { id: identityId }, select: { mfaSecret: true, mfaRecoveryHashes: true, mfaLockedUntil: true } });
     if (!row?.mfaSecret) throw new UnauthorizedException(MSG.mfa_code_invalid);
+    const now = new Date();
+    // While locked even a right code is refused, or the lock would only slow wrong guesses.
+    if (row.mfaLockedUntil && row.mfaLockedUntil > now) throw mfaLockedException(row.mfaLockedUntil, now);
 
     const verdict = verifyTotp(decryptSecret(row.mfaSecret), code);
     if (verdict.ok) {
-      // ⚠️ **ولا يُقبل رمزٌ سبق قبولُه** — الخطوةُ نفسُها أو أقدمُ منها.
-      if (row.mfaLastStep !== null && verdict.step <= row.mfaLastStep) throw new UnauthorizedException(MSG.mfa_code_invalid);
-      await this.prisma.loginIdentity.update({ where: { id: identityId }, data: { mfaLastStep: verdict.step } });
-      return;
+      // The step condition sits in the write itself, so two requests with one code cannot both pass.
+      const { count } = await this.prisma.loginIdentity.updateMany({
+        where: { id: identityId, OR: [{ mfaLastStep: null }, { mfaLastStep: { lt: verdict.step } }] },
+        data: { mfaLastStep: verdict.step, mfaFailedCount: 0, mfaLockedUntil: null },
+      });
+      if (count === 1) return;
+    } else {
+      const hash = this.hashRecovery(code);
+      if (row.mfaRecoveryHashes.includes(hash)) {
+        // array_remove in one statement: a code is spent once, and two codes spent together are both removed.
+        const spent = await this.prisma.$executeRaw`
+          UPDATE "login_identities"
+          SET "mfaRecoveryHashes" = array_remove("mfaRecoveryHashes", ${hash}), "mfaFailedCount" = 0, "mfaLockedUntil" = NULL, "updatedAt" = ${now}
+          WHERE "id" = ${identityId} AND ${hash} = ANY("mfaRecoveryHashes")`;
+        if (spent === 1) return;
+      }
     }
+    await this.recordFailure(identityId, now);
+  }
 
-    const hash = this.hashRecovery(code);
-    if (row.mfaRecoveryHashes.includes(hash)) {
-      await this.prisma.loginIdentity.update({ where: { id: identityId }, data: { mfaRecoveryHashes: row.mfaRecoveryHashes.filter((h) => h !== hash) } });
-      return;
-    }
-    throw new UnauthorizedException(MSG.mfa_code_invalid);
+  /** Counts a wrong or reused code; every fifth in a row sets a lock (15 minutes, doubling, at most a day). */
+  private async recordFailure(identityId: string, now: Date): Promise<never> {
+    const { mfaFailedCount } = await this.prisma.loginIdentity.update({ where: { id: identityId }, data: { mfaFailedCount: { increment: 1 } }, select: { mfaFailedCount: true } });
+    const lockMs = mfaLockDurationMs(mfaFailedCount);
+    if (lockMs === 0) throw new UnauthorizedException(MSG.mfa_code_invalid);
+    const until = new Date(now.getTime() + lockMs);
+    await this.prisma.loginIdentity.update({ where: { id: identityId }, data: { mfaLockedUntil: until } });
+    throw mfaLockedException(until, now);
   }
 }

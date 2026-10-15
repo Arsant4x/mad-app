@@ -45,10 +45,10 @@ describe('حذفُ المنشأة لا يمسّ ما تحت الحفظ — وا�
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
     const username = `ret-co-${suffix}-${seq++}`;
     const res = await admin(http().post('/companies'))
-      .send({ username, password: 'RetPass123!', orgName: `منشأة حفظ ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'RetPass1234!', orgName: `منشأة حفظ ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
       .expect(201);
     made.push(res.body.id);
-    const login = await http().post('/auth/login').send({ username, password: 'RetPass123!' }).expect(200);
+    const login = await http().post('/auth/login').send({ username, password: 'RetPass1234!' }).expect(200);
     return { id: res.body.id, token: login.body.accessToken, username };
   }
 

@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 
 export class ForgotPasswordDto {
   @IsString()
@@ -12,10 +13,9 @@ export class ResetPasswordDto {
   @MinLength(20)
   token!: string;
 
-  /// Same floor as account creation: 8+ characters.
+  /// The full password rules (common/password) are checked by the service, with the account's username.
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   newPassword!: string;
 }
 
@@ -31,8 +31,7 @@ export class RegisterDto {
   username!: string;
 
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
 
   /// Optional but strongly encouraged — it's what password recovery uses.

@@ -229,11 +229,11 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     const accountant = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${companyAToken}`)
-      .send({ name: 'محاسب', username, password: 'AccPass123!', permissionTemplateId: limitedTemplate.body.id })
+      .send({ name: 'محاسب', username, password: 'AccPass1234!', permissionTemplateId: limitedTemplate.body.id })
       .expect(201);
     createdCompanyUserIds.push(accountant.body.id);
 
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'AccPass123!' }).expect(200);
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'AccPass1234!' }).expect(200);
     const token = login.body.accessToken;
 
     // 'invoice' IS in the template -> must be reachable.

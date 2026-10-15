@@ -72,7 +72,7 @@ describe('Company region — country, time zone, locale and base currency on the
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const res = await http()
       .post('/auth/register')
-      .send({ orgName: `منشأة دولة ${stamp}`, username: `iso-region-zz-${stamp}`, password: 'IsoPass123!', country: 'ZZ' })
+      .send({ orgName: `منشأة دولة ${stamp}`, username: `iso-region-zz-${stamp}`, password: 'IsoPass1234!', country: 'ZZ' })
       .expect(400);
     expect(JSON.stringify(res.body)).toContain('ZZ');
     expect(await prisma.loginIdentity.count({ where: { username: `iso-region-zz-${stamp}` } })).toBe(0);

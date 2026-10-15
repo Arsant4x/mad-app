@@ -13,6 +13,7 @@ import { JwtPayload } from './types';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { MailService } from '../common/mail/mail.service';
 import { MfaService } from '../common/mfa/mfa.service';
+import { assertPasswordPolicy } from '../common/password/password-policy';
 import { clipToCompany, grantsOf } from '../templates/template-clip.util';
 
 export interface AuthUserView {
@@ -417,6 +418,9 @@ export class AuthService {
     if (!record || record.usedAt || record.expiresAt < new Date()) {
       throw new UnauthorizedException(MSG.reset_token_invalid);
     }
+    // After the token check, so the rules are checked against the account the link belongs to.
+    const identity = await this.prisma.loginIdentity.findUniqueOrThrow({ where: { id: record.loginIdentityId }, select: { username: true, company: { select: { email: true } } } });
+    assertPasswordPolicy(newPassword, { username: identity.username, email: identity.company?.email });
 
     const passwordHash = await argon2.hash(newPassword);
     await this.prisma.$transaction([
