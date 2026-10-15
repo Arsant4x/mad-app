@@ -57,6 +57,8 @@ on:
       #    و`locale-gate.spec` يقرأ `deploy.sh` — وكلاهما **لم يكن هنا**، أي أن
       #    تعديلهما كان يمرّ بلا أن يعمل حارسُه. وهو §8.7 نفسه: سطحُ التشغيل
       #    ضاق عن سطحِ القراءة.
+      #    The hooks gates moved to ops/process-gates, which runs on every pull request;
+      #    the path stays because ci-split in src/common still names .claude.
       - '.claude/**'
       - 'deploy.sh'
       # ⚠️ (ق-٥٧٧ · 2026-09-11) والثقبُ الثالث من الجنس نفسِه: `offsite-backup.spec`

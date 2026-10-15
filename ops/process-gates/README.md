@@ -10,6 +10,16 @@ and pull request.
 | `registry-numbering.test.mjs` | registry ids are unique; plans and index match |
 | `rule-extension-attached.test.mjs` | a decision that extends a rule is attached to it in `CLAUDE.md` |
 | `registry-not-with-code.test.mjs` | a branch never mixes the registries with code |
+| `attribution-ci.test.mjs` | no agent signature in a pull request title, description, commits or merge message |
+| `commit-msg-attribution.test.mjs` | the commit-msg hook removes signature lines, and the tool signature is off |
+| `hooks-present.test.mjs` | the agent's working gates in `.claude/hooks` exist and are wired |
+| `edit-while-reading.test.mjs` | the "no edit to a tree while it is read" gate works, proven by running it |
+
+The gates that guard the product itself stay with the product tests in
+`apps/api/src/common`: test quality (`no-silent-skip`, `test-budget-declared`,
+`test-explicit-timeouts`, `live-guard-precheck`, `guard-reads-declared`), the CI
+split (`ci-split`), search locale in scripts (`locale-gate`), secrets on command
+lines (`shell-argv-secrets`) and the derived SPEC status (`spec-tags`).
 
 Run locally from the repository root:
 
