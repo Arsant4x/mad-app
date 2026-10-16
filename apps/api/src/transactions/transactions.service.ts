@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { lockReconciledBanks, onOrBeforeReconciled } from '../banks/reconciliation-lock.util';
 import { assertBoxInBranch, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@mad-app/db';
 import { resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
@@ -6,7 +7,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 const TX_INCLUDE = { bank: true } as const;
 
@@ -23,6 +24,27 @@ export class TransactionsService {
     const existing = await tx.bankTransaction.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
     if (!existing) throw new NotFoundException(MSG.bank_transaction_not_found);
     return existing;
+  }
+
+  /**
+   * A line the reconciliation relies on is not changed by hand: nothing dated on or before a bank's reconciled-through
+   * date, or moved into it (reopen first), a line matched to a ledger line (unmatch first), or a line written by a
+   * posting (it follows its entry). The bank rows stay share-locked, so a reconciliation close waits for this edit.
+   */
+  private async assertNotLocked(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    row: { bankId: string; date: Date; matchedLineId: string | null; entryNo: string | null },
+    target?: { bankId: string; date: Date },
+  ) {
+    const banks = await lockReconciledBanks(tx, companyId, { bankIds: [...new Set([row.bankId, target?.bankId ?? row.bankId])] });
+    const closedFor = (bankId: string, date: Date) => banks.find((b) => b.id === bankId && onOrBeforeReconciled(b.reconciledUntil, date));
+    const closed = closedFor(row.bankId, row.date) ?? (target ? closedFor(target.bankId, target.date) : undefined);
+    if (closed) {
+      throw new ConflictException(formatMessage(MSG.bank_transaction_reconciled, { bank: closed.name, until: closed.reconciledUntil!.toISOString().slice(0, 10) }));
+    }
+    if (row.matchedLineId) throw new ConflictException(MSG.bank_transaction_matched);
+    if (row.entryNo) throw new ConflictException(formatMessage(MSG.bank_transaction_posted, { entry: row.entryNo }));
   }
 
   list(companyId: string, allowedBranchIds: string[] | 'all', query: ListTransactionsQueryDto = {}) {
@@ -114,6 +136,8 @@ export class TransactionsService {
         await assertBoxInBranch(tx, existing.branchId, await tx.bank.findUnique({ where: { id: dto.bankId }, select: { name: true, branchId: true } }));
         data.bankId = dto.bankId;
       }
+      // After the box check, so a bank the actor may not use is refused before its reconciliation is read.
+      await this.assertNotLocked(tx, companyId, existing, { bankId: dto.bankId ?? existing.bankId, date: dto.date !== undefined ? new Date(dto.date) : existing.date });
       if (dto.date !== undefined) data.date = new Date(dto.date);
       if (dto.description !== undefined) data.description = dto.description;
       // العملةُ والسعرُ المرسَلان يُقاسان كمستندٍ جديد (توجيه ٢٧٤ · البند 1): لا سعرَ حرّاً لعملة الأساس، ولا ترثُ أجنبيةٌ
@@ -134,7 +158,7 @@ export class TransactionsService {
   async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // ق-١٤٤٠: سطرُ فرعٍ آخر غيرُ موجودٍ للفاعل — 404 لا 403، فلا يُحذف ما لا يراه.
-      await this.findVisible(tx, allowedBranchIds, id);
+      await this.assertNotLocked(tx, companyId, await this.findVisible(tx, allowedBranchIds, id));
       // ولا يُحرَّك الرصيدُ هنا كذلك (ق-٢٨٢): حذفُ سطرِ مطابقةٍ لا يمسّ الأستاذ.
       await tx.bankTransaction.delete({ where: { id } });
     });

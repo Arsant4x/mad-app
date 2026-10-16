@@ -9,6 +9,7 @@ import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
 import { postBankStatementLineEntry } from '../journal/auto-posting.util';
 import { readLedger, type LedgerRow } from '../reports/ledger.util';
 import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, getOrCreateAccountByCode } from '../journal/pos-settlement.util';
+import { lockBankForReconciliationClose, lockReconciledBanks } from './reconciliation-lock.util';
 
 /**
  * **التسويةُ البنكية** (`ق-١٢٦١` ج — `domain-scan/07` A1).
@@ -146,7 +147,9 @@ export class ReconciliationService {
       const row = await tx.bankTransaction.findFirst({ where: { id: transactionId, bankId } });
       if (!row || !isStatementRow(row)) throw new NotFoundException(MSG.bank_transaction_not_found);
       if (!row.matchedLineId) throw new ConflictException(MSG.reconciliation_not_matched);
-      this.assertAfterClose(bank.reconciledUntil, row.date);
+      // Read under the shared lock, so a close in progress is waited for and a close after this waits for the unmatch.
+      const [locked] = await lockReconciledBanks(tx, companyId, { bankIds: [bank.id] });
+      this.assertAfterClose(locked?.reconciledUntil ?? null, row.date);
       // السطرُ الذي رُحِّل من التسوية يبقى حاملاً قيدَه (`entryNo`) — فكُّ المطابقة لا يمحو قيداً، والقيدُ يُعكس إن لزم.
       return tx.bankTransaction.update({ where: { id: row.id }, data: { matchedLineId: null, matchedAt: null, matched: row.entryNo !== null } });
     });
@@ -204,8 +207,10 @@ export class ReconciliationService {
   close(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, until: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      // Waits for postings, unmatches and edits holding the bank's shared lock, so the pending count below sees them.
+      const reconciledUntil = await lockBankForReconciliationClose(tx, companyId, bank.id);
       const untilDate = new Date(until);
-      if (bank.reconciledUntil && untilDate < bank.reconciledUntil) throw new ConflictException(MSG.reconciliation_close_backwards);
+      if (reconciledUntil && untilDate < reconciledUntil) throw new ConflictException(MSG.reconciliation_close_backwards);
       // المعلَّقُ حتى التاريخ — يُسمّى في الرفض بعدده وأوّل تاريخٍ فيه (لا ترقيمٌ من العدّ — حارسُ ق-١٩٨ يقرأ count() ترقيماً).
       // (السطرُ المرحَّل من التسوية يحمل matchedLineId فلا يُعدّ معلَّقاً؛ والمرآةُ تحمل entryNo فلا تدخل.)
       const pendingRows = await tx.bankTransaction.findMany({ where: { bankId, entryNo: null, matchedLineId: null, date: { lte: untilDate } }, select: { id: true }, orderBy: { date: 'asc' } });

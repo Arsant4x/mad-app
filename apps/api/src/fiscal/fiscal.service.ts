@@ -65,6 +65,8 @@ export class FiscalService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const period = await tx.fiscalPeriod.findUnique({ where: { id: periodId } });
       if (!period) throw new NotFoundException(MSG.fiscal_period_not_found);
+      // Waits for every posting holding the period FOR SHARE (assertPeriodOpen), so none commits into it after the close.
+      await tx.$queryRaw`SELECT "id" FROM "fiscal_periods" WHERE "id" = ${period.id} FOR UPDATE`;
 
       /**
        * ⚖️ **إعادةُ فتح فترةٍ تعكس قيدَ إقفال سنتها آلياً** (`ق-١٢٨٣`/ج — قرار المالك):

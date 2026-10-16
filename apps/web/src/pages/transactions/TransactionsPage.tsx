@@ -6,6 +6,7 @@ import { createTransaction, deleteTransaction, listTransactions, updateTransacti
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Pager } from '../../components/Pager';
 import { RowMenu } from '../../components/RowMenu';
+import { apiErrorMessage } from '../../lib/apiError';
 import { dfmt, fmt } from '../../lib/format';
 import { TransactionModal } from './TransactionModal';
 
@@ -22,6 +23,7 @@ export function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; tx: BankTx } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<BankTx | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [needsBankNotice, setNeedsBankNotice] = useState(false);
   const searchDebounce = useRef<number | undefined>(undefined);
 
@@ -69,7 +71,14 @@ export function TransactionsPage() {
 
   async function confirmDelete() {
     if (!pendingDelete) return;
-    await deleteTransaction(pendingDelete.id);
+    setDeleteError(null);
+    try {
+      await deleteTransaction(pendingDelete.id);
+    } catch (e) {
+      // A line tied to the reconciliation is refused by the server; its message says what to do instead.
+      setDeleteError(apiErrorMessage(e, t('transactions.page.delete_failed')));
+      return;
+    }
     setPendingDelete(null);
     await reload(page, search);
   }
@@ -157,9 +166,12 @@ export function TransactionsPage() {
       {pendingDelete && (
         <ConfirmModal
           title={t('transactions.page.delete_title')}
-          body={t('transactions.page.delete_body')}
+          body={deleteError ?? t('transactions.page.delete_body')}
           confirmLabel={t('transactions.page.delete_confirm')}
-          onCancel={() => setPendingDelete(null)}
+          onCancel={() => {
+            setPendingDelete(null);
+            setDeleteError(null);
+          }}
           onConfirm={confirmDelete}
         />
       )}

@@ -48,7 +48,12 @@ export async function assertPeriodOpen(tx: Prisma.TransactionClient, date: Date)
    */
   const month = date.getUTCMonth() + 1;
   const year = date.getUTCFullYear();
-  const period = await tx.fiscalPeriod.findFirst({ where: { month, year } });
+  const found = await tx.fiscalPeriod.findFirst({ where: { month, year }, select: { id: true } });
+  // FOR SHARE until the posting commits: a close (FOR UPDATE) waits for it, and a posting that meets a close in
+  // progress waits for it and then reads the status it committed.
+  const [period] = found
+    ? await tx.$queryRaw<{ status: string }[]>`SELECT "status"::text AS "status" FROM "fiscal_periods" WHERE "id" = ${found.id} FOR SHARE`
+    : [];
 
   // Still no period: the computed year clashes with a hand-made year of a
   // different span. A genuine configuration error, not something to wave
