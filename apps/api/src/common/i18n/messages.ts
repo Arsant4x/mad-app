@@ -79,6 +79,8 @@ export const MSG = {
   purchase_stocked_needs_warehouse: 'purchases.stocked_needs_warehouse',
   journal_entry_not_found: 'journal.entry_not_found',
   journal_entry_unbalanced: 'journal.entry_unbalanced',
+  journal_manual_entry_min_lines: 'journal.manual_entry_min_lines',
+  journal_manual_line_one_side: 'journal.manual_line_one_side',
   journal_line_account_not_found: 'journal.line_account_not_found',
   journal_auto_entry_undeletable: 'journal.auto_entry_undeletable',
   journal_posted_reverse_instead: 'journal.posted_reverse_instead',
@@ -904,6 +906,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.journal_entry_not_found]: { ar: 'القيد غير موجود', en: 'Journal entry not found' },
   [MSG.journal_entry_unbalanced]: { ar: 'القيد غير متوازن — لا يمكن ترحيله', en: 'Journal entry is unbalanced — it cannot be posted' },
+  [MSG.journal_manual_entry_min_lines]: { ar: 'القيد اليدوي يحتاج سطرين على الأقل', en: 'A manual journal entry needs at least two lines' },
+  [MSG.journal_manual_line_one_side]: {
+    ar: 'كل سطر في القيد اليدوي يحمل مبلغاً مديناً أو دائناً أكبر من صفر، لا الاثنين معاً',
+    en: 'Each line of a manual journal entry takes a debit or a credit above zero, not both',
+  },
   [MSG.journal_line_account_not_found]: { ar: 'أحد الحسابات المحددة بالقيد غير موجود', en: 'One of the accounts referenced by this entry does not exist' },
   [MSG.journal_auto_entry_undeletable]: {
     ar: 'لا يمكن حذف قيد آلي مباشرة — احذف المستند المصدر (الفاتورة/فاتورة الشراء) بدلاً من ذلك',

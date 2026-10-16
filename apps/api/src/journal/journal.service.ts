@@ -8,7 +8,7 @@ import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { ListJournalQueryDto } from './dto/list-journal-query.dto';
 import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
 import { resolveBranchId } from '../branches/branch-scope.util';
-import { createJournalEntry } from './journal-posting.util';
+import { assertManualEntryLines, createJournalEntry } from './journal-posting.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { withoutCompanyFigures } from '../common/tenant/company-figures.util';
 
@@ -83,6 +83,8 @@ export class JournalService {
     // ⚖️ `ق-١٥٨٥` (بحكم صاحب المشروع): القيدُ اليدويّ بعملة الأساس وحدَها، فحقلا العملة والسعر يُرفضان برسالة قبل أيّ كتابة؛
     // وكانا يُقبلان في الـDTO (يرثهما من `CurrencyFieldsDto`) ثم يُسقطان صامتين فيُخزَّن القيدُ بسعر ١ أيّاً كان المرسَل.
     if (dto.currency !== undefined || dto.exchangeRate !== undefined) throw new BadRequestException(MSG.journal_currency_fields_rejected);
+    const lines = dto.lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit }));
+    assertManualEntryLines(lines);
     // Retries the whole transaction on a "no" collision from a concurrent
     // manual entry — same reasoning as InvoicesService.create.
     return retryOnUniqueConflict(() =>
@@ -94,7 +96,7 @@ export class JournalService {
           date: new Date(dto.date),
           memo: dto.memo,
           auto: false,
-          lines: dto.lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit })),
+          lines,
         }),
       ),
     );
