@@ -48,7 +48,7 @@ describe('نقاطُ القائمة — مصفوفةٌ بلا page، مغلَّ�
       const created = await request(app.getHttpServer())
         .post('/properties')
         .set('Authorization', `Bearer ${companyToken}`)
-        .send({ name: `عقارُ فحص الترقيم ${Date.now()}`, type: 'RESIDENTIAL' })
+        .send({ name: `paging check property ${Date.now()}`, ownership: 'owned', activityType: 'residential' })
         .expect(201);
       propertyId = created.body.id;
     }

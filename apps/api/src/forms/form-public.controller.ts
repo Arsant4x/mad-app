@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
+import { ThrottleByClientIp } from '../common/throttle/throttler-options';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import {
   FormLinkOpenResponse,
@@ -34,22 +34,22 @@ const SESSION_HEADER = 'x-form-session';
  * ⚖️ **صفحةُ الرابط العامّة — بلا حساب** (توجيه ٢٨٧ ① إلى ③ و⑪ · السطحُ الخامس في الخطّة §٥).
  *
  * **لا حارسَ مصادقة** (العميلُ بلا حساب) **والحمايةُ في الخدمة**: الرمزُ بصمةٌ لا يُخمَّن، وكلُّ ما بعد الفتح بجلسةٍ قصيرة لنسخةٍ واحدة.
- * **وحدٌّ للطلبات على الرابط والرمز** (توجيه ٢٨٧ ⑪) فوق حدود التحدّي نفسِه: الحدُّ يُعدّ بعنوان الشبكة لمن لا جلسةَ له (`tenantTracker`)،
- * وأضيقُه على طلب الرمز وتحقيقه.
+ * Requests on the link and the code are limited on top of the challenge's own limits, counted per network address whatever
+ * session token they carry, as the sign-in routes are; the tightest limits are on requesting and checking the code.
  */
 @Controller('public/forms/:token')
 export class FormPublicController {
   constructor(private readonly service: FormPublicService) {}
 
   @Get()
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ThrottleByClientIp(30)
   @ApiOkResponse({ type: FormLinkOpenResponse })
   open(@Param('token') token: string, @Req() req: Request) {
     return this.service.open(token, metaOf(req));
   }
 
   @Post('otp')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ThrottleByClientIp(5)
   @ApiCreatedResponse({ type: FormOtpIssuedResponse })
   requestOtp(@Param('token') token: string, @Req() req: Request) {
     return this.service.requestOtp(token, metaOf(req));
@@ -57,35 +57,35 @@ export class FormPublicController {
 
   @Post('otp/verify')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ThrottleByClientIp(10)
   @ApiOkResponse({ type: FormSessionResponse })
   verifyOtp(@Param('token') token: string, @Body() dto: VerifyFormOtpDto, @Req() req: Request) {
     return this.service.verifyOtp(token, dto, metaOf(req));
   }
 
   @Post('nafath')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ThrottleByClientIp(5)
   @ApiCreatedResponse({ type: FormNafathStartResponse })
   startNafath(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Req() req: Request) {
     return this.service.startNafath(token, session, metaOf(req));
   }
 
   @Get('nafath')
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ThrottleByClientIp(30)
   @ApiOkResponse({ type: FormNafathPollResponse })
   pollNafath(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Req() req: Request) {
     return this.service.pollNafath(token, session, metaOf(req));
   }
 
   @Get('form')
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ThrottleByClientIp(30)
   @ApiOkResponse({ type: FormPublicViewResponse })
   view(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Req() req: Request) {
     return this.service.view(token, session, metaOf(req));
   }
 
   @Post('sign')
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ThrottleByClientIp(10)
   @UseInterceptors(FileInterceptor('drawing', { limits: { fileSize: MAX_FILE_BYTES } }))
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormSignedResponse })
@@ -100,7 +100,7 @@ export class FormPublicController {
   }
 
   @Post('objection')
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ThrottleByClientIp(10)
   @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: MAX_FILE_BYTES } }))
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormObjectedResponse })
@@ -117,7 +117,7 @@ export class FormPublicController {
   /** ⚖️ حكمُ المستأجر على المستلم البديل (`ق-١٦٧٢`): يوافق أو يرفض برابط الموافقة بعد الدخول برمزه. */
   @Post('substitute/decision')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ThrottleByClientIp(10)
   @ApiOkResponse({ type: FormSubstituteDecidedResponse })
   decideSubstitute(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Body() dto: FormSubstituteDecisionDto, @Req() req: Request) {
     return this.service.decideSubstitute(token, session, dto.approve, metaOf(req));

@@ -27,6 +27,19 @@ const entry = (over: Record<string, unknown>) => ({
 
 beforeEach(() => vi.clearAllMocks());
 
+// First in the file: React prints a missing key warning once per component, so a later case would not see it.
+describe('audit log rows', () => {
+  it('gives every row in the list its own key', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(listAuditLog).mockResolvedValue([entry({ id: 'r1', actorName: 'first' }), entry({ id: 'r2', actorName: 'second' })] as never);
+    render(<AuditLogPage />);
+
+    await waitFor(() => expect(screen.getByText('second')).toBeInTheDocument());
+    const keyWarnings = errors.mock.calls.filter((args) => args.some((a) => String(a).includes('unique "key"')));
+    expect(keyWarnings).toEqual([]);
+  });
+});
+
 describe('audit log actor', () => {
   it('marks a row written by a platform administrator, and only that row', async () => {
     vi.mocked(listAuditLog).mockResolvedValue([

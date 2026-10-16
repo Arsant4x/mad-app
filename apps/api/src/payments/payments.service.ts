@@ -20,7 +20,7 @@ import {
 } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
+import { FX_DIFFERENCE_ACCOUNT, mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
 import { getOrCreateAccountByCode, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME } from '../journal/pos-settlement.util';
 import { assertBoxInBranch, assertBranchAllowed, branchFilter, maskForeignDocument, resolveBranchId } from '../branches/branch-scope.util';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
@@ -582,9 +582,8 @@ export class PaymentsService {
         const reversalDate = date ? new Date(date) : await companyToday(tx, companyId);
         const no = await this.nextPaymentNumber(tx, companyId, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
-        // عكسُ مقبوض الشبكة يردّ `1251` لا `1000` — الطريقةُ تحدّد الحسابَ في الاتجاهين (`ق-٣٢٠`).
-        const networkAccountId =
-          original.method === 'CARD' ? (await getOrCreateAccountByCode(tx, companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset')).id : null;
+        // The reversal credits the account the receipt debited: a POS cash sale's drawer, 1251 for a card, else 1000.
+        const cashAccountId = bank ? null : await this.postedCashAccountOf(tx, companyId, original.journalEntryId, original.method);
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
         // القيدان طرفاً بطرف ويعود 5600 إلى ما كان: الحسبةُ نفسُها التي سوّت الأصل، مقلوبةَ الإشارة.
@@ -625,7 +624,7 @@ export class PaymentsService {
           exchangeRate: rate,
           branchId: original.branchId,
           bank,
-          drawerAccountId: networkAccountId,
+          drawerAccountId: cashAccountId,
           baseReceivable,
           description: `عكس مقبوض — سند ${no} (يعكس ${original.no})`,
           reversal: true,
@@ -636,6 +635,21 @@ export class PaymentsService {
         return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: reversal.id }, include: PAYMENT_INCLUDE }));
       }),
     );
+  }
+
+  /**
+   * The cash side of a receipt's posted entry, the line that is neither the receivable nor the exchange difference.
+   * Without a posted entry, a card receipt falls back to 1251 and a cash one to 1000.
+   *
+   * Company wide by design: it reads the lines of one posted entry by that entry's id, a document link and not a list.
+   */
+  private async postedCashAccountOf(tx: Prisma.TransactionClient, companyId: string, entryId: string | null, method: string): Promise<string | null> {
+    if (entryId) {
+      const lines = await tx.journalLine.findMany({ where: { journalEntryId: entryId }, select: { accountId: true, account: { select: { code: true } } } });
+      const cash = lines.filter((l) => l.account.code !== '1200' && l.account.code !== FX_DIFFERENCE_ACCOUNT);
+      if (cash.length === 1) return cash[0].accountId;
+    }
+    return method === 'CARD' ? (await getOrCreateAccountByCode(tx, companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset')).id : null;
   }
 
   /**

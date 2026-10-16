@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listAuditLog, type AuditEntry } from '../../api/audit';
 import { ALLOWED_SCREENS, SCREEN_LABELS } from '../../api/templates';
@@ -123,8 +123,8 @@ export function AuditLogPage() {
                 const badge = meta?.badge ?? 'draft';
                 const open = expanded === r.id;
                 return (
-                  <>
-                    <tr key={r.id}>
+                  <Fragment key={r.id}>
+                    <tr>
                       <td className="num" style={{ whiteSpace: 'nowrap' }}>
                         {stamp(r.createdAt)}
                       </td>
@@ -149,7 +149,7 @@ export function AuditLogPage() {
                       )}
                     </tr>
                     {open && !simplified && r.details && (
-                      <tr key={`${r.id}-d`}>
+                      <tr>
                         <td colSpan={6} style={{ background: 'var(--paper)' }}>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 'calc(12px * var(--font-scale))' }}>
                             {Object.entries(r.details).map(([k, v]) => (
@@ -166,7 +166,7 @@ export function AuditLogPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

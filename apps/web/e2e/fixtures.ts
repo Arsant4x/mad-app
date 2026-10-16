@@ -5,14 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { test, type APIRequestContext } from '@playwright/test';
 
 /**
- * منشأة اختبار تُسجَّل وتُحذف لكل تشغيل (قرار المالك 2026-08-10).
+ * One test company is registered for each run.
  *
- * العزل أهم من السرعة: حسابٌ ثابت يتراكم عليه أثر كل تشغيل، فيصير سقوطُ
- * اختبارٍ سؤالاً عن أيّ تشغيلٍ سابق خلّف ماذا. والتسجيل نفسه اختبارٌ ثانٍ
- * بلا كلفة — يمرّ بمسار الإنشاء ودليل الحسابات الافتراضي في كل مرة.
+ * Isolation matters more than speed: a fixed account carries what every earlier run left on it, so a failing
+ * test becomes a question of which run left what. Registering is a second test at no cost: it goes through
+ * account creation and the default chart of accounts every time.
  *
- * والحذف يمرّ بـ`DELETE /companies/:id` كما يفعل مدير المنصة، لا بحذفٍ في
- * القاعدة — فما لا يُنظّف عبر المسار الحقيقي لا يُثبت أن المسار الحقيقي ينظّف.
+ * The company is not deleted after the run: the API has no route that deletes a company (global-teardown.ts).
  */
 const API = process.env.E2E_API_URL ?? 'http://localhost:3000';
 
@@ -77,24 +76,6 @@ function grantTestSubscription(companyId: string): void {
   const apiDir = fileURLToPath(new URL('../../api/', import.meta.url));
   const tsNode = createRequire(import.meta.url).resolve('ts-node/dist/bin.js');
   execFileSync(process.execPath, [tsNode, '--transpile-only', 'test/test-subscription.ts', companyId], { cwd: apiDir, stdio: 'inherit' });
-}
-
-/** يُنظّف بصلاحية مدير المنصة. يبتلع الفشل عمداً: تنظيفٌ متعثّر يجب ألّا
- *  يُسقط اختباراً نجح، لكنه يُطبع كي لا يتراكم صامتاً. */
-export async function deleteCompany(request: APIRequestContext, companyId: string): Promise<void> {
-  const admin = await request.post(`${API}/auth/login`, {
-    data: {
-      username: process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan_admin',
-      password: process.env.DEV_SEED_PLATFORM_ADMIN_PASSWORD ?? '',
-    },
-  });
-  if (!admin.ok()) {
-    console.warn(`[cleanup] تعذّر دخول مدير المنصة (${admin.status()}) — بقيت المنشأة ${companyId}`);
-    return;
-  }
-  const { accessToken } = await admin.json();
-  const del = await request.delete(`${API}/companies/${companyId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!del.ok()) console.warn(`[cleanup] فشل حذف ${companyId}: ${del.status()} ${await del.text()}`);
 }
 
 /** دخولٌ عبر الواجهة نفسها لا بحقن رمز: المقصود اختبار ما يراه المستخدم. */

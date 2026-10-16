@@ -1,19 +1,11 @@
-import { request } from '@playwright/test';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { deleteCompany, STATE_FILE } from './fixtures';
+import { rmSync } from 'node:fs';
+import { STATE_FILE } from './fixtures';
 
-/** يحذف منشأة التشغيل عبر المسار الحقيقي (DELETE /companies/:id) — لا بـSQL:
- *  ما لا يُنظَّف عبر المسار الحقيقي لا يُثبت أن المسار الحقيقي ينظّف. */
+/**
+ * Removes the run's state file and leaves the registered company in place. The API no longer deletes a
+ * company: an account is closed through a deletion request and a second administrator's decision, then kept
+ * for its retention period. The CI database is discarded with the job.
+ */
 export default async function globalTeardown(): Promise<void> {
-  if (!existsSync(STATE_FILE)) return;
-  const state = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as { hasApi: boolean; companyId?: string };
   rmSync(STATE_FILE, { force: true });
-  if (!state.hasApi || !state.companyId) return;
-
-  const ctx = await request.newContext();
-  try {
-    await deleteCompany(ctx, state.companyId);
-  } finally {
-    await ctx.dispose();
-  }
 }

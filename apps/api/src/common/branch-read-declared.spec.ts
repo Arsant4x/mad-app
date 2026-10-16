@@ -58,6 +58,9 @@ readsDeclaredStrings();
  *
  * ⚠️ **④ ويفرض الإعلانَ لا صحّتَه**: من كتب سبباً كاذباً يمرّ — **تمنع الغفلة
  * لا الخطأ المتعمَّد** (كنظيرتيها `ق-٣٧٥` · `ق-٥٠١`).
+ *
+ * English marker: code comments are written in English, so a new declaration uses the fixed English marker
+ * `Company wide by design: <reason>` (any letter case). The Arabic marker stays valid for existing code.
  */
 const SRC = join(__dirname, '..');
 const SCHEMA = readFileSync(join(__dirname, '..', '..', 'prisma', 'schema.prisma'), 'utf8');
@@ -67,6 +70,9 @@ export const AGGREGATE_READS = ['findMany', 'findFirst', 'findFirstOrThrow', 'co
 
 /** علامةُ الإعلان — تُكتب في تعليق التابع، ويليها السبب. */
 export const SCOPE_DECLARATION = 'على مستوى المنشأة بحقّها';
+
+/** The same marker in English, for new code whose comments are in English; matched in any letter case. */
+export const SCOPE_DECLARATION_EN = 'Company wide by design';
 
 /** أقصرُ سببٍ يُقبل — حدٌّ ضدّ الفراغ لا حكمٌ على المعنى. */
 export const MIN_REASON_LENGTH = 20;
@@ -145,15 +151,23 @@ function usesBranchFilter(scope: ts.Node, scoping: Set<string>): boolean {
   return found;
 }
 
+/** Where the declaration marker ends in a comment: the Arabic marker, or the English one in any letter case. */
+function markerIn(doc: string): { end: number } | null {
+  const arabic = doc.indexOf(SCOPE_DECLARATION);
+  if (arabic !== -1) return { end: arabic + SCOPE_DECLARATION.length };
+  const english = new RegExp(SCOPE_DECLARATION_EN, 'i').exec(doc);
+  return english ? { end: english.index + english[0].length } : null;
+}
+
 /** السببُ المعلَن في التعليق الملاصق فوق التابع — بعد العلامة حتى نهاية التعليق. */
 function declaredReason(scope: ts.Node, text: string): string | null {
   const pos = ts.isSourceFile(scope) ? 0 : scope.getFullStart();
   const ranges = ts.getLeadingCommentRanges(text, pos) ?? [];
   const doc = ranges.map((r) => text.slice(r.pos, r.end)).join('\n');
-  const at = doc.indexOf(SCOPE_DECLARATION);
-  if (at === -1) return null;
+  const marker = markerIn(doc);
+  if (!marker) return null;
   return doc
-    .slice(at + SCOPE_DECLARATION.length)
+    .slice(marker.end)
     .replace(/\*\/[\s\S]*$/, '')
     .replace(/^\s*\*+\s?/gm, '')
     .replace(/^[\s*:：—-]+/, '')
@@ -237,6 +251,7 @@ describe('قراءةٌ جامعةٌ على نموذجِ فرعٍ تُرشِّح 
           '',
           'إمّا مرِّرها: `where: branchFilter(allowedBranchIds)` — المصدرُ الواحد في `branches/branch-scope.util`;',
           `وإمّا أعلن في تعليق التابع: **${SCOPE_DECLARATION}**: <لماذا لا تُقصر على فروع القارئ>.`,
+          `Or in an English comment: ${SCOPE_DECLARATION_EN}: <why the read is not limited to the reader's branches>.`,
           '',
           '⚠️ والسببُ يقول لماذا — لا «عامّة»: سلسلةُ الهيئة تُختم على المنشأة كلِّها ·',
           '   حذفُ العميل يُمنع بفواتيره في أيّ فرع · الأستاذُ دفترٌ واحد … وهكذا.',
@@ -300,6 +315,22 @@ describe('قراءةٌ جامعةٌ على نموذجِ فرعٍ تُرشِّح 
     expect(undeclaredBranchReads(requested, models)).toEqual([]);
     const assertedOnly = ['class R {', '  returns(allowed: string[] | "all", branchId?: string) {', '    if (branchId) assertBranchAllowed(allowed, branchId);', '    return tx.quote.findMany({});', '  }', '}'].join('\n');
     expect(undeclaredBranchReads(assertedOnly, models).map((r) => r.scope)).toEqual(['R.returns']);
+  });
+
+  it('accepts the English declaration marker with a reason, and refuses it without one', () => {
+    const models = ['Quote'];
+    const read = (comment: string[]) => ['class ZatcaService {', ...comment, '  chain(tx: Tx) {', '    return tx.quote.findFirst({ orderBy: { icv: "desc" } });', '  }', '}'].join('\n');
+
+    // Must not be flagged: the English marker followed by a reason, read as written.
+    const declared = read(['  /**', '   * Company wide by design: the ZATCA chain is sealed over every invoice of the company in order.', '   */']);
+    expect(undeclaredBranchReads(declared, models)).toEqual([]);
+    expect(branchReads(declared, models)[0].reason).toBe('the ZATCA chain is sealed over every invoice of the company in order.');
+
+    // Must be flagged: the marker with no reason, and a comment without the marker.
+    const empty = read(['  /** Company wide by design: general. */']);
+    expect(undeclaredBranchReads(empty, models).map((r) => r.scope)).toEqual(['ZatcaService.chain']);
+    const unmarked = read(['  /** Reads every invoice of the company because the chain is sealed in order. */']);
+    expect(undeclaredBranchReads(unmarked, models).map((r) => r.scope)).toEqual(['ZatcaService.chain']);
   });
 
   it('🔴 والمرشِّحاتُ تُقرأ من المصدر الواحد — مُثبَتٌ بحالتَين', () => {
