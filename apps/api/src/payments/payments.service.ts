@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
+import { companyToday } from '../common/company-day.util';
 import { companyBaseCurrency, resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { round2, formatMoney } from '../common/money/rounding';
@@ -524,9 +525,8 @@ export class PaymentsService {
         await tx.paymentAllocation.createMany({ data: requested.map((a) => ({ companyId, paymentId: id, invoiceId: a.invoiceId, amount: a.amount })) });
       }
 
-      // ⚖️ (`ق-١٤٨٩`/B1) الفرقُ بين الذمّتَين قيدٌ بلا نقد: موجبٌ ⟵ دائن `1200` · مدين `5600` (خسارة)، وسالبٌ ⟵ مدين `1200` ·
-      //    دائن `5600` (ربح). بيوم التوزيع (من الطلب، وإلا ساعةُ الخادم كالعكس — `ق-٧٣٦`)، وقفلُ الفترات في `createJournalEntry`
-      //    يرفضه في فترةٍ مقفلة فتسقط المعاملةُ كلُّها ويبقى التوزيعُ القديم.
+      // The receivable difference is a cashless entry (positive: credit 1200, debit 5600; negative: the reverse), dated on the
+      // requested day or else the company's own day; a closed period refuses it and the old allocation stays.
       // وما لم يُخصَّص بعد التوزيع بسعر ذمّته من المصدر نفسِه الذي قُرئ به `settledBefore` (`unallocatedReceivableRate` — B6):
       // لسند القبض هو سعرُه، ولسند الردّ سعرُ إشعاره — فلا يصنع اختلافُ القارئَين فرقاً لا أصلَ له.
       const settledAfter = baseSettledOf(round2(Number(payment.amount)), unallocatedReceivableRate(payment), toSettlementAllocations(requested), rates);
@@ -536,7 +536,7 @@ export class PaymentsService {
           customerId: payment.customerId,
           paymentNo: payment.no,
           customerName: payment.customer.name,
-          date: dto.date ? new Date(dto.date) : new Date(),
+          date: dto.date ? new Date(dto.date) : await companyToday(tx, companyId),
           baseCash: 0,
           baseReceivable: difference,
           branchId: payment.branchId,
@@ -578,11 +578,8 @@ export class PaymentsService {
 
         const amount = round2(-Number(original.amount));
         const rate = Number(original.exchangeRate);
-        // لحظةٌ واحدة للرقم وللصفّ معاً. ونداءان منفصلان لـ`new Date()` قد
-        // يقعان على طرفَي منتصف الليل، فيحمل السند رقم سنةٍ وتاريخَ أخرى.
-        // ⚖️ **ويومُ التاجر أوّلاً** (`ق-٧٣٦`): يُقرأ من الطلب (`YYYY-MM-DD` → منتصفُ ليل `UTC` كسائر
-        //    المستندات)، ولا يُشتقّ من ساعة الخادم إلا لعميلٍ لم يُرسله — حدٌّ معلَن.
-        const reversalDate = date ? new Date(date) : new Date();
+        // The requested day, else the company's own day: one value for the number and the row.
+        const reversalDate = date ? new Date(date) : await companyToday(tx, companyId);
         const no = await this.nextPaymentNumber(tx, companyId, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
         // عكسُ مقبوض الشبكة يردّ `1251` لا `1000` — الطريقةُ تحدّد الحسابَ في الاتجاهين (`ق-٣٢٠`).

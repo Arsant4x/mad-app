@@ -9,6 +9,7 @@ import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/
 import { buildZatcaQr, ZatcaQrValueTooLongError } from '../zatca/qr.util';
 import { issuedWallClock } from '../common/wall-clock.util';
 import { Prisma } from '@mad-app/db';
+import { companyToday } from '../common/company-day.util';
 import {
   assertAdjustableTarget,
   assertReturnLinesBelong,
@@ -375,7 +376,7 @@ export class InvoicesService {
         const issueDate = standard
           ? clock.issuedAt && clock.issuedOffsetMin !== null
             ? new Date(localDateOf(clock.issuedAt, clock.issuedOffsetMin))
-            : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+            : await companyToday(tx, companyId, now)
           : rejected.issueDate;
         const dueDate = rejected.dueDate > issueDate ? rejected.dueDate : issueDate;
         const rate = Number(rejected.exchangeRate);
@@ -1090,8 +1091,8 @@ export class InvoicesService {
     // document, so repricing at today's rate would make the pair
     // irreconcilable in base currency.
     const rate = Number(original.exchangeRate);
-    // التاريخ يسبق الرقم — فالبادئة تُشتقّ منه.
-    const issueDate = note.issueDate ? new Date(note.issueDate) : new Date();
+    // The date comes before the number, whose prefix derives from it; without one the company's own day applies.
+    const issueDate = note.issueDate ? new Date(note.issueDate) : await companyToday(tx, companyId);
     const { subtotal, taxTotal, total } = note.totals;
     const base = baseCurrencyTotals(note.totals, rate);
     // ⚖️ (`ق-١٤٩٠`) الإشعارُ مستندٌ ضريبيّ يصل الهيئةَ برقمه — فما يُرفض بعد الترقيم يُفحص قبله: الإرجاعُ فوق المبيع

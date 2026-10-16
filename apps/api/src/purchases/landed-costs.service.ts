@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { branchFilter } from '../branches/branch-scope.util';
+import { companyToday } from '../common/company-day.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { formatMoney, round2, roundTo } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -294,8 +295,9 @@ export class LandedCostsService {
       }
 
       const voidedAt = new Date();
+      // The row keeps the instant; the reversal is dated on the company's day of that instant.
       const reversal = distribution.journalEntryId
-        ? await postReversalEntry(tx, companyId, { entryId: distribution.journalEntryId, date: voidedAt, memo: `عكسُ تكلفةٍ محمَّلة — فاتورة شراء ${purchase.no}` })
+        ? await postReversalEntry(tx, companyId, { entryId: distribution.journalEntryId, date: await companyToday(tx, companyId, voidedAt), memo: `عكسُ تكلفةٍ محمَّلة — فاتورة شراء ${purchase.no}` })
         : null;
       await tx.landedCostDistribution.update({ where: { id: distribution.id }, data: { voidedAt, voidJournalEntryId: reversal?.id ?? null } });
     });

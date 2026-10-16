@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PosCardVerification, PosShift, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
+import { companyToday } from '../common/company-day.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { onceForKey } from '../common/idempotency/idempotency';
 import { moneyEquals } from '../common/money/allocation';
@@ -359,8 +360,8 @@ export class PosService {
         : null;
       await postShiftVarianceEntry(tx, tenant.companyId, {
         shiftNo: shift.id.slice(0, 8),
-        // ⚖️ يومُ الكاشير من انحراف طرفيته (`ق-٧٣٦`) — لا يومُ الخادم؛ وبلا انحرافٍ يومُ `UTC` صراحةً.
-        date: settlementDate(dto.closedOffsetMin),
+        // The cashier's day from the terminal's offset; a terminal that sends none gets the company's own day.
+        date: dto.closedOffsetMin !== undefined ? settlementDate(dto.closedOffsetMin) : await companyToday(tx, tenant.companyId),
         branchId: shift.branchId,
         drawerAccountId: drawer?.accountId ?? null,
         variance,

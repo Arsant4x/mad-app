@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { assertBranchAllowed } from '../branches/branch-scope.util';
+import { companyToday } from '../common/company-day.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import {
   assertAdjustableTarget,
@@ -127,7 +128,7 @@ export class SupplierNotesService {
         await assertPurchaseReferences(tx, { productIds: lines.map((l) => l.productId) });
 
         const rate = Number(original.exchangeRate);
-        const date = dto.date ? new Date(dto.date) : new Date();
+        const date = dto.date ? new Date(dto.date) : await companyToday(tx, companyId);
         // رقمُنا مرجعٌ داخليّ من العدّاد الذرّيّ (ق-٣٢٨)، عمريٌّ كرقم الشراء — ورقمُ المورّد في `supplierRef`.
         const no = await nextDocumentNumber(tx, companyId, date, { kind: side === 'credit' ? 'SCN' : 'SDN', pad: 3, perYear: false }, (prefix) =>
           highestSequenceOf(tx.purchase, prefix),

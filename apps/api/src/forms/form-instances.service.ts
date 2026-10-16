@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { FormInstanceStatus, FormItemType, FormTemplateStatus, Prisma } from '@mad-app/db';
+import { companyToday } from '../common/company-day.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { dayStartOf } from '../common/wall-clock.util';
 import { conditionValueOf, isConditionValue, NUMERIC_ITEM_TYPES } from './form-template-items.util';
 import {
   SEAL_FORMAT,
@@ -256,8 +256,8 @@ export class FormInstancesService {
       const template = await tx.formTemplate.findFirst({ where: { id: input.templateId, companyId }, select: { id: true, status: true } });
       if (!template) throw new NotFoundException(MSG.form_template_not_found);
       if (template.status !== FormTemplateStatus.PUBLISHED) throw new BadRequestException(MSG.form_instance_template_not_published);
-      // ⚠️ بلا تاريخٍ مُرسَل فيومُ UTC (حدٌّ معلَن في `wall-clock.util`)؛ والشاشةُ ترسل يومَ الجهاز.
-      const formDate = input.formDate ? new Date(`${input.formDate}T00:00:00.000Z`) : dayStartOf(new Date());
+      // Without a sent date the company's own day applies; the screen sends the device's day.
+      const formDate = input.formDate ? new Date(`${input.formDate}T00:00:00.000Z`) : await companyToday(tx, companyId);
       const created = await tx.formInstance.create({
         data: {
           companyId,

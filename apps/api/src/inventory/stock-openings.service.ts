@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@mad-app/db';
 import { resolveBranchId, warehouseFilter } from '../branches/branch-scope.util';
 import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
+import { companyToday } from '../common/company-day.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
@@ -165,7 +166,7 @@ export class StockOpeningsService {
         let settledDelta = 0;
         let settledCount = 0;
         const settledAllocation = { shelf: 0, cogs: 0, writeOff: 0, variance: 0 };
-        const today = toDateOnly(new Date());
+        const today = await companyToday(tx, companyId);
         for (const p of prepared) {
           const movement = await tx.stockMovement.create({
             data: {
@@ -296,7 +297,7 @@ export class StockOpeningsService {
 
       const original = await tx.stockMovement.findUniqueOrThrow({ where: { id: line.movementId }, select: { branchId: true } });
       const branchId = await resolveBranchId(tx, original.branchId, allowedBranchIds, 'mirror');
-      const today = toDateOnly(new Date());
+      const today = await companyToday(tx, companyId);
       const reversal = await tx.stockMovement.create({
         data: {
           companyId,

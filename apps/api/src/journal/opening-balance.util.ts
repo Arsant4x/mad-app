@@ -1,8 +1,8 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
+import { companyToday } from '../common/company-day.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
-import { dayStartOf } from '../common/wall-clock.util';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
@@ -54,10 +54,8 @@ export async function getOrCreateOpeningEquityAccount(
  * one (a company born before it, or whose years were all deleted) today is
  * used, and posting it creates the year that contains it. */
 export async function openingEntryDate(tx: Prisma.TransactionClient, companyId: string): Promise<Date> {
-  // Today at UTC midnight — the same shape a '2026-08-08' DTO string parses to,
-  // so @db.Date comparisons behave identically. يومٌ معلَن لا يومُ منطقة العملية
-  // (`ق-١١٩٠`): كان يُبنى من `getFullYear()/getMonth()/getDate()` المحلّية.
-  const today = dayStartOf(new Date());
+  // The company's own day, shaped like a '2026-08-08' DTO string so @db.Date comparisons behave identically.
+  const today = await companyToday(tx, companyId);
   const year = await tx.fiscalYear.findFirst({ where: { companyId, start: { lte: today }, end: { gte: today } } });
   return year ? new Date(year.start) : today;
 }

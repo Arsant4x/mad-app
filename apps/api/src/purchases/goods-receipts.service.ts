@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { branchFilter } from '../branches/branch-scope.util';
+import { companyToday } from '../common/company-day.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
@@ -285,7 +286,7 @@ export class GoodsReceiptsService {
       await reverseGoodsReceipt(tx, {
         companyId,
         branchId: purchase.branchId,
-        date: new Date(),
+        date: await companyToday(tx, companyId),
         documentNo: receipt.no,
         reason: `إلغاءُ استلام ${receipt.no}`,
         receiptId: receipt.id,
