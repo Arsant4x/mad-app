@@ -150,6 +150,7 @@ export const MSG = {
   purchase_has_payments: 'purchases.has_payments',
   purchase_total_below_allocated: 'purchases.total_below_allocated',
   purchase_rate_frozen_after_payment: 'purchases.rate_frozen_after_payment',
+  purchase_supplier_ref_taken: 'purchases.supplier_ref_taken',
   supplier_payment_not_found: 'supplier_payments.not_found',
   allocation_wrong_supplier: 'supplier_payments.allocation_wrong_supplier',
   allocation_not_payable: 'supplier_payments.allocation_not_payable',
@@ -1119,6 +1120,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.purchase_rate_frozen_after_payment]: {
     ar: 'عملة فاتورة الشراء {no} وسعر صرفها لا يُعدَّلان وعليها سدادٌ مخصَّص ({allocated}) — فرق الصرف رُحِّل بسعرها يوم السداد؛ اعكس سند الصرف أولاً ثم عدِّل',
     en: 'The currency and exchange rate of purchase invoice {no} cannot be edited while supplier payments are allocated to it ({allocated}) — the exchange difference was posted at its rate when paid; reverse the supplier payment first, then edit',
+  },
+  [MSG.purchase_supplier_ref_taken]: {
+    ar: 'فاتورة المورّد رقم {ref} مسجَّلة من قبل على هذا المورّد — لا تُسجَّل فاتورته مرتين. إن كانت المسجَّلة خطأً فألغِها أولاً',
+    en: 'Supplier invoice {ref} is already recorded for this supplier, and the same supplier invoice cannot be recorded twice. If the recorded one is wrong, void it first',
   },
   [MSG.supplier_payment_not_found]: { ar: 'سند الصرف غير موجود', en: 'Supplier payment not found' },
   [MSG.allocation_wrong_supplier]: { ar: 'فاتورة الشراء {no} ليست لهذا المورّد', en: 'Purchase invoice {no} belongs to another supplier' },

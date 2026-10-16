@@ -20,6 +20,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 import { assertPurchaseReferences } from './purchase-references.util';
+import { asSupplierRefConflict, assertSupplierRefFree } from './supplier-ref.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 
@@ -128,6 +129,8 @@ export class PurchasesService {
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
         // `ق-١٤٦٥` مراجعُ منشأةٍ أخرى تُردّ مسمّاةً قبل الترقيم — لا `500` من المفتاح المركّب بعده.
         await assertPurchaseReferences(tx, { supplierId: dto.supplierId, productIds: (dto.lines ?? []).map((l) => l.productId), warehouseId: dto.warehouseId });
+        // A concurrent create with the same number loses on the index and is retried, and the retry stops here.
+        await assertSupplierRefFree(tx, { companyId, supplierId: dto.supplierId, supplierRef: dto.supplierRef });
         const no = await this.nextPurchaseNumber(tx, companyId);
         // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — لا تُخمَّن لصنفٍ لم يُعلنها.
         const unitCodes = await unitCodesFor(tx, dto.lines ?? []);
@@ -298,6 +301,10 @@ export class PurchasesService {
 
       // `ق-١٤٦٥` ما يُرسَل من مراجعَ يُقرأ في سياق المنشأة قبل أيّ عكسٍ أو كتابة.
       await assertPurchaseReferences(tx, { supplierId: dto.supplierId, productIds: (dto.lines ?? []).map((l) => l.productId), warehouseId: dto.warehouseId });
+      const effectiveRef = dto.supplierRef !== undefined ? dto.supplierRef : existing.supplierRef;
+      if (dto.supplierId !== undefined || dto.supplierRef !== undefined) {
+        await assertSupplierRefFree(tx, { companyId, supplierId: dto.supplierId ?? existing.supplierId, supplierRef: effectiveRef, exceptPurchaseId: id });
+      }
 
       const data: Prisma.PurchaseUncheckedUpdateInput = {};
       if (dto.supplierId !== undefined) data.supplierId = dto.supplierId;
@@ -371,7 +378,10 @@ export class PurchasesService {
         throw new ConflictException(formatMessage(MSG.purchase_frozen_by_landed_costs, { no: existing.no }));
       }
 
-      let updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE });
+      // Only the supplier invoice number index can refuse this write: a race lost on it gets the same named 409.
+      let updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE }).catch((e: unknown) => {
+        throw asSupplierRefConflict(e, effectiveRef);
+      });
 
       let reReceive: { warehouseId: string | null; hadImplicit: boolean } | null = null;
       if (dto.lines !== undefined) {

@@ -1959,6 +1959,9 @@ model Purchase {
   adjustmentReason String?
   /// **رقمُ مستند المورّد** كما على ورقته — فاتورتُه أو إشعارُه — **مرجعٌ خارجيٌّ لا رقمُنا**
   /// (`ق-١٠٠٦`/①: «يُسجَّل مرجعاً خارجياً كما يُسجَّل رقمُ فاتورة الشراء»).
+  /// Unique per company and supplier among active purchases (docType PURCHASE, not voided, not empty),
+  /// compared without case or surrounding spaces: a partial unique index in the migration
+  /// `purchase_supplier_ref_unique`, since Prisma cannot express it.
   supplierRef String?
 
   date     DateTime  @db.Date
