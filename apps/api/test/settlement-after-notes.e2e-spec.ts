@@ -210,6 +210,7 @@ describe('Settlement after credit notes (e2e)', () => {
       await tenantPrisma.runInTenantContext(company.companyId, (tx) => tx.invoice.update({ where: { id: rejected.id }, data: { zatcaStatus: 'REJECTED' } }));
       await auth(http().post(`/invoices/${rejected.id}/replacement`)).send({}).expect(201);
 
+      expect((await openInvoices(customerId)).some((i) => i.id === rejected.id)).toBe(false);
       const res = await collect(customerId, 500, [{ invoiceId: rejected.id, amount: 500 }]);
       expect(res.status).toBe(400);
       expect(String(res.body.message)).toContain(rejected.no);
