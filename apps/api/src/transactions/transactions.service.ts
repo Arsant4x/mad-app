@@ -100,13 +100,20 @@ export class TransactionsService {
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
       // مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر (`ق-١٤٣٧`).
       await assertBoxInBranch(tx, branchId, await tx.bank.findUnique({ where: { id: dto.bankId }, select: { name: true, branchId: true } }));
+      // A new unmatched line inside a closed reconciliation would change it; read under the shared lock so a close
+      // in progress is waited for and a close after this counts the new line.
+      const date = new Date(dto.date);
+      const [locked] = await lockReconciledBanks(tx, companyId, { bankIds: [dto.bankId] });
+      if (locked && onOrBeforeReconciled(locked.reconciledUntil, date)) {
+        throw new ConflictException(formatMessage(MSG.bank_transaction_reconciled_add, { bank: locked.name, until: locked.reconciledUntil!.toISOString().slice(0, 10) }));
+      }
       return tx.bankTransaction.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
         data: {
           bankId: dto.bankId,
           branchId,
-          date: new Date(dto.date),
+          date,
           description: dto.description,
           amount: dto.amount,
           source: dto.source || null,

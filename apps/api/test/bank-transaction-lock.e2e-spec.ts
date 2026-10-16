@@ -11,7 +11,7 @@ jest.setTimeout(90000);
 /**
  * A bank transaction that the reconciliation relies on is not edited or deleted by hand: a line matched to a ledger
  * line is corrected by unmatching it, a line written by a posting follows its entry, and nothing on or before the
- * reconciled-through date changes until the reconciliation is reopened.
+ * reconciled-through date changes or is added until the reconciliation is reopened.
  */
 describe('Bank transactions tied to the reconciliation are locked (e2e)', () => {
   let app: INestApplication;
@@ -122,5 +122,24 @@ describe('Bank transactions tied to the reconciliation are locked (e2e)', () => 
     await auth(http().post(`/banks/${bankId}/reconciliation/reopen`)).expect(201);
     const afterReopen = await auth(http().patch(`/transactions/${depositRowId}`)).send({ description: 'Changed after reopen' }).expect(409);
     expect(afterReopen.body.message).toContain('unmatch it first');
+  });
+
+  it('refuses a new line dated on or before the reconciled-through date, and accepts one after it', async () => {
+    await auth(http().post(`/banks/${bankId}/reconciliation/close`)).send({ until: '2026-06-30' }).expect(201);
+    const count = async () => ((await auth(http().get('/transactions?pageSize=100')).expect(200)).body.items as Row[]).length;
+    const before = await count();
+
+    const onClosedDay = await auth(http().post('/transactions')).send({ bankId, date: '2026-06-30', description: 'Fee on the closed day', amount: -5 }).expect(409);
+    expect(onClosedDay.body.message).toContain('2026-06-30');
+    const inside = await auth(http().post('/transactions')).send({ bankId, date: '2026-06-03', description: 'Fee inside the closed range', amount: -5 }).expect(409);
+    expect(inside.body.message).toContain('reopen the reconciliation first');
+    expect(await count()).toBe(before);
+
+    const afterId = (await auth(http().post('/transactions')).send({ bankId, date: '2026-07-01', description: 'Fee after the close', amount: -5 }).expect(201)).body.id;
+    expect(await rowOf(afterId)).toMatchObject({ date: expect.stringMatching(/^2026-07-01/) });
+
+    // Reopening lifts the lock for new lines too.
+    await auth(http().post(`/banks/${bankId}/reconciliation/reopen`)).expect(201);
+    await auth(http().post('/transactions')).send({ bankId, date: '2026-06-03', description: 'Fee after reopen', amount: -5 }).expect(201);
   });
 });

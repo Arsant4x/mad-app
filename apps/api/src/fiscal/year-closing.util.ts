@@ -126,19 +126,23 @@ export async function closeFiscalYearWithinTx(
 ) {
   const { companyId, year } = params;
 
-  // قفلُ صفِّ السنة: طلبان متزامنان لا يُنشئان قيدَي إقفالٍ لسنةٍ واحدة.
-  await tx.$queryRawUnsafe('SELECT id FROM fiscal_years WHERE id = $1 FOR UPDATE', year.id);
-
-  const open = await tx.fiscalPeriod.findFirst({
-    where: { fiscalYearId: year.id, status: { not: 'CLOSED' } },
-    orderBy: [{ year: 'asc' }, { month: 'asc' }],
-    select: { month: true, year: true },
-  });
+  // The periods are read FOR SHARE until the closing entry commits: a reopen (FOR UPDATE) in progress is waited for
+  // and its status seen, and a reopen after this waits and then reverses the entry. Taken before the year row, since a
+  // reopen holding its period writes a reversal whose key check needs the year row, and the opposite order deadlocks.
+  const periods = await tx.$queryRaw<{ month: number; year: number; status: string }[]>`
+    SELECT "month", "year", "status"::text AS "status" FROM "fiscal_periods"
+    WHERE "companyId" = ${companyId} AND "fiscalYearId" = ${year.id}
+    ORDER BY "year", "month"
+    FOR SHARE`;
+  const open = periods.find((p) => p.status !== 'CLOSED');
   if (open) {
     throw new ConflictException(
       formatMessage(MSG.fiscal_year_close_needs_closed_periods, { period: `${String(open.month).padStart(2, '0')}/${open.year}` }),
     );
   }
+
+  // The year row: two closes at the same moment do not write two closing entries for one year.
+  await tx.$queryRawUnsafe('SELECT id FROM fiscal_years WHERE id = $1 FOR UPDATE', year.id);
 
   if (await activeClosingEntry(tx, year.id)) throw new ConflictException(MSG.fiscal_year_already_closed);
 
