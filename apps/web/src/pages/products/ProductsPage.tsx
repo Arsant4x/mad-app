@@ -17,6 +17,7 @@ export function ProductsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; product: Product } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
     setProducts(await listProducts(showArchived));
@@ -57,11 +58,18 @@ export function ProductsPage() {
     await reload();
   }
 
+  // The server refuses a product that still holds stock; its message is shown in the dialog.
   async function confirmDelete() {
     if (!pendingDelete) return;
-    await deleteProduct(pendingDelete.id);
-    setPendingDelete(null);
-    await reload();
+    setDeleteError(null);
+    try {
+      await deleteProduct(pendingDelete.id);
+      setPendingDelete(null);
+      await reload();
+    } catch (e) {
+      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setDeleteError(message ?? t('products.list.delete_error'));
+    }
   }
 
   if (loading) return null;
@@ -199,9 +207,12 @@ export function ProductsPage() {
       {pendingDelete && (
         <ConfirmModal
           title={t('products.list.delete_title')}
-          body={t('products.list.delete_body', { name: pendingDelete.name })}
+          body={deleteError ?? t('products.list.delete_body', { name: pendingDelete.name })}
           confirmLabel={t('products.list.delete_confirm')}
-          onCancel={() => setPendingDelete(null)}
+          onCancel={() => {
+            setPendingDelete(null);
+            setDeleteError(null);
+          }}
           onConfirm={confirmDelete}
         />
       )}

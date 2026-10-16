@@ -66,6 +66,7 @@
     "delete": "🗑 Delete",
     "delete_title": "Delete product",
     "delete_body": "Delete \"{{name}}\"? This cannot be undone.",
-    "delete_confirm": "Delete"
+    "delete_confirm": "Delete",
+    "delete_error": "Could not delete the product"
   }
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { isUnitCode } from '../common/units/units';
@@ -110,6 +110,9 @@ export class ProductsService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.product.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.product_not_found);
+      // Stock still on a cost layer stays in the books; deleting the product would drop it from every stock screen.
+      const openLayer = await tx.inventoryLayer.findFirst({ where: { productId: id, qtyRemaining: { gt: 0 } }, select: { id: true } });
+      if (openLayer) throw new ConflictException(MSG.product_has_open_stock);
       await tx.product.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }

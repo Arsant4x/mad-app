@@ -66,6 +66,7 @@
     "delete": "🗑 حذف",
     "delete_title": "حذف المنتج",
     "delete_body": "حذف \"{{name}}\"؟ لا يمكن التراجع عن هذا الإجراء.",
-    "delete_confirm": "حذف"
+    "delete_confirm": "حذف",
+    "delete_error": "تعذّر حذف المنتج"
   }
 }
