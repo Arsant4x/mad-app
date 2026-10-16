@@ -9,12 +9,16 @@ import {
   type ReminderChannel,
 } from '../../api/reminders';
 import { listCompanyUsers, type CompanyUser } from '../../api/companyUsers';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt } from '../../lib/format';
 
 const CHANNELS: ReminderChannel[] = ['WHATSAPP', 'SMS', 'CALL', 'EMAIL', 'OTHER'];
 
 export function RemindersPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Logging a sent reminder needs record on contracts; the server refuses it otherwise.
+  const canRecord = can('contracts', 'record');
   const [data, setData] = useState<DueReminders | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -222,12 +226,14 @@ export function RemindersPage() {
                         <button className="btn btn-ghost" onClick={() => copy(r)}>
                           {copiedId === r.installmentId ? t('reminders.page.copied') : t('reminders.page.copy')}
                         </button>
-                        <button className="btn btn-ghost" onClick={() => openFor(r)}>
-                          {t('reminders.page.record_send')}
-                        </button>
+                        {canRecord && (
+                          <button className="btn btn-ghost" onClick={() => openFor(r)}>
+                            {t('reminders.page.record_send')}
+                          </button>
+                        )}
                       </div>
 
-                      {openId === r.installmentId && (
+                      {canRecord && openId === r.installmentId && (
                         <div className="card" style={{ background: '#faf9f5', marginTop: 6 }}>
                           <div className="field">
                             <label>{t('reminders.page.channel')}</label>

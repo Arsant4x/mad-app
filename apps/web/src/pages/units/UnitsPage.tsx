@@ -6,6 +6,7 @@ import { BulkUnitsModal } from './BulkUnitsModal';
 import { unitTypeLabel } from './unitTypes';
 import { cancelReservation, createReservation, listReservations, type Reservation, type ReservationInput } from '../../api/reservations';
 import { createUnit, deleteUnit, listUnits, setUnitArchived, updateUnit, type Unit, type UnitInput, type UnitStatus } from '../../api/units';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -24,6 +25,9 @@ const statusMeta = (): Record<UnitStatus, { label: string; badgeClass: string }>
 
 export function UnitsPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Cancelling a reservation needs delete on properties; the server refuses it otherwise.
+  const canCancelReservation = can('properties', 'delete');
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -203,7 +207,7 @@ export function UnitsPage() {
                           actions={[
                             { label: t('units.page.action_edit'), onClick: () => setModal({ mode: 'edit', unit: u }) },
                             ...(u.status === 'vacant' ? [{ label: t('units.page.action_reserve'), onClick: () => setReservingUnit(u) }] : []),
-                            ...(activeRsv ? [{ label: t('units.page.action_cancel_reservation'), onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) }] : []),
+                            ...(activeRsv && canCancelReservation ? [{ label: t('units.page.action_cancel_reservation'), onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) }] : []),
                             { label: u.underMaintenance ? t('units.page.action_end_maintenance') : t('units.page.action_start_maintenance'), onClick: () => toggleMaintenance(u) },
                             { label: u.archived ? t('units.page.action_unarchive') : t('units.page.action_archive'), onClick: () => setUnitArchived(u.id, !u.archived).then(reload) },
                             '-',

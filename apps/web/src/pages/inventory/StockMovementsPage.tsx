@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { createStockMovement, listStockMovements, reverseStockMovement, type StockMovement, type StockMovementInput } from '../../api/inventory';
 import { listProducts, type Product } from '../../api/products';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Pager } from '../../components/Pager';
 import { RowMenu } from '../../components/RowMenu';
+import { apiErrorMessage } from '../../lib/apiError';
 import { dfmt, fmt } from '../../lib/format';
 import { StockMovementModal } from './StockMovementModal';
 
@@ -21,6 +23,10 @@ const PAGE_SIZE = 25;
 
 export function StockMovementsPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // A new movement needs record and a reversal needs delete; the server refuses them otherwise.
+  const canRecord = can('inventory', 'record');
+  const canReverse = can('inventory', 'delete');
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -30,6 +36,7 @@ export function StockMovementsPage() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<StockMovement | null>(null);
+  const [reverseError, setReverseError] = useState<string | null>(null);
   const searchDebounce = useRef<number | undefined>(undefined);
 
   async function reloadPage(p: number, q: string) {
@@ -68,9 +75,20 @@ export function StockMovementsPage() {
   // A movement is never deleted: it is reversed by an opposite movement that points to it, and both stay.
   async function confirmReverse() {
     if (!pendingDelete) return;
-    await reverseStockMovement(pendingDelete.id);
+    setReverseError(null);
+    try {
+      await reverseStockMovement(pendingDelete.id);
+    } catch (e) {
+      setReverseError(apiErrorMessage(e, t('inventory.movements.reverse_failed')));
+      return;
+    }
     setPendingDelete(null);
     await reloadPage(page, search);
+  }
+
+  function closeReverse() {
+    setPendingDelete(null);
+    setReverseError(null);
   }
 
   if (loading) return null;
@@ -83,9 +101,11 @@ export function StockMovementsPage() {
           <div className="page-sub">{t('inventory.movements.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setShowModal(true)} disabled={products.length === 0 || warehouses.length === 0}>
-            {t('inventory.movements.new')}
-          </button>
+          {canRecord && (
+            <button className="btn btn-primary" onClick={() => setShowModal(true)} disabled={products.length === 0 || warehouses.length === 0}>
+              {t('inventory.movements.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -137,7 +157,7 @@ export function StockMovementsPage() {
                     <td className="num">{fmt(m.qty)}</td>
                     <td>{m.reason || '—'}</td>
                     <td>
-                      <RowMenu actions={[{ label: t('inventory.movements.reverse_action'), onClick: () => setPendingDelete(m), danger: true }]} />
+                      {canReverse && <RowMenu actions={[{ label: t('inventory.movements.reverse_action'), onClick: () => setPendingDelete(m), danger: true }]} />}
                     </td>
                   </tr>
                 ))}
@@ -154,9 +174,9 @@ export function StockMovementsPage() {
       {pendingDelete && (
         <ConfirmModal
           title={t('inventory.movements.reverse_title')}
-          body={t('inventory.movements.reverse_body')}
+          body={reverseError ?? t('inventory.movements.reverse_body')}
           confirmLabel={t('inventory.movements.reverse_confirm')}
-          onCancel={() => setPendingDelete(null)}
+          onCancel={closeReverse}
           onConfirm={confirmReverse}
         />
       )}

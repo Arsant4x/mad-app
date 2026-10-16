@@ -16,6 +16,7 @@ import {
 } from '../../api/maintenance';
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt, today } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -42,6 +43,10 @@ const OPEN_STATUSES: MaintenanceStatus[] = ['REPORTED', 'ASSIGNED', 'IN_PROGRESS
 
 export function MaintenancePage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Assign and start need edit, cancel needs delete: the server refuses them otherwise.
+  const canEdit = can('maintenance', 'edit');
+  const canCancel = can('maintenance', 'delete');
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -282,12 +287,12 @@ export function MaintenancePage() {
                     <AssignTaskButton screen="maintenance" entityId={r.id} />
                     {/* Only the moves the server would actually accept are
                         offered — a button that always 409s is worse than none. */}
-                    {r.status === 'REPORTED' && (
+                    {canEdit && r.status === 'REPORTED' && (
                       <button className="btn btn-ghost" onClick={() => openAction(r.id, 'assign')}>
                         {t('maintenance.page.action_assign')}
                       </button>
                     )}
-                    {(r.status === 'REPORTED' || r.status === 'ASSIGNED') && (
+                    {canEdit && (r.status === 'REPORTED' || r.status === 'ASSIGNED') && (
                       <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => startMaintenance(r.id, today()))}>
                         {t('maintenance.page.action_start')}
                       </button>
@@ -302,7 +307,7 @@ export function MaintenancePage() {
                         {t('maintenance.page.action_close')}
                       </button>
                     )}
-                    {OPEN_STATUSES.includes(r.status) && (
+                    {canCancel && OPEN_STATUSES.includes(r.status) && (
                       <button className="btn btn-ghost" style={{ color: 'var(--rose)' }} onClick={() => openAction(r.id, 'cancel')}>
                         {t('maintenance.page.action_cancel')}
                       </button>
