@@ -386,16 +386,22 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
 }
 
 /**
- * Renewing produces a new contract — the expiring one is left untouched, with
- * its own schedule and payment history intact. The form defaults to the day
- * after the current term ends and to the same rent, which is the ordinary case;
- * everything else is an override.
+ * Renewing produces a new contract — the expiring one keeps its own schedule
+ * and payment history. The form defaults to the day after the current term
+ * ends and to the same rent, which is the ordinary case; everything else is an
+ * override. A start on or before the current term's last day ends the current
+ * contract the day before, and the form says so before it is confirmed.
  */
 export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: RenewContractInput) => Promise<void> }) {
   const { t } = useTranslation();
   const dayAfter = (iso: string) => {
     const d = new Date(iso);
     d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const dayBeforeIso = (iso: string) => {
+    const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 1);
     return d.toISOString().slice(0, 10);
   };
   const oneYearOn = (iso: string) => {
@@ -435,6 +441,10 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
     (classification === 'MIXED' && sharePercent !== (contract.exemptSharePercent ?? ''));
   // Same for the lessor on an operated property: an owner-lessor credit is not deducted from a company-lessor contract, nor the reverse.
   const lessorChanged = managed && lessor !== contract.lessor;
+  // A renewal starting on or before the current contract's last day ends it the day before; the server does the cut.
+  const early = start !== '' && start <= contract.end.slice(0, 10);
+  const cutDay = early ? dayBeforeIso(start) : '';
+  const cancelledAfterCut = early ? contract.installments.filter((i) => i.status !== 'CANCELLED' && i.dueDate.slice(0, 10) > cutDay).length : 0;
 
   async function submit() {
     setError(null);
@@ -549,6 +559,11 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
             : lessorChanged
               ? t('contracts.detail.renew.credit_kept_lessor', { amount: formatMoney(tenantCredit) })
               : t('contracts.detail.renew.credit_deducted', { amount: formatMoney(tenantCredit) })}
+        </p>
+      )}
+      {early && (
+        <p className="hint" role="note" style={{ color: 'var(--rose)' }}>
+          {t('contracts.detail.renew.early_cut', { no: contract.no, cut: dfmt(cutDay), n: cancelledAfterCut })}
         </p>
       )}
       {error && <p className="error-text">{error}</p>}

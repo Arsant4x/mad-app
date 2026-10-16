@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PermissionsModule } from '../delegations/permissions.module';
 import { FilesModule } from '../files/files.module';
 import { FormsModule } from '../forms/forms.module';
 import { ContractAttachmentsService } from './contract-attachments.service';
@@ -12,7 +13,7 @@ import { RentAccrualService } from './rent-accrual.service';
 import { RentRecognitionService } from './rent-recognition.service';
 
 @Module({
-  imports: [FilesModule, FormsModule],
+  imports: [FilesModule, FormsModule, PermissionsModule],
   controllers: [ContractsController, ContractFormsController],
   providers: [ContractsService, ContractAttachmentsService, ClaimAttachmentsService, HandoverPhotosService, RentRecognitionService, RentAccrualService, ContractFormsService],
 })

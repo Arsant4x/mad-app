@@ -2,7 +2,14 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma, RentAccrualKind } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
-import { postDeferredToOtherIncomeEntry, postPartySettlementEntry, postRentAccrualEntry, postRentAccrualReversalEntry, postTenantCreditTransferEntry } from './auto-posting.util';
+import {
+  postDeferredToOtherIncomeEntry,
+  postPartySettlementEntry,
+  postRentAccrualEntry,
+  postRentAccrualReversalEntry,
+  postRentToTenantCreditEntry,
+  postTenantCreditTransferEntry,
+} from './auto-posting.util';
 import {
   exemptNetOf,
   pendingTaxPoints,
@@ -485,6 +492,76 @@ export async function reduceAccrualWithinTx(
     });
   }
   return row;
+}
+
+/**
+ * Rent received on an installment for days the contract no longer serves becomes the tenant's credit on the
+ * contract: a negative row on the installment and a `TENANT_CREDIT` row without one, the same amounts and the same
+ * date, so they cancel in the VAT return (the tax point was the day of receipt and the tax stays with the credit).
+ * One entry moves the net from 2400 (and from 4200 for what was already recognized) to 2450. The renewal then
+ * draws on that credit through the existing tenant credit path.
+ */
+export async function carryCollectedToTenantCreditWithinTx(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  contract: AccrualContract,
+  treatment: RentTaxTreatment,
+  installment: { id: string; baseAccruedNet: Prisma.Decimal; baseRecognized: Prisma.Decimal },
+  carried: { date: Date; gross: number; paymentId: string },
+): Promise<void> {
+  const amounts = splitGrossAmount(carried.gross, treatment);
+  if (amounts.gross <= 0) return;
+  const rate = Number(contract.exchangeRate);
+  const base = { gross: toBaseAmount(amounts.gross, rate), tax: toBaseAmount(amounts.tax, rate), net: 0 };
+  base.net = round2(base.gross - base.tax);
+  const unrecognized = round2(Math.max(0, Number(installment.baseAccruedNet) - Number(installment.baseRecognized)));
+  const fromDeferred = round2(Math.min(base.net, unrecognized));
+  const fromRevenue = round2(base.net - fromDeferred);
+  const exempt = exemptNetOf(base.net, treatment);
+
+  const entry = await postRentToTenantCreditEntry(tx, companyId, {
+    customerId: contract.customerId,
+    unitId: contract.unitId,
+    contractNo: contract.no,
+    tenant: contract.tenant,
+    date: carried.date,
+    baseNetFromDeferred: fromDeferred,
+    baseNetFromRevenue: fromRevenue,
+  });
+
+  const row = (installmentId: string | null, kind: RentAccrualKind, sign: 1 | -1) =>
+    ({
+      contractId: contract.id,
+      installmentId,
+      paymentId: carried.paymentId,
+      kind,
+      date: carried.date,
+      classification: treatment.classification,
+      taxable: treatment.taxable,
+      managed: treatment.managed,
+      amountGross: sign * amounts.gross,
+      amountNet: sign * amounts.net,
+      amountTax: sign * amounts.tax,
+      currency: contract.currency,
+      exchangeRate: rate,
+      baseGross: sign * base.gross,
+      baseNet: sign * base.net,
+      baseTax: sign * base.tax,
+      baseExemptNet: exempt === null ? null : sign * exempt,
+      journalEntryId: entry?.id ?? null,
+    }) as unknown as Prisma.RentAccrualUncheckedCreateInput;
+  await tx.rentAccrual.create({ data: row(installment.id, 'REVERSAL', -1) });
+  await tx.rentAccrual.create({ data: row(null, 'TENANT_CREDIT', 1) });
+
+  await tx.installment.update({
+    where: { id: installment.id },
+    data: {
+      baseAccruedGross: { decrement: base.gross },
+      baseAccruedNet: { decrement: base.net },
+      baseAccruedTax: { decrement: base.tax },
+      baseRecognized: { decrement: fromRevenue },
+    },
+  });
 }
 
 /** الخصمُ عند القبض — تعديلُ مقابلٍ يُنقص الذمّةَ والصافيَ والضريبة (`ق-٩٢٧/٦`). */

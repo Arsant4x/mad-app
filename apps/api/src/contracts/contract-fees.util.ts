@@ -24,7 +24,7 @@ export interface FeeSweepResult {
   blockedByPeriodLock: number;
 }
 
-const FEE_KIND_LABEL = 'رسوم خدمة';
+export const FEE_KIND_LABEL = 'رسوم خدمة';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 

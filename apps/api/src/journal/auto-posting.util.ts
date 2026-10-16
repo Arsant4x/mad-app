@@ -1310,6 +1310,46 @@ export async function postRentAccrualReversalEntry(tx: Prisma.TransactionClient,
   });
 }
 
+export interface RentToTenantCreditForPosting {
+  customerId?: string | null;
+  unitId: string;
+  branchId?: string | null;
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  /** The net moved out of rent: what was not yet recognized comes from 2400, the rest from 4200. */
+  baseNetFromDeferred: number;
+  baseNetFromRevenue: number;
+}
+
+/**
+ * Rent received for days the contract will no longer serve becomes the tenant's credit: debit 2400 and 4200,
+ * credit 2450 with the net. The receivable was settled when the cash came in and the VAT was due on that day,
+ * so neither 1200 nor 2200 moves.
+ */
+export async function postRentToTenantCreditEntry(tx: Prisma.TransactionClient, companyId: string, t: RentToTenantCreditForPosting) {
+  const fromDeferred = round2(t.baseNetFromDeferred);
+  const fromRevenue = round2(t.baseNetFromRevenue);
+  const net = round2(fromDeferred + fromRevenue);
+  if (net <= 0) return null;
+
+  const lines: PostingLine[] = [];
+  if (fromDeferred > 0) lines.push({ accountId: await getOrCreateDeferredRevenueAccount(tx, companyId), debit: fromDeferred, credit: 0 });
+  if (fromRevenue > 0) lines.push({ accountId: (await resolveAccountIds(tx, ['4200'])).get('4200')!, debit: fromRevenue, credit: 0 });
+  lines.push({ accountId: await getOrCreateCustomerPrepaymentsAccount(tx, companyId), debit: 0, credit: net });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: t.date,
+    memo: `رصيدٌ للمستأجر من إيجارٍ مقبوض عن مدّةٍ بعد نهاية العقد بالتجديد المبكر — عقد ${t.contractNo} — ${t.tenant}`,
+    unitId: t.unitId,
+    lines,
+    auto: true,
+    branchId: t.branchId ?? null,
+    customerId: t.customerId ?? null,
+  });
+}
+
 export interface DeferredToOtherIncomeForPosting {
   customerId?: string | null;
   unitId: string;

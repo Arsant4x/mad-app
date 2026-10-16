@@ -190,11 +190,11 @@ export class ContractsController {
     return this.contractsService.cancel(tenant.companyId, id, dto);
   }
 
-  /** Creates the next lease and links it back to this one. */
+  /** Creates the next lease and links it back to this one. A renewal that starts before this one ends also needs delete. */
   @Post(':id/renew')
   @RequiresAction('add')
   renew(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RenewContractDto) {
-    return this.contractsService.renew(tenant.companyId, id, dto);
+    return this.contractsService.renew(tenant, id, dto);
   }
 
   /** The condition-of-unit form. Draft until signed, immutable after. */
