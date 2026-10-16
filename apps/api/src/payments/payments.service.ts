@@ -6,17 +6,14 @@ import { round2, formatMoney } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
-import { dayStartOf } from '../common/wall-clock.util';
 import {
   allocatedByDocument,
   allocatedFor,
   assertReversible,
   baseSettledOf,
-  deriveSettlementStatus,
   lockAndAssertAllocationsFit,
   lockDocumentRow,
   SETTLEMENT_EPS as EPS,
-  SettlementTarget,
   withAllocatedTotals,
   withRemaining,
 } from '../common/settlement/settlement.util';
@@ -30,6 +27,8 @@ import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
 import { resolveDeclaredLineTax, type LineTax } from '../common/vat/line-tax.util';
 import { InvoicesService } from '../invoices/invoices.service';
+import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
+import { creditedByInvoice, invoiceTarget, RECEIVABLE_INVOICE_KINDS, recomputeInvoiceStatus } from '../invoices/invoice-settlement.util';
 import { assertPrepaymentIssuable } from '../invoices/issue-prechecks.util';
 import { unallocatedReceivableRate } from './voucher-receivable-rate.util';
 
@@ -40,16 +39,6 @@ const PAYMENT_INCLUDE = {
   // ④A1: فاتورةُ الدفعة المقدَّمة التي أصدرها السند — تقرؤها الشاشةُ من هنا لا تستنتجها.
   prepaymentInvoice: { select: { id: true, no: true, total: true } },
 } as const;
-
-/** هدفُ التسوية: الفواتير بمفتاح العميل — والآليةُ المشتركة في `common/settlement` (`ق-٨٧١`). */
-const invoiceTarget = (tx: Prisma.TransactionClient): SettlementTarget => ({
-  table: 'invoices',
-  partyColumn: 'customerId',
-  documentKey: 'invoiceId',
-  allocations: tx.paymentAllocation,
-  documentNotFound: MSG.invoice_not_found,
-  wrongParty: MSG.allocation_wrong_customer,
-});
 
 /** تخصيصاتُ الطلب بمفردات التسوية المشتركة. */
 const toSettlementAllocations = (allocations: AllocationDto[]) => allocations.map((a) => ({ documentId: a.invoiceId, amount: a.amount }));
@@ -156,14 +145,24 @@ export class PaymentsService {
    */
   openInvoices(companyId: string, allowedBranchIds: string[] | 'all', customerId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // Only what can take a payment: invoices and debit notes, without a rejected invoice that was replaced.
+      // The branch filter and the replacement condition are both OR clauses, so they sit under AND.
       const invoices = await tx.invoice.findMany({
-        where: { customerId, status: { not: 'PAID' }, ...branchFilter(allowedBranchIds) },
-        select: { id: true, no: true, issueDate: true, dueDate: true, total: true, currency: true, status: true },
+        where: { customerId, docType: { in: [...RECEIVABLE_INVOICE_KINDS] }, status: { not: 'PAID' }, AND: [branchFilter(allowedBranchIds), NOT_REPLACED_REJECTED] },
+        select: { id: true, no: true, docType: true, issueDate: true, dueDate: true, total: true, currency: true, status: true },
         orderBy: { issueDate: 'asc' },
       });
+      const ids = invoices.map((i) => i.id);
+      const open = withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), ids), await creditedByInvoice(tx, ids), 'CREDIT_NOTE');
       // ② المسدَّدُ والمتبقّي نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والترشيحُ داخل `withRemaining` رقمٌ كما كان.
-      return withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), invoices.map((i) => i.id))).map((doc) => ({
-        ...doc,
+      return open.map((doc) => ({
+        id: doc.id,
+        no: doc.no,
+        issueDate: doc.issueDate,
+        dueDate: doc.dueDate,
+        total: doc.total,
+        currency: doc.currency,
+        status: doc.status,
         allocated: money(doc.allocated),
         remaining: money(doc.remaining),
       }));
@@ -303,7 +302,7 @@ export class PaymentsService {
           description: `مقبوض من عميل — سند ${no} — ${customer.name}`,
         });
 
-        for (const a of allocations) await this.recomputeInvoiceStatus(tx, a.invoiceId);
+        for (const a of allocations) await recomputeInvoiceStatus(tx, a.invoiceId);
 
         // ④A1: الفائضُ المعلَنُ دفعةً مقدَّمة يُصدر مستندَ 386 يومَ القبض — بعد ترحيل السند (فالذمّةُ تُقفل منه إلى الالتزام).
         const prepaymentInvoice =
@@ -339,12 +338,13 @@ export class PaymentsService {
    */
   private async openRemainingOf(tx: Prisma.TransactionClient, customerId: string): Promise<number> {
     const open = await tx.invoice.findMany({
-      where: { customerId, status: { not: 'PAID' }, docType: { in: ['INVOICE', 'DEBIT_NOTE'] } },
-      select: { id: true, total: true },
+      where: { customerId, status: { not: 'PAID' }, docType: { in: [...RECEIVABLE_INVOICE_KINDS] }, ...NOT_REPLACED_REJECTED },
+      select: { id: true, docType: true, total: true },
     });
     if (open.length === 0) return 0;
-    const allocated = await allocatedByDocument(invoiceTarget(tx), open.map((i) => i.id));
-    return round2(withRemaining(open, allocated).reduce((s, d) => s + d.remaining, 0));
+    const ids = open.map((i) => i.id);
+    const remaining = withRemaining(open, await allocatedByDocument(invoiceTarget(tx), ids), await creditedByInvoice(tx, ids), 'CREDIT_NOTE');
+    return round2(remaining.reduce((s, d) => s + d.remaining, 0));
   }
 
   /**
@@ -420,7 +420,7 @@ export class PaymentsService {
       description: `تحصيل بيع كاشير — سند ${no} — ${input.invoiceNo}`,
     });
 
-    await this.recomputeInvoiceStatus(tx, input.invoiceId);
+    await recomputeInvoiceStatus(tx, input.invoiceId);
   }
 
   /**
@@ -544,7 +544,7 @@ export class PaymentsService {
         });
       }
 
-      for (const invoiceId of touched) await this.recomputeInvoiceStatus(tx, invoiceId);
+      for (const invoiceId of touched) await recomputeInvoiceStatus(tx, invoiceId);
 
       return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id }, include: PAYMENT_INCLUDE }));
     });
@@ -634,7 +634,7 @@ export class PaymentsService {
           reversal: true,
         });
 
-        for (const a of original.allocations) await this.recomputeInvoiceStatus(tx, a.invoiceId);
+        for (const a of original.allocations) await recomputeInvoiceStatus(tx, a.invoiceId);
 
         return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: reversal.id }, include: PAYMENT_INCLUDE }));
       }),
@@ -805,26 +805,6 @@ export class PaymentsService {
    */
   assertNotPosted(payment: { journalEntryId: string | null; no: string }): void {
     if (payment.journalEntryId) throw new ConflictException(formatMessage(MSG.payment_posted_immutable, { no: payment.no }));
-  }
-
-  /**
-   * إعادة حساب حالة الفاتورة من تخصيصاتها — **المدخل الوحيد** لكتابة الحالة.
-   *
-   * المدفوع يتقدّم على التأخر: فاتورة مسدَّدة جزئياً ومتأخرة تُقرأ PARTIAL،
-   * والأعمار (4.6) هي من يفصل التأخر لاحقاً. **والاشتقاقُ مشترك** (`deriveSettlementStatus`)؛
-   * وما يخصّ الفاتورةَ وحدَها هو `OVERDUE` على المستحقّ الذي فات موعدُه.
-   */
-  private async recomputeInvoiceStatus(tx: Prisma.TransactionClient, invoiceId: string): Promise<void> {
-    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, total: true, status: true, dueDate: true, docType: true } });
-    if (!invoice) return;
-    // ④A1: مستندُ الدفعة المقدَّمة مسدَّدٌ بالبناء (سندُ قبضه أصدره) — حالتُه لا تُشتقّ من تخصيصٍ قد ينتقل عنه.
-    if (invoice.docType === 'PREPAYMENT') return;
-    const derived = deriveSettlementStatus(await allocatedFor(invoiceTarget(tx), invoiceId), Number(invoice.total));
-
-    // يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فحكمُ «متأخّرة» يقرؤه التاجر.
-    const today = dayStartOf(new Date());
-    const status = derived === 'DUE' && invoice.dueDate < today ? 'OVERDUE' : derived;
-    if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
   }
 
   /** الترحيل + أثر الصندوق/البنك — مسار واحد للدفعة وعكسها. */

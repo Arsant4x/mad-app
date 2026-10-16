@@ -134,6 +134,8 @@ export const MSG = {
   allocation_exceeds_remaining: 'payments.allocation_exceeds_remaining',
   allocation_wrong_customer: 'payments.allocation_wrong_customer',
   allocation_currency_mismatch: 'payments.allocation_currency_mismatch',
+  allocation_not_receivable: 'payments.allocation_not_receivable',
+  allocation_invoice_replaced: 'payments.allocation_invoice_replaced',
   quote_not_found: 'quotes.not_found',
   quote_expired: 'quotes.expired',
   quote_already_converted: 'quotes.already_converted',
@@ -150,6 +152,8 @@ export const MSG = {
   purchase_rate_frozen_after_payment: 'purchases.rate_frozen_after_payment',
   supplier_payment_not_found: 'supplier_payments.not_found',
   allocation_wrong_supplier: 'supplier_payments.allocation_wrong_supplier',
+  allocation_not_payable: 'supplier_payments.allocation_not_payable',
+  allocation_purchase_voided: 'supplier_payments.allocation_purchase_voided',
 
   // products / inventory
   product_not_found: 'products.not_found',
@@ -1091,6 +1095,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.allocation_exceeds_remaining]: { ar: 'التخصيص {amount} يتجاوز المتبقي على الفاتورة {no} وهو {remaining}', en: 'Allocating {amount} exceeds the {remaining} remaining on invoice {no}' },
   [MSG.allocation_wrong_customer]: { ar: 'الفاتورة {no} ليست لهذا العميل', en: 'Invoice {no} belongs to another customer' },
   [MSG.allocation_currency_mismatch]: { ar: 'عملة الفاتورة {no} ({invoiceCurrency}) تخالف عملة السند ({paymentCurrency})', en: 'Invoice {no} is in {invoiceCurrency} but the payment is in {paymentCurrency}' },
+  [MSG.allocation_not_receivable]: { ar: 'المستند {no} ليس فاتورة مستحقة على العميل، فلا يُخصَّص عليه سند قبض', en: 'Document {no} is not an invoice the customer owes, so a payment cannot be allocated to it' },
+  [MSG.allocation_invoice_replaced]: { ar: 'الفاتورة {no} مردودة صدر بدلها، فيُخصَّص السند على البدل', en: 'Invoice {no} was rejected and replaced, so allocate the payment to its replacement' },
 
   [MSG.supplier_not_found]: { ar: 'المورد غير موجود', en: 'Supplier not found' },
   [MSG.supplier_has_purchases]: {
@@ -1116,6 +1122,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.supplier_payment_not_found]: { ar: 'سند الصرف غير موجود', en: 'Supplier payment not found' },
   [MSG.allocation_wrong_supplier]: { ar: 'فاتورة الشراء {no} ليست لهذا المورّد', en: 'Purchase invoice {no} belongs to another supplier' },
+  [MSG.allocation_not_payable]: { ar: 'المستند {no} ليس فاتورة شراء مستحقة للمورّد، فلا يُخصَّص عليه سند صرف', en: 'Document {no} is not a purchase invoice owed to the supplier, so a supplier payment cannot be allocated to it' },
+  [MSG.allocation_purchase_voided]: { ar: 'فاتورة الشراء {no} مُلغاة، فلا يُخصَّص عليها سند صرف', en: 'Purchase invoice {no} was voided, so a supplier payment cannot be allocated to it' },
 
   [MSG.product_not_found]: { ar: 'المنتج غير موجود', en: 'Product not found' },
   [MSG.unit_code_required]: { ar: 'وحدة القياس مطلوبة — تُعلَن من القائمة ولا تُفترض', en: 'Unit of measure is required — declare it from the list; none is assumed' },

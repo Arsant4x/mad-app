@@ -204,7 +204,9 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
   const unappliedByCustomer = new Map<string, number>();
   for (const n of notes) {
     const base = Number(n.baseTotal);
-    const signed = adjustmentSign(n.docType, 'CREDIT_NOTE') * base;
+    // A debit note is collected on its own, so what was allocated to it lowers the balance it adds to its root,
+    // at the note's rate, exactly as the collection lowered 1200.
+    const signed = adjustmentSign(n.docType, 'CREDIT_NOTE') * base - (allocByInvoice.get(n.id) ?? 0) * Number(n.exchangeRate);
     const root = n.relatedInvoiceId ? rootInvoiceOf(n.relatedInvoiceId) : null;
     if (root) noteAdjustment.set(root, (noteAdjustment.get(root) ?? 0) + signed);
     else unappliedByCustomer.set(n.customerId, (unappliedByCustomer.get(n.customerId) ?? 0) + signed);
