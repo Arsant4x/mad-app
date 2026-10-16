@@ -44,3 +44,12 @@ export function evaluateCompanyStatus(company: StatusBearing, now: Date = new Da
 
   return { status: company.status, frozenAt: company.frozenAt };
 }
+
+/**
+ * A company is born with its subscription end equal to its start, and only a subscription decision
+ * moves the end forward, so a term of no length means it never had a subscription. Read by the
+ * subscription screen and by the guard's refusal, so neither tells such a company that it ended.
+ */
+export function neverSubscribed(company: { subStart: Date | null; subEnd: Date | null }): boolean {
+  return !!company.subStart && !!company.subEnd && company.subEnd.getTime() <= company.subStart.getTime();
+}

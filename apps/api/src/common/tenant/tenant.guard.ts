@@ -5,7 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantPrismaService } from './tenant-prisma.service';
 import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
-import { evaluateCompanyStatus } from './company-status.util';
+import { evaluateCompanyStatus, neverSubscribed } from './company-status.util';
 import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, ActionUndeclaredException, ConsentRequiredException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
 import { ALLOW_WHILE_CLOSED_KEY } from './allow-while-closed.decorator';
 import { ALLOW_WHILE_CONSENT_PENDING_KEY } from './allow-while-consent-pending.decorator';
@@ -158,13 +158,13 @@ export class TenantGuard implements CanActivate {
 
     // STOPPED is a full lock-out — except subscription self-service.
     if (evaluated.status === 'STOPPED' && !subscriptionSelfService) throw new AccountStoppedException();
-    // FROZEN is the post-expiry grace period: the tenant may still read and
-    // export its own data, but not add/edit/delete anything (owner's rule). So
+    // FROZEN is read only, from birth until a subscription is activated and again after one lapses:
+    // the tenant may still read and export its own data, but not add/edit/delete anything. So
     // only mutating methods are blocked; GET/HEAD and the routes above pass through.
     if (evaluated.status === 'FROZEN') {
       const method = req.method.toUpperCase();
       const isRead = method === 'GET' || method === 'HEAD';
-      if (!isRead && !subscriptionSelfService) throw new AccountFrozenException();
+      if (!isRead && !subscriptionSelfService) throw new AccountFrozenException(neverSubscribed(company) ? MSG.account_frozen_no_subscription : MSG.account_frozen);
     }
 
     let isAllScreens = company.permissionTemplate.isAllScreens;
@@ -225,7 +225,7 @@ export class TenantGuard implements CanActivate {
       ] as const);
       delegationChains = chainsFor(delegationRows, payload.profileId);
       if (companyUser.status !== 'ACTIVE') {
-        throw new AccountFrozenException();
+        throw new AccountFrozenException(MSG.account_user_inactive);
       }
       isAllScreens = companyUser.permissionTemplate.isAllScreens;
       allowedScreens = isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens;
