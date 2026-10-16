@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { API_VERSION_PREFIX, applyApiVersioning } from '../src/common/versioning';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (9.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(30000);
@@ -70,6 +71,8 @@ describe('Audit log (e2e)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
+    // As at boot, so the versioned path the web calls is routed here too.
+    applyApiVersioning(app);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
 
@@ -104,6 +107,63 @@ describe('Audit log (e2e)', () => {
     expect(actions).toContain('add');
     expect(actions).toContain('edit');
   }, 40000);
+
+  describe('writes through the versioned path the web calls', () => {
+    const versioned = (path: string) => `/${API_VERSION_PREFIX}${path}`;
+    const cleanup: string[] = [];
+
+    afterAll(async () => {
+      for (const path of cleanup) await authA(request(app.getHttpServer()).delete(path));
+    });
+
+    it('records the entity named by the route, not the version prefix', async () => {
+      const name = `عميل المسار المُصدَّر ${suffix}`;
+      const created = await authA(request(app.getHttpServer()).post(versioned('/customers'))).send({ kind: 'NATURAL', name }).expect(201);
+      cleanup.push(`/customers/${created.body.id}`);
+
+      const isCreation = (e: Entry) => e.entityId === created.body.id && e.action === 'add';
+      const entry = (await trailUntil((entries) => entries.some(isCreation))).find(isCreation);
+      expect(entry).toBeTruthy();
+      expect(entry!.entity).toBe('customers');
+      expect(entry!.summary).toBe(`أضاف عميل «${name}»`);
+    });
+
+    it('records a refused write under the entity named by the route', async () => {
+      const templates = await authA(request(app.getHttpServer()).get('/templates')).expect(200);
+      const template = (templates.body as { id: string; isSystem: boolean }[]).find((t) => !t.isSystem);
+      if (!template) throw new Error('No assignable permission template in this company; the seed creates one');
+      const before = new Set((await trail()).map((e) => e.id));
+
+      await authA(request(app.getHttpServer()).post(versioned('/company-users')))
+        .send({ name: 'refused through the versioned path', username: 'demo-company-a', password: 'AnyPass1234!', permissionTemplateId: template.id })
+        .expect((res) => {
+          if (res.status !== 409 && res.status !== 403) throw new Error(`Expected a refusal by state or permission, got ${res.status}`);
+        });
+
+      const isNewRefusal = (e: Entry) => !before.has(e.id) && (e.details as { outcome?: string } | null)?.outcome === 'rejected';
+      const entry = (await trailUntil((entries) => entries.some(isNewRefusal))).find(isNewRefusal);
+      expect(entry).toBeTruthy();
+      expect(entry!.entity).toBe('company-users');
+    });
+
+    it('words a sub-route the same whichever path the request used', async () => {
+      const neutralName = `نوع إجازة محايد ${suffix}`;
+      const versionedName = `نوع إجازة مُصدَّر ${suffix}`;
+      const neutral = await authA(request(app.getHttpServer()).post('/leaves/types')).send({ name: neutralName }).expect(201);
+      cleanup.push(`/leaves/types/${neutral.body.id}`);
+      const viaVersion = await authA(request(app.getHttpServer()).post(versioned('/leaves/types'))).send({ name: versionedName }).expect(201);
+      cleanup.push(`/leaves/types/${viaVersion.body.id}`);
+
+      const isAdd = (id: string) => (e: Entry) => e.entityId === id && e.action === 'add';
+      const entries = await trailUntil((es) => es.some(isAdd(neutral.body.id)) && es.some(isAdd(viaVersion.body.id)));
+      const neutralEntry = entries.find(isAdd(neutral.body.id));
+      const versionedEntry = entries.find(isAdd(viaVersion.body.id));
+      expect(neutralEntry).toBeTruthy();
+      expect(versionedEntry).toBeTruthy();
+      expect(versionedEntry!.entity).toBe(neutralEntry!.entity);
+      expect(versionedEntry!.summary).toBe(neutralEntry!.summary.replace(neutralName, versionedName));
+    });
+  });
 
   /**
    * 🔴 **المحاولةُ المرفوضة تُسجَّل** (`ق-٥١١`).
