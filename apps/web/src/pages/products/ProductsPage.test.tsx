@@ -12,6 +12,9 @@ vi.mock('../../api/products', async (orig) => ({
 
 import { deleteProduct, listProducts } from '../../api/products';
 
+// File budget: slowest case measured at 0.4 s under the full suite; three times that stays under the default.
+vi.setConfig({ testTimeout: 5_000 });
+
 const product: Product = {
   archived: false,
   id: 'p1',

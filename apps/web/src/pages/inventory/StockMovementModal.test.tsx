@@ -5,6 +5,9 @@ import type { Warehouse } from '../../api/warehouses';
 import i18n from '../../i18n';
 import { StockMovementModal } from './StockMovementModal';
 
+// File budget: slowest case measured at 0.5 s under the full suite; three times that stays under the default.
+vi.setConfig({ testTimeout: 5_000 });
+
 const grants = new Set<string>();
 vi.mock('../../auth/PermissionsContext', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
