@@ -35,7 +35,10 @@ export class RemindersController {
     return this.remindersService.dueToday(tenant.companyId, contractId);
   }
 
+  /** Logs a reminder a person sent: collection work recorded like a rent payment,
+   * so the master data lock does not stop it. */
   @Post('installments/:installmentId/send')
+  @RequiresAction('record')
   send(@CurrentTenant() tenant: TenantContext, @Param('installmentId') installmentId: string, @Body() dto: SendReminderDto) {
     return this.remindersService.send(tenant.companyId, installmentId, dto);
   }

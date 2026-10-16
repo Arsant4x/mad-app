@@ -52,11 +52,13 @@ export class MaintenanceController {
   }
 
   @Post(':id/assign')
+  @RequiresAction('edit')
   assign(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: AssignMaintenanceDto) {
     return this.maintenanceService.assign(tenant.companyId, id, dto);
   }
 
   @Post(':id/start')
+  @RequiresAction('edit')
   start(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: StartMaintenanceDto) {
     return this.maintenanceService.start(tenant.companyId, id, dto);
   }
@@ -74,7 +76,9 @@ export class MaintenanceController {
     return this.maintenanceService.close(tenant.companyId, id, dto);
   }
 
+  /** Cancelling takes the same action as cancelling a contract. */
   @Post(':id/cancel')
+  @RequiresAction('delete')
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CancelMaintenanceDto) {
     return this.maintenanceService.cancel(tenant.companyId, id, dto);
   }

@@ -5,9 +5,9 @@ export const REQUIRES_ACTION_KEY = 'requiresAction';
 
 /**
  * Marks a route as requiring a specific action on its @RequiresScreen screen —
- * e.g. `@RequiresAction('add')` on contract creation. Enforcement is opt-in:
- * a route without this decorator is still gated only by its screen, so adding
- * granular actions one screen at a time never locks anyone out of the rest.
+ * e.g. `@RequiresAction('add')` on contract creation. A read without it is gated
+ * by its screen alone; a write (POST, PUT, PATCH, DELETE) under a screen without
+ * it is refused by TenantGuard unless marked @OwnerOnly or @TenantWide.
  *
  * Deliberately not inferred from the HTTP method: many POSTs are workflow
  * actions (cancel a contract, run a sweep), not "add", and mapping them to

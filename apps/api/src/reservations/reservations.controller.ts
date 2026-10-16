@@ -27,7 +27,9 @@ export class ReservationsController {
     return this.reservationsService.create(tenant.companyId, dto);
   }
 
+  /** Cancelling takes the same action as cancelling a contract. */
   @Patch(':id/cancel')
+  @RequiresAction('delete')
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.reservationsService.cancel(tenant.companyId, id);
   }

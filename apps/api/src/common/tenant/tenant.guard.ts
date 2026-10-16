@@ -6,7 +6,7 @@ import { TenantPrismaService } from './tenant-prisma.service';
 import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
-import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, ConsentRequiredException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
+import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, ActionUndeclaredException, ConsentRequiredException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
 import { ALLOW_WHILE_CLOSED_KEY } from './allow-while-closed.decorator';
 import { ALLOW_WHILE_CONSENT_PENDING_KEY } from './allow-while-consent-pending.decorator';
 import { ConsentService } from '../../consent/consent.service';
@@ -31,6 +31,7 @@ import { IntegrationUsageService, USAGE_API_KEY } from '../../api-keys/integrati
  * what the master-data lock is for — invoices and payments stay editable. */
 const MASTER_DATA_SCREENS = new Set(['properties', 'contracts']);
 const WRITE_ACTIONS = new Set(['add', 'edit', 'delete']);
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
  * Runs after JwtAuthGuard on every tenant (COMPANY / COMPANY_USER) route.
@@ -275,6 +276,11 @@ export class TenantGuard implements CanActivate {
     if (!requiredScreen && !ownerOnly && !tenantWide && !supportShell) throw new ForbiddenException(MSG.screen_undeclared);
     if (ownerOnly && payload.actorType !== 'COMPANY') throw new ForbiddenException(ownerOnly);
 
+    // A write under a screen names the action it needs, or is marked owner only or tenant wide.
+    // Without either, anyone who can open the screen could run it, so it is refused for every actor.
+    const requiredAction = this.reflector.getAllAndOverride<ScreenAction | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
+    if (requiredScreen && !requiredAction && !ownerOnly && !tenantWide && WRITE_METHODS.has(req.method.toUpperCase())) throw new ActionUndeclaredException();
+
     /**
      * ⚠️ **ترشيح النشاط قبل فحص القالب — والترتيب مقصود.**
      *
@@ -301,10 +307,8 @@ export class TenantGuard implements CanActivate {
       throw new ScreenForbiddenException(requiredScreen);
     }
 
-    // Action-level check, opt-in per endpoint (@RequiresAction). Only meaningful
-    // once the screen is allowed; a screen with no explicit action set grants
-    // all actions (backward compat), so pre-existing templates never regress.
-    const requiredAction = this.reflector.getAllAndOverride<ScreenAction | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
+    // Action-level check (@RequiresAction), once the screen is allowed. A screen granted
+    // with no action list grants every action, so templates made before actions keep working.
     if (requiredScreen && requiredAction && !isActionAllowed(isAllScreens, allowedScreens === 'all' ? [] : allowedScreens, screenActions, requiredScreen, requiredAction)) {
       throw new ActionForbiddenException(requiredAction, requiredScreen);
     }
