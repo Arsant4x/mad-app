@@ -27,6 +27,7 @@ export class ReservationsService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const unit = await tx.unit.findUnique({ where: { id: dto.unitId } });
       if (!unit) throw new NotFoundException(MSG.unit_not_found);
+      await lockUnitForBooking(tx, unit.id);
 
       const today = new Date();
       const currentContract = await tx.contract.findFirst({
@@ -74,6 +75,14 @@ export async function expireStaleReservations(tx: Prisma.TransactionClient): Pro
     where: { status: 'ACTIVE', expiryDate: { lt: new Date() } },
     data: { status: 'EXPIRED' },
   });
+}
+
+/**
+ * Serializes every booking of one unit (contract, renewal, reservation) until the transaction ends, so a
+ * concurrent booking waits here and its overlap check then sees this one. Taken before the check.
+ */
+export async function lockUnitForBooking(tx: Prisma.TransactionClient, unitId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'unit_booking:' + unitId}))`;
 }
 
 /** Matches the mockup's `unitActiveReservation` (post-expiry). Exported so

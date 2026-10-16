@@ -33,7 +33,7 @@ import {
   unearnedDetailWithinTx,
 } from '../journal/rent-accrual.util';
 import { closeDeferredWithinTx, recognizeDueWithinTx } from './rent-recognition.service';
-import { activeReservationForUnit, expireStaleReservations } from '../reservations/reservations.service';
+import { activeReservationForUnit, expireStaleReservations, lockUnitForBooking } from '../reservations/reservations.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
 import { CreateContractDto } from './dto/create-contract.dto';
@@ -1146,6 +1146,7 @@ export class ContractsService {
       }
     }
 
+    await lockUnitForBooking(tx, unit.id);
     const overlapping = await tx.contract.findFirst({
       where: {
         unitId: unit.id,
