@@ -42,6 +42,10 @@ export const MSG = {
   decision_not_pending: 'platform.decision_not_pending',
   decision_same_hand: 'platform.decision_same_hand',
   decision_required: 'platform.decision_required',
+  decision_sub_end_required: 'platform.decision_sub_end_required',
+  decision_sub_end_not_applicable: 'platform.decision_sub_end_not_applicable',
+  decision_value_mismatch: 'platform.decision_value_mismatch',
+  decision_value_missing: 'platform.decision_value_missing',
   /** المصادقةُ المتعدّدة (`ق-١٣١٨` · ⑨A1). */
   mfa_already_enrolled: 'auth.mfa_already_enrolled',
   mfa_not_started: 'auth.mfa_not_started',
@@ -839,6 +843,22 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.decision_required]: {
     ar: 'هذا الإجراء ({action}) يحتاج قراراً مُقرّاً من مدير منصّة آخر قبل تنفيذه',
     en: 'This action ({action}) needs a decision approved by another platform administrator first',
+  },
+  [MSG.decision_sub_end_required]: {
+    ar: 'قرار تعديل الاشتراك يحمل تاريخ النهاية المطلوب (subEnd)، فالمُقرّ يوافق على تاريخٍ بعينه',
+    en: 'A subscription change decision carries the requested end date (subEnd), so the approver approves a given date',
+  },
+  [MSG.decision_sub_end_not_applicable]: {
+    ar: 'تاريخ النهاية (subEnd) خاصّ بقرار تعديل الاشتراك',
+    en: 'The end date (subEnd) belongs to a subscription change decision only',
+  },
+  [MSG.decision_value_mismatch]: {
+    ar: 'القرار المُقرّ على تاريخ نهاية الاشتراك {approved}، ولا يُطبَّق بتاريخٍ غيره',
+    en: 'The approved decision is for a subscription end of {approved}; it cannot apply another date',
+  },
+  [MSG.decision_value_missing]: {
+    ar: 'هذا القرار أُقرّ قبل أن تحمل القرارات تاريخ النهاية المُقرّ، فلا يُطبَّق. اطلب قراراً جديداً بتاريخ النهاية',
+    en: 'This decision was approved before decisions carried the approved end date, so it cannot be applied. Request a new decision with the end date',
   },
   [MSG.mfa_already_enrolled]: { ar: 'المصادقة المتعددة مفعّلة على هذا الحساب بالفعل', en: 'Multi-factor authentication is already enabled on this account' },
   [MSG.mfa_not_started]: { ar: 'ابدأ التفعيل أولاً للحصول على المفتاح', en: 'Start enrolment first to obtain the key' },

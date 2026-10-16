@@ -59,7 +59,7 @@
     "reset_link_failed": "Could not send the reset link",
     "sub_start": "Subscription start",
     "sub_end": "Subscription end",
-    "hint": "When the subscription ends, the account is frozen automatically for 30 days, then stopped for good unless renewed. To renew, change the end date to a future date.",
+    "hint": "When the subscription ends, the account is frozen automatically for 30 days, then stopped for good unless renewed. To renew, change the end date to a future date that a subscription change decision approved.",
     "create_hint": "The company starts with no active subscription, view only, and subscribes the same way as any merchant.",
     "save": "Save account"
   },
@@ -80,6 +80,9 @@
     "target_id": "Target ID (company or request)",
     "summary_label": "Impact summary — read by the approver",
     "summary_placeholder": "What exactly will happen, and to whom",
+    "sub_end": "Requested subscription end",
+    "requested_end": "Requested end: {{date}}",
+    "executed_by": "carried out by {{name}}",
     "request": "Request decision",
     "col_summary": "Summary",
     "col_requester": "Requested by",

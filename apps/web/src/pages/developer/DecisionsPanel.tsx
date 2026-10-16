@@ -38,6 +38,9 @@ export function DecisionsPanel() {
   const [action, setAction] = useState<PlatformDecisionAction>('SUBSCRIPTION_CHANGE');
   const [targetId, setTargetId] = useState('');
   const [summary, setSummary] = useState('');
+  // A subscription change carries the end date it approves; applying it later requires that same date.
+  const [subEnd, setSubEnd] = useState('');
+  const isSubscription = action === 'SUBSCRIPTION_CHANGE';
 
   async function reload() {
     setRows(await listPlatformDecisions());
@@ -56,9 +59,10 @@ export function DecisionsPanel() {
     setError(null);
     setBusy('new');
     try {
-      await requestPlatformDecision({ action, targetId: targetId.trim(), summary: summary.trim() });
+      await requestPlatformDecision({ action, targetId: targetId.trim(), summary: summary.trim(), ...(isSubscription ? { subEnd } : {}) });
       setTargetId('');
       setSummary('');
+      setSubEnd('');
       await reload();
     } catch (e) {
       show(e);
@@ -109,7 +113,17 @@ export function DecisionsPanel() {
         <label>{t('developer.decisions.summary_label')}</label>
         <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder={t('developer.decisions.summary_placeholder')} />
       </div>
-      <button className="btn btn-sm btn-primary" onClick={ask} disabled={busy === 'new' || !targetId.trim() || summary.trim().length < 10}>
+      {isSubscription && (
+        <div className="field">
+          <label htmlFor="decision-sub-end">{t('developer.decisions.sub_end')}</label>
+          <input id="decision-sub-end" type="date" value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
+        </div>
+      )}
+      <button
+        className="btn btn-sm btn-primary"
+        onClick={ask}
+        disabled={busy === 'new' || !targetId.trim() || summary.trim().length < 10 || (isSubscription && !subEnd)}
+      >
         {t('developer.decisions.request')}
       </button>
       {error && <p className="error-text">{error}</p>}
@@ -135,7 +149,10 @@ export function DecisionsPanel() {
           {rows.map((d) => (
             <tr key={d.id}>
               <td>{t(ACTION_LABEL_KEY[d.action])}</td>
-              <td>{d.summary}</td>
+              <td>
+                {d.summary}
+                {d.subEnd && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{t('developer.decisions.requested_end', { date: dfmt(d.subEnd) })}</div>}
+              </td>
               <td>
                 {d.requestedBy.displayName}
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}> — {dfmt(d.requestedAt)}</span>
@@ -143,6 +160,9 @@ export function DecisionsPanel() {
               <td>
                 <span className={`badge ${STATUS_LABEL[d.status].badgeClass}`}>{t(STATUS_LABEL[d.status].labelKey)}</span>
                 {d.decidedBy && <span style={{ fontSize: 11, color: 'var(--muted)' }}> — {d.decidedBy.displayName}</span>}
+                {d.executedBy && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{t('developer.decisions.executed_by', { name: d.executedBy.displayName })}</div>
+                )}
               </td>
               <td>
                 {d.status === 'PENDING' && (

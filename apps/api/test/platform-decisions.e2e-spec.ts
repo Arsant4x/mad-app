@@ -62,8 +62,8 @@ describe('القراراتُ المنصّية الحرجة (e2e)', () => {
     await app.close();
   });
 
-  const ask = (who: 'a' | 'b', action: string, targetId: string) =>
-    http().post('/admin/decisions').set('Authorization', as(who)).send({ action, targetId, summary: `ملخّصُ الأثر للاختبار ${suffix}` });
+  const ask = (who: 'a' | 'b', action: string, targetId: string, values: { subEnd?: string } = {}) =>
+    http().post('/admin/decisions').set('Authorization', as(who)).send({ action, targetId, summary: `ملخّصُ الأثر للاختبار ${suffix}`, ...values });
 
   describe('تعديلُ الاشتراك', () => {
     let target: IsolatedCompany;
@@ -83,7 +83,7 @@ describe('القراراتُ المنصّية الحرجة (e2e)', () => {
     });
 
     it('🔴 ② ولا يُقرّه طالبُه — بيدين لا بيد', async () => {
-      const asked = await ask('a', 'SUBSCRIPTION_CHANGE', target.companyId).expect(201);
+      const asked = await ask('a', 'SUBSCRIPTION_CHANGE', target.companyId, { subEnd: nextYear }).expect(201);
       const res = await http().post(`/admin/decisions/${asked.body.id}/approve`).set('Authorization', as('a')).expect(409);
       expect(String(res.body.message)).toContain('بيدين');
       // ولا يمضي الفعلُ ما دام معلّقاً.
@@ -105,7 +105,7 @@ describe('القراراتُ المنصّية الحرجة (e2e)', () => {
     });
 
     it('④ والمرفوضُ لا يُصرف', async () => {
-      const asked = await ask('a', 'SUBSCRIPTION_CHANGE', target.companyId).expect(201);
+      const asked = await ask('a', 'SUBSCRIPTION_CHANGE', target.companyId, { subEnd: nextYear }).expect(201);
       await http().post(`/admin/decisions/${asked.body.id}/reject`).set('Authorization', as('b')).send({ note: 'لا مبرّر' }).expect(201);
       await http().patch(`/companies/${target.companyId}/subscription`).set('Authorization', as('a')).send({ subEnd: nextYear }).expect(409);
     });

@@ -1,7 +1,9 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiOkResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtPayload } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { PlatformAuditTarget } from '../common/platform-admin/platform-audit-target.decorator';
@@ -71,7 +73,7 @@ export class CompanySubscriptionController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Patch(':id/subscription')
-  updateSubscription(@Param('id') id: string, @Body() dto: UpdateCompanySubscriptionDto) {
-    return this.companiesService.updateSubscription(id, dto);
+  updateSubscription(@Req() req: Request, @Param('id') id: string, @Body() dto: UpdateCompanySubscriptionDto) {
+    return this.companiesService.updateSubscription(id, dto, (req.user as JwtPayload).profileId);
   }
 }

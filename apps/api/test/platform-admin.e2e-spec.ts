@@ -155,7 +155,7 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     expect(created.body.status).toBe('FROZEN');
 
     // The subscription has its own route for the finance role, behind a two person decision.
-    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
+    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken, { subEnd: '2030-01-01' });
     const activated = await request(app.getHttpServer())
       .patch(`/companies/${created.body.id}/subscription`)
       .set('Authorization', `Bearer ${platformAdminToken}`)
@@ -164,7 +164,7 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     expect(activated.body.status).toBe('ACTIVE');
     expect(activated.body.frozenAt).toBeNull();
 
-    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
+    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken, { subEnd: '2020-01-01' });
     await request(app.getHttpServer())
       .patch(`/companies/${created.body.id}/subscription`)
       .set('Authorization', `Bearer ${platformAdminToken}`)

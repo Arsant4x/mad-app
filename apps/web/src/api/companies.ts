@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
 import type { CompanyStatus } from '@mad-app/shared/api/enums';
-import type { CreateCompanyDto, UpdateCompanyDto } from '@mad-app/shared/api/requests';
+import type { CreateCompanyDto, UpdateCompanyDto, UpdateCompanySubscriptionDto } from '@mad-app/shared/api/requests';
 import type { OwnerResetLinkResponse } from '@mad-app/shared/api/responses';
 
 export type { CompanyStatus };
@@ -23,9 +23,10 @@ export type CompanyInput = CreateCompanyDto;
 
 /**
  * What the company form hands back. Creating sends no subscription dates (a new company subscribes like
- * any merchant); editing may carry them for the finance route, which is called separately.
+ * any merchant); editing may carry the end date for the finance route, which is called separately.
+ * The start date is shown, never sent: it stays the activation day.
  */
-export type CompanyFormValues = Partial<CompanyInput> & { subStart?: string; subEnd?: string };
+export type CompanyFormValues = Partial<CompanyInput> & { subEnd?: string };
 
 export const listCompanies = () => apiClient.get<Company[]>('/companies').then((r) => r.data);
 export const createCompany = (dto: CompanyInput) => apiClient.post<Company>('/companies', dto).then((r) => r.data);
@@ -45,6 +46,6 @@ export const sendOwnerResetLink = (id: string) => apiClient.post<OwnerResetLinkR
  * وحدَها. والخادمُ يردّ `subStart`/`subEnd` على المسار العامّ بـ`400` باسمهما، **فلا
  * يُرسلان إلا من هنا ولا يُتجاهلان صامتَين**.
  */
-export const updateCompanySubscription = (id: string, dto: { subStart?: string; subEnd?: string }) =>
+export const updateCompanySubscription = (id: string, dto: UpdateCompanySubscriptionDto) =>
   apiClient.patch<Company>(`/companies/${id}/subscription`, dto).then((r) => r.data);
 // ⛔ لا حذفَ مباشراً من المنصّة (`ق-٥٤٨`): المسارُ الوحيد طلبُ الحذف وموافقتُه — انظر `deletionRequests.ts`.

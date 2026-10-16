@@ -1036,6 +1036,7 @@ export interface RequestDecisionDto {
   action: 'ACCOUNT_ERASURE' | 'SUBSCRIPTION_CHANGE' | 'REFUND';
   targetId: string;
   summary: string;
+  subEnd?: string;
 }
 
 /** Request body: `RequestSubstituteDto` on the server. */
@@ -1318,7 +1319,6 @@ export interface UpdateCompanyProfileDto {
 
 /** Request body: `UpdateCompanySubscriptionDto` on the server. */
 export interface UpdateCompanySubscriptionDto {
-  subStart?: string;
   subEnd?: string;
 }
 

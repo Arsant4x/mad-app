@@ -281,8 +281,8 @@ export class DeletionRequestsService {
       const report = await this.erasure.erase(company.id, decider, 'REQUEST');
       await this.prisma.$transaction(async (tx) => {
         await tx.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'ERASED' } });
-        // الاستهلاكُ مع ختم الطلب — **فالقرارُ يُصرف مرّةً واحدة** (`ق-١٣١٨`).
-        await this.decisions.consumeWithinTx(tx, 'ACCOUNT_ERASURE', id);
+        // Spent with the request it closes, once, and it records who carried it out.
+        await this.decisions.consumeWithinTx(tx, 'ACCOUNT_ERASURE', id, decider.id);
       });
       this.logger.warn(`Erased non-mandatory data of company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
       // الحدُّ يُعلَن في الردّ نفسِه (`ق-١٢٧٨`/②): ما لا يبلغه المحو يُقال لطالبه لا يُكتشف بعده.
@@ -320,8 +320,8 @@ export class DeletionRequestsService {
         },
       });
       await tx.company.update({ where: { id: company.id }, data: { status: 'CLOSED', closedAt, retainUntil } });
-      // الاستهلاكُ مع ختم الإغلاق — في المعاملة نفسِها فيسقطان معاً أو يقعان معاً.
-      await this.decisions.consumeWithinTx(tx, 'ACCOUNT_ERASURE', id);
+      // Spent in the same transaction as the closure, and it records who carried it out.
+      await this.decisions.consumeWithinTx(tx, 'ACCOUNT_ERASURE', id, decider.id);
     });
     return {
       executed: true,

@@ -113,7 +113,7 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
       const asked = await http()
         .post('/admin/decisions')
         .set('Authorization', as(PlatformRole.FINANCE))
-        .send({ action: 'SUBSCRIPTION_CHANGE', targetId: target.companyId, summary: `تمديدُ اشتراكٍ للاختبار ${suffix}` })
+        .send({ action: 'SUBSCRIPTION_CHANGE', targetId: target.companyId, summary: `تمديدُ اشتراكٍ للاختبار ${suffix}`, subEnd: nextYear })
         .expect(201);
       await http().post(`/admin/decisions/${asked.body.id}/approve`).set('Authorization', as(PlatformRole.COMPLIANCE)).expect(201);
       await http().patch(`/companies/${target.companyId}/subscription`).set('Authorization', as(PlatformRole.FINANCE)).send({ subEnd: nextYear }).expect(200);
