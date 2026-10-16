@@ -1,11 +1,14 @@
-import { relativeCost, relativeCostVerdict, type RelativeCost } from './relative-cost.util';
+import { settledCost } from '../../test/settled-cost';
+import { relativeCostVerdict, type RelativeCost } from './relative-cost.util';
 
 /**
  * Relative cost and its verdict.
  *
  * The arithmetic is proven with made-up numbers. Real time is only measured in
  * the cases that check the ratio follows the work, and those cases wait for the
- * measurement to settle instead of trusting a single sample.
+ * measurement to settle instead of trusting a single sample: under load about one
+ * single sample in a hundred fell to 2 or below, down to 0.06, while the true ratio
+ * is near 8.
  */
 const cost = (subjectMs: number, referenceMs: number): RelativeCost => ({
   subjectMs,
@@ -20,38 +23,6 @@ const work = (times: number) => () => {
   for (let i = 0; i < 20000 * times; i++) sum += i % 7;
   return sum;
 };
-
-/**
- * Measures again until two measurements in a row agree, then returns the last one.
- *
- * Under load one pause can land on a single reference round and flip the ratio of
- * that sample (measured: about one sample in a hundred fell to 2 or below, down to
- * 0.06, while the true ratio is near 8). Two samples in a row that agree are the
- * settled state. A broken measure (swapped or equal sides) settles too, just on the
- * wrong value, so the assertion after it still fails. The deadline only stops a run
- * that never settles; it is not a looser threshold.
- */
-function settledCost(
-  subject: () => unknown,
-  reference: () => unknown,
-  { rounds = 3, agreement = 0.25, deadlineMs = 10000 } = {},
-): { cost: RelativeCost; samples: number } {
-  const started = Date.now();
-  let previous = relativeCost(subject, reference, rounds);
-  let samples = 1;
-  for (;;) {
-    const current = relativeCost(subject, reference, rounds);
-    samples += 1;
-    const spread = Math.abs(current.ratio - previous.ratio);
-    if (spread <= agreement * Math.max(current.ratio, previous.ratio)) return { cost: current, samples };
-    if (Date.now() - started > deadlineMs) {
-      throw new Error(
-        `The ratio never settled in ${deadlineMs} ms over ${samples} samples; last two: ${previous.ratio.toFixed(1)} and ${current.ratio.toFixed(1)}`,
-      );
-    }
-    previous = current;
-  }
-}
 
 describe('الكلفةُ النسبيّة وحكمُها', () => {
   describe('الحساب', () => {
