@@ -15,7 +15,7 @@ import { CredentialChangeService } from '../common/credentials/credential-change
 import { MailService } from '../common/mail/mail.service';
 import { MfaService } from '../common/mfa/mfa.service';
 import { assertPasswordPolicy } from '../common/password/password-policy';
-import { clipToCompany, grantsOf } from '../templates/template-clip.util';
+import { clipToCompany, companyGrantsOf, grantsOf } from '../templates/template-clip.util';
 
 export interface AuthUserView {
   id: string;
@@ -109,7 +109,7 @@ interface IdentityWithProfiles {
  * شاشاتُ الموظّف كما يراها الحارسُ: قالبُه **مقصوصاً بقالب منشأته** (توجيه ٢٧٦ · `ق-١٦٠١`) — فلا تعرض الواجهةُ قائمةً يردّها الخادمُ 403.
  */
 function employeeScreens(u: NonNullable<IdentityWithProfiles['companyUser']>): string[] | 'all' {
-  const c = clipToCompany(grantsOf(u.permissionTemplate), grantsOf(u.company.permissionTemplate));
+  const c = clipToCompany(grantsOf(u.permissionTemplate), companyGrantsOf(u.company.permissionTemplate));
   return c.isAllScreens ? 'all' : c.allowedScreens;
 }
 

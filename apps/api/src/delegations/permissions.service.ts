@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { ScreenActionMap } from '../templates/screens';
-import { clipToCompany, grantsOf } from '../templates/template-clip.util';
+import { clipToCompany, companyGrantsOf, grantsOf } from '../templates/template-clip.util';
 import { TenantContext } from '../auth/types';
 import { Grant, TreeNode, buildTree } from './permission-tree';
 import { RootGrants, actorGrants } from './intersection';
@@ -170,11 +169,11 @@ export class PermissionsService {
           include: { permissionTemplate: true },
         }),
       );
-      const c = clipToCompany(grantsOf(user.permissionTemplate), grantsOf(company.permissionTemplate));
+      const c = clipToCompany(grantsOf(user.permissionTemplate), companyGrantsOf(company.permissionTemplate));
       return rootGrantsFrom(c.isAllScreens, c.allowedScreens, c.screenActions);
     }
-    const t = company.permissionTemplate;
-    return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions as ScreenActionMap | null);
+    const t = companyGrantsOf(company.permissionTemplate);
+    return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions);
   }
 
   /**

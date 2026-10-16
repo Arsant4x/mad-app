@@ -1,4 +1,4 @@
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, ScreenAction, ScreenActionMap, isActionAllowed } from '../templates/screens';
+import { ALLOWED_SCREENS, ScreenAction, ScreenActionMap, actionsFor, isActionAllowed } from '../templates/screens';
 import type { TemplateGrants } from '../templates/template-clip.util';
 import { Grant, grant } from './permission-tree';
 import { DelegationLink, RootGrants, actorGrants } from './intersection';
@@ -37,7 +37,7 @@ export function rootGrantsFrom(
   const out = new Set<Grant>();
   const screens = [...allowedScreens];
   for (const screen of ALLOWED_SCREENS) {
-    for (const action of SCREEN_ACTIONS) {
+    for (const action of actionsFor(screen)) {
       // ⚠️ الدالة نفسها التي يستدعيها `tenant.guard.ts` — لا نسخةٌ منها.
       if (isActionAllowed(isAllScreens, screens, screenActions, screen, action)) {
         out.add(grant(screen, action));
@@ -58,7 +58,7 @@ export function delegatedTemplate(template: TemplateGrants, chains: readonly (re
   const allowedScreens: string[] = [];
   const screenActions: ScreenActionMap = {};
   for (const screen of ALLOWED_SCREENS) {
-    const actions: ScreenAction[] = SCREEN_ACTIONS.filter((action) => held.has(grant(screen, action)));
+    const actions: ScreenAction[] = actionsFor(screen).filter((action) => held.has(grant(screen, action)));
     if (actions.length === 0) continue;
     allowedScreens.push(screen);
     screenActions[screen] = actions;

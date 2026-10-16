@@ -2,11 +2,12 @@ import { badgeOf, type BadgeMeta } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
-import { createEmployee, deleteEmployee, listEmployees, setEmployeeArchived, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
+import { createEmployee, deleteEmployee, listEmployees, setEmployeeArchived, setEmployeeSalary, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
-import { dfmt, fmt } from '../../lib/format';
-import { EmployeeModal } from './EmployeeModal';
+import { dfmt } from '../../lib/format';
+import { EmployeeModal, type SalaryChange } from './EmployeeModal';
 
 // `label` holds a translation key; it is turned into text where rendered.
 const STATUS_META: Record<EmployeeStatus, BadgeMeta> = {
@@ -17,6 +18,7 @@ const STATUS_META: Record<EmployeeStatus, BadgeMeta> = {
 
 export function EmployeesPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,14 +51,21 @@ export function EmployeesPage() {
     );
   }, [employees, search]);
 
-  async function handleSave(data: EmployeeInput) {
+  async function handleSave(data: EmployeeInput, salary?: SalaryChange) {
+    let employeeId: string;
     if (modal?.mode === 'edit') {
       // The branch is never sent on update (the update type forbids it), so it is stripped here.
       const { branchId: _createOnly, ...update } = data;
       await updateEmployee(modal.employee.id, update);
+      employeeId = modal.employee.id;
     } else {
-      await createEmployee(data);
+      const created = await createEmployee(data);
+      employeeId = created.id;
+      // From here a retry edits this employee instead of creating a second one.
+      setModal({ mode: 'edit', employee: created });
     }
+    // The salary has its own path; it is sent only when the field was changed.
+    if (salary) await setEmployeeSalary(employeeId, salary.baseSalary);
     setModal(null);
     await reload();
   }
@@ -105,7 +114,6 @@ export function EmployeesPage() {
               <th>{t('employees.col.job')}</th>
               <th>{t('employees.col.department')}</th>
               <th>{t('employees.col.hire_date')}</th>
-              <th>{t('employees.col.base_salary')}</th>
               <th>{t('employees.col.phone')}</th>
               <th>{t('employees.col.status')}</th>
               <th></th>
@@ -114,7 +122,7 @@ export function EmployeesPage() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={7}>
                   <div className="empty-state">{t('employees.empty')}</div>
                 </td>
               </tr>
@@ -125,7 +133,6 @@ export function EmployeesPage() {
                 <td>{e.jobTitle || '—'}</td>
                 <td>{e.department || '—'}</td>
                 <td className="num">{dfmt(e.hireDate)}</td>
-                <td className="num">{fmt(e.baseSalary)}</td>
                 <td className="num">{e.phone || '—'}</td>
                 <td>
                   <span className={`badge ${badgeOf(STATUS_META, e.status).badgeClass}`}>{t(badgeOf(STATUS_META, e.status).label)}</span>
@@ -146,7 +153,15 @@ export function EmployeesPage() {
         </table>
       </div>
 
-      {modal && <EmployeeModal branches={branches} editing={modal.mode === 'edit' ? modal.employee : null} onCancel={() => setModal(null)} onSave={handleSave} />}
+      {modal && (
+        <EmployeeModal
+          branches={branches}
+          editing={modal.mode === 'edit' ? modal.employee : null}
+          salaryAccess={can('employees', 'salaries')}
+          onCancel={() => setModal(null)}
+          onSave={handleSave}
+        />
+      )}
 
       {pendingDelete && (
         <ConfirmModal

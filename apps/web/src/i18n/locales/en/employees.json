@@ -18,7 +18,6 @@
     "job": "Job",
     "department": "Department",
     "hire_date": "Hire date",
-    "base_salary": "Base salary",
     "phone": "Mobile",
     "status": "Status"
   },
@@ -43,6 +42,7 @@
     "department_placeholder": "Finance",
     "hire_date": "Hire date",
     "base_salary": "Base salary",
+    "salary_invalid": "Enter the salary as a positive number, or leave it empty",
     "phone": "Mobile number",
     "phone_placeholder": "05XXXXXXXX",
     "status": "Status",

@@ -35,9 +35,15 @@ export type ScreenKey = (typeof ALLOWED_SCREENS)[number];
 
 /** الأفعالُ التي تُمنح على شاشة — بترتيب المصدر. */
 export const SCREEN_ACTIONS = ['view', 'add', 'edit', 'delete', 'record', 'review', 'audit'] as const;
-export type ScreenAction = (typeof SCREEN_ACTIONS)[number];
 
-/** كلُّ زوجٍ `شاشة:فعل` — 25 × 7 = 175. */
+/** Actions that exist on one screen only, on top of the general ones. */
+export const SCREEN_ONLY_ACTIONS = { employees: ['salaries'] } as const;
+
+/** Every action name: the general ones first, then the screen-only ones. */
+export const ALL_ACTIONS = ['view', 'add', 'edit', 'delete', 'record', 'review', 'audit', 'salaries'] as const;
+export type ScreenAction = (typeof ALL_ACTIONS)[number];
+
+/** Every real screen:action pair: 25 screens × 7 actions, plus 1 screen-only, = 176. */
 export const PERMISSION_KEYS = [
   'dashboard:view',
   'dashboard:add',
@@ -151,6 +157,7 @@ export const PERMISSION_KEYS = [
   'employees:record',
   'employees:review',
   'employees:audit',
+  'employees:salaries',
   'banks:view',
   'banks:add',
   'banks:edit',

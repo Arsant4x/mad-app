@@ -291,7 +291,6 @@ export interface CreateEmployeeDto {
   jobTitle?: string;
   department?: string;
   hireDate: string;
-  baseSalary?: number;
   phone?: string;
   nationalId?: string;
   salaryIban?: string;
@@ -1096,6 +1095,11 @@ export interface SetArchivedDto {
   archived: boolean;
 }
 
+/** Request body: `SetEmployeeSalaryDto` on the server. */
+export interface SetEmployeeSalaryDto {
+  baseSalary: number | null;
+}
+
 /** Request body: `SetEnabledDto` on the server. */
 export interface SetEnabledDto {
   enabled: boolean;
@@ -1382,7 +1386,6 @@ export interface UpdateEmployeeDto {
   jobTitle?: string;
   department?: string;
   hireDate?: string;
-  baseSalary?: number;
   phone?: string;
   nationalId?: string;
   salaryIban?: string;

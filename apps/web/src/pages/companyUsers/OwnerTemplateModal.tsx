@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ACTION_LABELS,
+  ALL_ACTIONS,
   ALLOWED_SCREENS,
-  SCREEN_ACTIONS,
   SCREEN_LABELS,
+  actionsFor,
   isScreenKey,
   type PermissionTemplate,
+  type ScreenAction,
   type ScreenActionMap,
   type TemplateInput,
 } from '../../api/templates';
@@ -14,8 +16,9 @@ import {
 /**
  * The owner's permission template editor: a screens by actions matrix.
  *
- * One row per granted screen, with its seven actions in front of it; "write contracts" is add on the
- * contracts screen, "edit contracts" is edit on it, and any number of permissions can be combined.
+ * One row per granted screen, with the actions that exist on it in front of it; "write contracts" is add on the
+ * contracts screen, "edit contracts" is edit on it, and any number of permissions can be combined. The salaries
+ * action has a box on the employees row only.
  */
 export function OwnerTemplateModal({
   editing,
@@ -34,7 +37,7 @@ export function OwnerTemplateModal({
     // A screen with no stored entry means "every action" — surface that
     // honestly as all boxes checked.
     const map: ScreenActionMap = {};
-    for (const s of editing.allowedScreens) map[s] = editing.screenActions?.[s] ?? [...SCREEN_ACTIONS];
+    for (const s of editing.allowedScreens) map[s] = editing.screenActions?.[s] ?? [...actionsFor(s)];
     return map;
   });
   const [saving, setSaving] = useState(false);
@@ -53,12 +56,12 @@ export function OwnerTemplateModal({
       // A newly-granted screen starts with every action — the owner narrows
       // from there, which reads better than granting a screen that can do
       // nothing until seven boxes are ticked.
-      setActions((a) => ({ ...a, [screen]: [...SCREEN_ACTIONS] }));
+      setActions((a) => ({ ...a, [screen]: [...actionsFor(screen)] }));
       return [...prev, screen];
     });
   }
 
-  function toggleAction(screen: string, action: (typeof SCREEN_ACTIONS)[number]) {
+  function toggleAction(screen: string, action: ScreenAction) {
     setActions((prev) => {
       const current = prev[screen] ?? [];
       const next = current.includes(action) ? current.filter((a) => a !== action) : [...current, action];
@@ -111,13 +114,16 @@ export function OwnerTemplateModal({
         <p className="hint" style={{ marginBottom: 8 }}>
           {t('company_users.template_modal.hint')}
         </p>
+        <p className="hint" style={{ marginBottom: 8 }}>
+          {t('company_users.template_modal.salaries_hint')}
+        </p>
 
         <div style={{ maxHeight: '46vh', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
           <table>
             <thead>
               <tr>
                 <th>{t('company_users.template_modal.col_screen')}</th>
-                {SCREEN_ACTIONS.map((a) => (
+                {ALL_ACTIONS.map((a) => (
                   <th key={a} style={{ textAlign: 'center', fontSize: 11 }}>
                     {ACTION_LABELS[a]}
                   </th>
@@ -135,15 +141,17 @@ export function OwnerTemplateModal({
                         {SCREEN_LABELS[screen]}
                       </label>
                     </td>
-                    {SCREEN_ACTIONS.map((a) => (
+                    {ALL_ACTIONS.map((a) => (
                       <td key={a} style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          style={{ width: 'auto' }}
-                          disabled={!granted}
-                          checked={granted && (actions[screen] ?? []).includes(a)}
-                          onChange={() => toggleAction(screen, a)}
-                        />
+                        {actionsFor(screen).includes(a) && (
+                          <input
+                            type="checkbox"
+                            style={{ width: 'auto' }}
+                            disabled={!granted}
+                            checked={granted && (actions[screen] ?? []).includes(a)}
+                            onChange={() => toggleAction(screen, a)}
+                          />
+                        )}
                       </td>
                     ))}
                   </tr>

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { stripComments } from '../common/source-scan.util';
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { ALLOWED_SCREENS, SCREEN_ACTIONS } from '../templates/screens';
+import { ALLOWED_SCREENS, actionsFor } from '../templates/screens';
 import { RAW_DOMAINS, buildTree } from './permission-tree';
 import { CreateDelegationDto } from './dto/create-delegation.dto';
 
@@ -31,11 +31,11 @@ describe('مفردات التفويض مشتقّة من مصدرها — لا م
     expect(errorsOn(dto({ nodeKey: 'audit-log' }))).toContain('nodeKey');
   });
 
-  it('⭐ الـ175 زوجاً كلها مقبولة، وما خرج عنها مرفوض', () => {
-    const all = ALLOWED_SCREENS.flatMap((s) => SCREEN_ACTIONS.map((a) => `${s}:${a}`));
-    expect(all).toHaveLength(175);
+  it('all 176 real pairs are accepted, and anything else is refused', () => {
+    const all = ALLOWED_SCREENS.flatMap((s) => actionsFor(s).map((a) => `${s}:${a}`));
+    expect(all).toHaveLength(176);
     expect(all.filter((g) => errorsOn(dto({ grants: [g] })).includes('grants'))).toEqual([]);
-    for (const bad of ['contracts:approve', 'invoices:view', 'contracts', 'contracts:view:extra', '*:*']) {
+    for (const bad of ['contracts:approve', 'invoices:view', 'contracts', 'contracts:view:extra', '*:*', 'contracts:salaries']) {
       expect({ bad, rejected: errorsOn(dto({ grants: [bad] })).includes('grants') }).toEqual({ bad, rejected: true });
     }
   });

@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import {
   ACTION_LABELS,
   ALLOWED_SCREENS,
-  SCREEN_ACTIONS,
   SCREEN_LABELS,
+  actionsFor,
   isScreenKey,
   type PermissionTemplate,
   type ScreenAction,
@@ -52,7 +52,7 @@ export function TemplateModal({
       // Undetailed means "all", so the first click starts from the full set and
       // removes one; otherwise ticking a box would silently *widen* nothing and
       // unticking would look like it did nothing.
-      const current = prev[screen] ?? [...SCREEN_ACTIONS];
+      const current = prev[screen] ?? [...actionsFor(screen)];
       const next = current.includes(action) ? current.filter((a) => a !== action) : [...current, action];
       return { ...prev, [screen]: next };
     });
@@ -76,7 +76,7 @@ export function TemplateModal({
     // grant everything anyway (keeps the stored map minimal and readable).
     const finalActions: ScreenActionMap = {};
     for (const [screen, list] of Object.entries(actions)) {
-      if (!finalScreens.has(screen) || list.length === 0 || list.length === SCREEN_ACTIONS.length) continue;
+      if (!finalScreens.has(screen) || list.length === 0 || list.length === actionsFor(screen).length) continue;
       finalActions[screen] = list;
     }
 
@@ -119,7 +119,7 @@ export function TemplateModal({
         <div style={{ maxHeight: 380, overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
           {ALLOWED_SCREENS.map((key) => {
             const on = screens.has(key);
-            const granted = actions[key] ?? [...SCREEN_ACTIONS];
+            const granted = actions[key] ?? [...actionsFor(key)];
             return (
               <div key={key} style={{ borderBottom: '1px solid var(--line)', padding: '8px 10px', background: on ? 'transparent' : 'var(--paper)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>
@@ -128,7 +128,7 @@ export function TemplateModal({
                 </label>
                 {on && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6, paddingInlineStart: 22 }}>
-                    {SCREEN_ACTIONS.map((action) => (
+                    {actionsFor(key).map((action) => (
                       <label key={action} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 'calc(11.5px * var(--font-scale))', color: 'var(--muted)' }}>
                         <input type="checkbox" checked={granted.includes(action)} onChange={() => toggleAction(key, action)} style={{ width: 'auto' }} />
                         {ACTION_LABELS[action]}

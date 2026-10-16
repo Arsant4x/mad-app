@@ -33,7 +33,7 @@ describe('Employees tenant isolation (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/employees')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ fullName: `موظف اختبار ${Date.now()}`, hireDate: '2026-01-01', baseSalary: 5000 })
+      .send({ fullName: `موظف اختبار ${Date.now()}`, hireDate: '2026-01-01' })
       .expect(201);
 
     expect(created.body.status).toBe('ACTIVE');

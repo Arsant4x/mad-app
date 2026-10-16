@@ -1,9 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmployeeModal } from './EmployeeModal';
 import type { Employee } from '../../api/employees';
 import type { Branch } from '../../api/branches';
+
+const getEmployeeSalary = vi.fn();
+vi.mock('../../api/employees', () => ({ getEmployeeSalary: (id: string) => getEmployeeSalary(id) }));
+const api = { getEmployeeSalary };
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (1.4 ث — ثلاثةُ أضعافه دون الافتراضيّ، فالميزانيةُ الافتراضيُّ نفسُه).
 vi.setConfig({ testTimeout: 5_000 });
@@ -17,7 +21,6 @@ const employee: Employee = {
   jobTitle: null,
   department: null,
   hireDate: '2026-01-01',
-  baseSalary: '5000.00',
   phone: null,
   status: 'ACTIVE',
 };
@@ -29,7 +32,7 @@ const employee: Employee = {
 describe('نافذةُ الموظّف — الفرعُ عند الإنشاء وحدَه', () => {
   it('التعديلُ لا يرسل الفرعَ — ويعرضه قراءةً لا اختياراً', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<EmployeeModal editing={employee} branches={branches} onCancel={() => {}} onSave={onSave} />);
+    render(<EmployeeModal editing={employee} branches={branches} salaryAccess={false} onCancel={() => {}} onSave={onSave} />);
     await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     const payload = onSave.mock.calls[0][0] as Record<string, unknown>;
@@ -43,12 +46,77 @@ describe('نافذةُ الموظّف — الفرعُ عند الإنشاء و�
 
   it('والإنشاءُ يرسل الفرعَ المختار', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<EmployeeModal editing={null} branches={branches} onCancel={() => {}} onSave={onSave} />);
+    render(<EmployeeModal editing={null} branches={branches} salaryAccess={false} onCancel={() => {}} onSave={onSave} />);
     await userEvent.type(screen.getByPlaceholderText(/سارة العتيبي/), 'موظّفٌ جديد');
     const branchSelect = screen.getByRole('option', { name: 'فرع الصالة' }).closest('select')!;
     await userEvent.selectOptions(branchSelect, 'br1');
     await userEvent.click(screen.getByRole('button', { name: 'إضافة الموظف' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect((onSave.mock.calls[0][0] as Record<string, unknown>).branchId).toBe('br1');
+  });
+});
+
+describe('Employee window: the salary', () => {
+  beforeEach(() => {
+    api.getEmployeeSalary.mockReset();
+  });
+
+  it('without the salaries action the field is not shown and no salary is sent', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EmployeeModal editing={employee} branches={branches} salaryAccess={false} onCancel={() => {}} onSave={onSave} />);
+    expect(screen.queryByLabelText('الراتب الأساسي')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    const [payload, salary] = onSave.mock.calls[0] as [Record<string, unknown>, unknown];
+    expect('baseSalary' in payload).toBe(false);
+    expect(salary).toBeUndefined();
+    expect(api.getEmployeeSalary).not.toHaveBeenCalled();
+  });
+
+  it('editing reads the salary from its own path, and a save without touching it sends none', async () => {
+    api.getEmployeeSalary.mockResolvedValue({ employeeId: 'e1', baseSalary: '5000.00' });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EmployeeModal editing={employee} branches={branches} salaryAccess onCancel={() => {}} onSave={onSave} />);
+    const field = (await screen.findByLabelText('الراتب الأساسي')) as HTMLInputElement;
+    expect(field.value).toBe('5000.00');
+    expect(api.getEmployeeSalary).toHaveBeenCalledWith('e1');
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    const [payload, salary] = onSave.mock.calls[0] as [Record<string, unknown>, unknown];
+    expect('baseSalary' in payload).toBe(false);
+    expect(salary).toBeUndefined();
+  });
+
+  it('a changed salary is sent on its own, and an emptied one clears it', async () => {
+    api.getEmployeeSalary.mockResolvedValue({ employeeId: 'e1', baseSalary: '5000.00' });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EmployeeModal editing={employee} branches={branches} salaryAccess onCancel={() => {}} onSave={onSave} />);
+    const field = await screen.findByLabelText('الراتب الأساسي');
+    await userEvent.clear(field);
+    await userEvent.type(field, '5200.5');
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    expect(onSave.mock.calls[0][1]).toEqual({ baseSalary: 5200.5 });
+    await userEvent.clear(field);
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    expect(onSave.mock.calls[1][1]).toEqual({ baseSalary: null });
+  });
+
+  it('a salary that is not a positive number is refused before anything is sent', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EmployeeModal editing={null} branches={branches} salaryAccess onCancel={() => {}} onSave={onSave} />);
+    await userEvent.type(screen.getByPlaceholderText(/سارة العتيبي/), 'موظّفٌ جديد');
+    await userEvent.type(screen.getByLabelText('الراتب الأساسي'), '-5');
+    await userEvent.click(screen.getByRole('button', { name: 'إضافة الموظف' }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText('اكتب الراتب رقماً موجباً، أو اتركه فارغاً')).toBeTruthy();
+  });
+
+  it('a salary that cannot be read is not shown, so saving never touches it', async () => {
+    api.getEmployeeSalary.mockRejectedValue({ response: { status: 403 } });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EmployeeModal editing={employee} branches={branches} salaryAccess onCancel={() => {}} onSave={onSave} />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.getEmployeeSalary).toHaveBeenCalledWith('e1');
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    expect(screen.queryByLabelText('الراتب الأساسي')).toBeNull();
+    expect(onSave.mock.calls[0][1]).toBeUndefined();
   });
 });

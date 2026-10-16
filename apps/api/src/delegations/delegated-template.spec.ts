@@ -1,4 +1,4 @@
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, isActionAllowed } from '../templates/screens';
+import { ALLOWED_SCREENS, ALL_ACTIONS, type ScreenAction, isActionAllowed } from '../templates/screens';
 import type { TemplateGrants } from '../templates/template-clip.util';
 import { DelegationRow, chainsFor } from './chain-source';
 import { actorGrants } from './intersection';
@@ -7,7 +7,7 @@ import { delegatedTemplate, rootGrantsFrom } from './root-grants';
 
 const row = (grantorId: string, granteeId: string, grants: string[], state = 'ACTIVE'): DelegationRow => ({ grantorId, granteeId, grants, state });
 
-const allowedBy = (t: TemplateGrants, screen: string, action: (typeof SCREEN_ACTIONS)[number]) => isActionAllowed(t.isAllScreens, t.allowedScreens, t.screenActions, screen, action);
+const allowedBy = (t: TemplateGrants, screen: string, action: ScreenAction) => isActionAllowed(t.isAllScreens, t.allowedScreens, t.screenActions, screen, action);
 
 /** The guard decides with isActionAllowed on the delegated template; /me/permissions lists actorGrants. */
 function expectGuardMatchesMePermissions(template: TemplateGrants, rows: DelegationRow[], actor: string) {
@@ -16,12 +16,13 @@ function expectGuardMatchesMePermissions(template: TemplateGrants, rows: Delegat
   const guardTemplate = delegatedTemplate(template, chains);
   let pairs = 0;
   for (const screen of ALLOWED_SCREENS) {
-    for (const action of SCREEN_ACTIONS) {
+    // Every action name on every screen, so a screen-only action is checked where it does not exist too.
+    for (const action of ALL_ACTIONS) {
       pairs++;
       expect({ pair: grant(screen, action), guard: allowedBy(guardTemplate, screen, action) }).toEqual({ pair: grant(screen, action), guard: listed.has(grant(screen, action)) });
     }
   }
-  expect(pairs).toBe(ALLOWED_SCREENS.length * SCREEN_ACTIONS.length);
+  expect(pairs).toBe(ALLOWED_SCREENS.length * ALL_ACTIONS.length);
 }
 
 describe('delegatedTemplate: the tenant guard reads the same grants as /me/permissions', () => {

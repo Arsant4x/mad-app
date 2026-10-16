@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { readsDeclaredStrings } from '../common/source-scan.util';
-import { ALLOWED_SCREENS, SCREEN_ACTIONS } from './screens';
+import { ALL_ACTIONS, ALLOWED_SCREENS, actionsFor } from './screens';
 import { REGENERATE_COMMAND, renderSharedPermissions, SHARED_PERMISSIONS_PATH } from './shared-permissions.util';
 
 // المولَّدُ بياناتٌ معلَنة داخل سلاسل (أسماءُ الشاشات والأفعال والمفاتيح) — فالنصُّ هو بياناتُه (`ق-٣٧٥`).
@@ -20,14 +20,17 @@ describe('مفرداتُ الصلاحيات المشتركة مولَّدةٌ م
   const onDisk = readFileSync(SHARED_PERMISSIONS_PATH, 'utf8').replace(/\r\n/g, '\n');
   const rendered = renderSharedPermissions();
 
-  it('يقرأ الملفَّ فعلاً — وفيه المفاتيحُ كلُّها (الشاشات × الأفعال)', () => {
+  it('reads the file, and every screen:action pair is in it (general actions on every screen, screen-only actions on theirs)', () => {
     expect(onDisk.length).toBeGreaterThan(1000);
-    const expectedKeys = ALLOWED_SCREENS.length * SCREEN_ACTIONS.length;
-    expect(expectedKeys).toBe(175);
+    const expectedKeys = ALLOWED_SCREENS.reduce((n, s) => n + actionsFor(s).length, 0);
+    // 25 screens by 7 general actions, plus the salaries action on the employees screen.
+    expect(expectedKeys).toBe(176);
     const keysOnDisk = onDisk.match(/^  '[a-z]+:[a-z]+',$/gm) ?? [];
     expect(keysOnDisk).toHaveLength(expectedKeys);
+    expect(keysOnDisk).toContain("  'employees:salaries',");
+    expect(keysOnDisk).not.toContain("  'contracts:salaries',");
     for (const screen of ALLOWED_SCREENS) expect(onDisk).toContain(`  '${screen}',`);
-    for (const action of SCREEN_ACTIONS) expect(onDisk).toContain(`'${action}'`);
+    for (const action of ALL_ACTIONS) expect(onDisk).toContain(`'${action}'`);
   });
 
   it('⭐ ما على القرص = ما يُرسَم من المصدر الآن — حرفاً', () => {

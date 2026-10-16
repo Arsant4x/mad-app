@@ -3,7 +3,7 @@ import { Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
-import { SCREEN_ACTIONS, type ScreenAction, type ScreenActionMap } from './screens';
+import { actionsFor, type ScreenAction, type ScreenActionMap } from './screens';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -30,7 +30,8 @@ function sanitizeScreenActions(input: Record<string, string[]> | undefined, allo
   const out: ScreenActionMap = {};
   for (const [screen, actions] of Object.entries(input)) {
     if (!allowedScreens.includes(screen) || !Array.isArray(actions)) continue;
-    const valid = [...new Set(actions.filter((a): a is ScreenAction => (SCREEN_ACTIONS as readonly string[]).includes(a)))];
+    // Only the actions that exist on this screen; a screen-only action stays on its screen.
+    const valid = [...new Set(actions.filter((a): a is ScreenAction => (actionsFor(screen) as readonly string[]).includes(a)))];
     if (valid.length) out[screen] = valid;
   }
   return Object.keys(out).length ? out : null;
