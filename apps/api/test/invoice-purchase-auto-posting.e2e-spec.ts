@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(55000);
@@ -320,4 +321,99 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر يعكس قيدَه (ق-٩٥٣).
     await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), [inv.body.id]);
   }, 30000);
+
+  /**
+   * Inventory layers hold their cost in the company currency (the purchase converts at receipt), so the cost
+   * of a sale is the consumed layer cost whatever the invoice currency, and its credit note reverses the same amount.
+   */
+  describe('cost of goods sold on a foreign currency invoice', () => {
+    const UNIT_COST = 40;
+    const USD_RATE = 3.75;
+    let iso: IsolatedCompany;
+    let customer: string;
+    let branch: string;
+    let warehouse: string;
+    let product: string;
+    const day = () => new Date().toISOString().slice(0, 10);
+    const isoAuth = (r: request.Test) => r.set('Authorization', `Bearer ${iso.token}`);
+    const http = () => request(app.getHttpServer());
+
+    /** The lines of the one entry with this memo, as account code and amounts, sorted by code. */
+    async function entryLines(memo: string) {
+      const entry = await app
+        .get(TenantPrismaService)
+        .runInTenantContext(iso.companyId, (tx) => tx.journalEntry.findFirst({ where: { memo }, include: { lines: { include: { account: { select: { code: true } } } } } }));
+      expect(entry).not.toBeNull();
+      return entry!.lines
+        .map((l) => ({ code: l.account.code, debit: Number(l.debit), credit: Number(l.credit) }))
+        .sort((a, b) => a.code.localeCompare(b.code, 'en'));
+    }
+
+    async function sell(quantity: number, currency?: { currency: string; exchangeRate: number }) {
+      const res = await isoAuth(http().post('/invoices'))
+        .send({
+          customerId: customer,
+          branchId: branch,
+          issueDate: day(),
+          dueDate: day(),
+          ...currency,
+          lines: [{ description: 'stocked sale', productId: product, quantity, unitPrice: 20, taxRate: 15 }],
+        })
+        .expect(201);
+      return res.body as { id: string; no: string; stockFulfilment: { fulfilled: boolean; totalCost: string } };
+    }
+
+    beforeAll(async () => {
+      iso = await registerIsolatedCompany(app, 'fx-cogs');
+      const tag = `${Date.now()}`;
+      customer = (await isoAuth(http().post('/customers')).send({ kind: 'NATURAL', name: `FX COGS customer ${tag}` }).expect(201)).body.id;
+      warehouse = (await isoAuth(http().post('/warehouses')).send({ name: `FX COGS warehouse ${tag}` }).expect(201)).body.id;
+      branch = (await isoAuth(http().post('/branches')).send({ name: `FX COGS branch ${tag}`, warehouseId: warehouse }).expect(201)).body.id;
+      product = (
+        await isoAuth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `FX COGS product ${tag}`, price: 100, cost: UNIT_COST }).expect(201)
+      ).body.id;
+      const supplier = (await isoAuth(http().post('/suppliers')).send({ name: `FX COGS supplier ${tag}` }).expect(201)).body.id;
+      // One base currency layer of ten units at 40 each.
+      await isoAuth(http().post('/purchases'))
+        .send({ supplierId: supplier, date: day(), subtotal: 10 * UNIT_COST, warehouseId: warehouse, branchId: branch, lines: [{ description: 'stocked purchase', productId: product, quantity: 10, unitPrice: UNIT_COST, taxRate: 15 }] })
+        .expect(201);
+    }, 60000);
+
+    afterAll(async () => {
+      await removeIsolatedCompany(app, iso);
+    }, 60000);
+
+    it('posts the consumed layer cost for a base currency sale', async () => {
+      const inv = await sell(2);
+      expect(inv.stockFulfilment).toMatchObject({ fulfilled: true, totalCost: '80.00' });
+      expect(await entryLines(`تكلفة مبيعات ${inv.no}`)).toEqual([
+        { code: '1300', debit: 0, credit: 2 * UNIT_COST },
+        { code: '5100', debit: 2 * UNIT_COST, credit: 0 },
+      ]);
+    }, 60000);
+
+    it('posts the consumed layer cost for a USD sale and reverses the same amount on its credit note', async () => {
+      const inv = await sell(3, { currency: 'USD', exchangeRate: USD_RATE });
+      expect(inv.stockFulfilment).toMatchObject({ fulfilled: true, totalCost: '120.00' });
+      // The layer cost is already in the company currency: 3 x 40 = 120, never 3 x 40 x 3.75 = 450.
+      expect(await entryLines(`تكلفة مبيعات ${inv.no}`)).toEqual([
+        { code: '1300', debit: 0, credit: 3 * UNIT_COST },
+        { code: '5100', debit: 3 * UNIT_COST, credit: 0 },
+      ]);
+
+      const note = await isoAuth(http().post(`/invoices/${inv.id}/credit-note`)).send({ reason: 'goods returned' }).expect(201);
+      expect(await entryLines(`عكس تكلفة مبيعات — مرتجع ${note.body.no}`)).toEqual([
+        { code: '1300', debit: 3 * UNIT_COST, credit: 0 },
+        { code: '5100', debit: 0, credit: 3 * UNIT_COST },
+      ]);
+
+      // The inventory account still equals what is on the shelf: 10 - 2 - 3 + 3 = 8 units at 40.
+      const accounts = (await isoAuth(http().get('/accounts')).expect(200)).body as { code: string; balance: string }[];
+      expect(Number(accounts.find((a) => a.code === '1300')!.balance)).toBeCloseTo(8 * UNIT_COST, 2);
+      const layers = await app
+        .get(TenantPrismaService)
+        .runInTenantContext(iso.companyId, (tx) => tx.inventoryLayer.findMany({ where: { productId: product }, select: { qtyRemaining: true, unitCost: true } }));
+      expect(layers.reduce((s, l) => s + Number(l.qtyRemaining) * Number(l.unitCost), 0)).toBeCloseTo(8 * UNIT_COST, 2);
+    }, 60000);
+  });
 });
