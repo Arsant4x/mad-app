@@ -260,7 +260,7 @@ model PlatformDecision {
 
   /// The subscription end a SUBSCRIPTION_CHANGE decision approves, written when it is requested.
   /// Applying any other end is refused. No other action carries it.
-  subEnd DateTime?
+  requestedSubEnd DateTime?
 
   createdAt DateTime @default(now())
 

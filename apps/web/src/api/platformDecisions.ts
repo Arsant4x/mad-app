@@ -22,7 +22,7 @@ export interface PlatformDecision {
   executedAt: string | null;
   note: string | null;
   /** The subscription end a subscription change approves; applying it requires this same date. */
-  subEnd: string | null;
+  requestedSubEnd: string | null;
   requestedBy: { displayName: string };
   decidedBy: { displayName: string } | null;
   executedBy: { displayName: string } | null;

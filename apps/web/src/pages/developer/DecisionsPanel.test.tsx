@@ -25,7 +25,7 @@ const executed: PlatformDecision = {
   decidedAt: '2026-10-02T00:00:00.000Z',
   executedAt: '2026-10-03T00:00:00.000Z',
   note: null,
-  subEnd: '2027-10-01T00:00:00.000Z',
+  requestedSubEnd: '2027-10-01T00:00:00.000Z',
   requestedBy: { displayName: 'Finance one' },
   decidedBy: { displayName: 'Compliance one' },
   executedBy: { displayName: 'Finance two' },

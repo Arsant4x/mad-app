@@ -57,12 +57,12 @@ export class PlatformDecisionsService {
     // A subscription change requested before decisions carried their end can never be applied,
     // so it does not keep a new request out.
     const open = await this.prisma.platformDecision.findFirst({
-      where: { action, targetId, status: { in: ['PENDING', 'APPROVED'] }, ...(isSubscription ? { subEnd: { not: null } } : {}) },
+      where: { action, targetId, status: { in: ['PENDING', 'APPROVED'] }, ...(isSubscription ? { requestedSubEnd: { not: null } } : {}) },
       select: { id: true, status: true },
     });
     if (open) throw new ConflictException(formatMessage(MSG.decision_already_open, { status: open.status }));
     return this.prisma.platformDecision.create({
-      data: { action, targetId, summary: summary.trim(), requestedById, subEnd: isSubscription ? new Date(values.subEnd!) : null },
+      data: { action, targetId, summary: summary.trim(), requestedById, requestedSubEnd: isSubscription ? new Date(values.subEnd!) : null },
     });
   }
 
@@ -136,11 +136,11 @@ function valueLabel(at: Date): string {
  * so the same day sent as a date or as midnight UTC matches.
  */
 function approvedForEnd(approved: PlatformDecision[], subEnd: Date | null): PlatformDecision {
-  const match = approved.find((d) => d.subEnd !== null && subEnd !== null && d.subEnd.getTime() === subEnd.getTime());
+  const match = approved.find((d) => d.requestedSubEnd !== null && subEnd !== null && d.requestedSubEnd.getTime() === subEnd.getTime());
   if (match) return match;
-  const bound = approved.find((d) => d.subEnd !== null);
+  const bound = approved.find((d) => d.requestedSubEnd !== null);
   if (!bound) throw new ConflictException(MSG.decision_value_missing);
-  throw new ConflictException(formatMessage(MSG.decision_value_mismatch, { approved: valueLabel(bound.subEnd!) }));
+  throw new ConflictException(formatMessage(MSG.decision_value_mismatch, { approved: valueLabel(bound.requestedSubEnd!) }));
 }
 
 /** تسميةُ الفعل في رسالة الرفض — **فيُعرف ما ينقص**، لا أنه رُدّ. */

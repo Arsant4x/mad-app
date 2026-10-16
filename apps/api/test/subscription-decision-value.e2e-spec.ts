@@ -115,10 +115,10 @@ describe('subscription decision binds the approved value (e2e)', () => {
     await applyEnd({ subEnd: approved }).expect(200);
 
     expect(await companyEnd()).toBe(approved);
-    const decision = await prisma.platformDecision.findUniqueOrThrow({ where: { id: decisionId }, select: { status: true, executedById: true, subEnd: true } });
+    const decision = await prisma.platformDecision.findUniqueOrThrow({ where: { id: decisionId }, select: { status: true, executedById: true, requestedSubEnd: true } });
     expect(decision.status).toBe('EXECUTED');
     expect(decision.executedById).toBe(admins.a.adminId);
-    expect(decision.subEnd?.toISOString().slice(0, 10)).toBe(approved);
+    expect(decision.requestedSubEnd?.toISOString().slice(0, 10)).toBe(approved);
   });
 
   it('refuses the start date by name instead of ignoring it, and leaves the decision unspent', async () => {
@@ -178,7 +178,7 @@ describe('subscription decision binds the approved value (e2e)', () => {
   it('holds the same rules in the database for rows written now', async () => {
     const base = { targetId: target.companyId, summary: `raw row ${suffix}`, requestedById: admins.a.adminId };
     await expect(prisma.platformDecision.create({ data: { ...base, action: 'SUBSCRIPTION_CHANGE' } })).rejects.toThrow(/platform_decisions_subscription_carries_end/);
-    await expect(prisma.platformDecision.create({ data: { ...base, action: 'REFUND', subEnd: new Date() } })).rejects.toThrow(/platform_decisions_sub_end_only_on_subscription/);
+    await expect(prisma.platformDecision.create({ data: { ...base, action: 'REFUND', requestedSubEnd: new Date() } })).rejects.toThrow(/platform_decisions_sub_end_only_on_subscription/);
     await expect(
       prisma.platformDecision.create({ data: { ...base, action: 'REFUND', status: 'EXECUTED', decidedById: admins.b.adminId, executedAt: new Date() } }),
     ).rejects.toThrow(/platform_decisions_executed_names_executor/);

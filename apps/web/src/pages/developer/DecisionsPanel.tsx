@@ -151,7 +151,9 @@ export function DecisionsPanel() {
               <td>{t(ACTION_LABEL_KEY[d.action])}</td>
               <td>
                 {d.summary}
-                {d.subEnd && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{t('developer.decisions.requested_end', { date: dfmt(d.subEnd) })}</div>}
+                {d.requestedSubEnd && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{t('developer.decisions.requested_end', { date: dfmt(d.requestedSubEnd) })}</div>
+                )}
               </td>
               <td>
                 {d.requestedBy.displayName}

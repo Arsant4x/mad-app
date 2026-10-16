@@ -13,14 +13,14 @@
 -- counted and announced. No row is written.
 
 ALTER TABLE "platform_decisions" ADD COLUMN "executedById" TEXT;
-ALTER TABLE "platform_decisions" ADD COLUMN "subEnd" TIMESTAMP(3);
+ALTER TABLE "platform_decisions" ADD COLUMN "requestedSubEnd" TIMESTAMP(3);
 
 -- Restrict, like the requester and the approver: deleting an administrator cannot erase who applied a decision.
 ALTER TABLE "platform_decisions" ADD CONSTRAINT "platform_decisions_executedById_fkey"
   FOREIGN KEY ("executedById") REFERENCES "platform_admins"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "platform_decisions" ADD CONSTRAINT "platform_decisions_sub_end_only_on_subscription"
-  CHECK ("subEnd" IS NULL OR "action" = 'SUBSCRIPTION_CHANGE');
+  CHECK ("requestedSubEnd" IS NULL OR "action" = 'SUBSCRIPTION_CHANGE');
 
 ALTER TABLE "platform_decisions" ADD CONSTRAINT "platform_decisions_executor_only_when_executed"
   CHECK ("executedById" IS NULL OR "status" = 'EXECUTED');
@@ -31,10 +31,10 @@ DECLARE
   cutover timestamp := (clock_timestamp() AT TIME ZONE 'UTC');
 BEGIN
   SELECT count(*) INTO open_without_end FROM "platform_decisions"
-   WHERE "action" = 'SUBSCRIPTION_CHANGE' AND "status" IN ('PENDING', 'APPROVED') AND "subEnd" IS NULL;
+   WHERE "action" = 'SUBSCRIPTION_CHANGE' AND "status" IN ('PENDING', 'APPROVED') AND "requestedSubEnd" IS NULL;
 
   EXECUTE format(
-    'ALTER TABLE "platform_decisions" ADD CONSTRAINT "platform_decisions_subscription_carries_end" CHECK ("action" <> ''SUBSCRIPTION_CHANGE'' OR "subEnd" IS NOT NULL OR "createdAt" < %L)',
+    'ALTER TABLE "platform_decisions" ADD CONSTRAINT "platform_decisions_subscription_carries_end" CHECK ("action" <> ''SUBSCRIPTION_CHANGE'' OR "requestedSubEnd" IS NOT NULL OR "createdAt" < %L)',
     cutover
   );
   EXECUTE format(
