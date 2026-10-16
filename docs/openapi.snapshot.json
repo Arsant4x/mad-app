@@ -928,6 +928,15 @@
       "200"
     ]
   },
+  "GET /v1/employees/{id}/salary": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/export": {
     "parameters": [],
     "requiredBody": [],
@@ -4291,6 +4300,17 @@
     ],
     "requiredBody": [
       "values"
+    ],
+    "responses": [
+      "200"
+    ]
+  },
+  "PUT /v1/employees/{id}/salary": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "baseSalary"
     ],
     "responses": [
       "200"

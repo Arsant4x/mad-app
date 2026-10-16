@@ -1,4 +1,4 @@
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, ScreenAction } from '../templates/screens';
+import { ALLOWED_SCREENS, ScreenAction, actionsFor } from '../templates/screens';
 
 /**
  * شجرة نطاقات الصلاحيات — **مشتقّة من `screens.ts` لا مكتوبة يدوياً**.
@@ -108,16 +108,16 @@ export function screensUnder(nodeKey: string): readonly string[] {
 export type Grant = `${string}:${ScreenAction}`;
 export const grant = (screen: string, action: ScreenAction): Grant => `${screen}:${action}`;
 
-/** أقصى مجموعة ممكنة — 24 × 7 = 168 زوجاً (قِيس، انظر CLAUDE.md). */
+/** The largest possible set: every screen with the actions that exist on it. */
 export function allGrants(): Set<Grant> {
   const out = new Set<Grant>();
-  for (const s of ALLOWED_SCREENS) for (const a of SCREEN_ACTIONS) out.add(grant(s, a));
+  for (const s of ALLOWED_SCREENS) for (const a of actionsFor(s)) out.add(grant(s, a));
   return out;
 }
 
-/** يوسّع تفويضاً على عقدة إلى أزواجه. */
+/** Expands a delegation on a node into its pairs; an action is kept only on the screens where it exists. */
 export function expand(nodeKey: string, actions: readonly ScreenAction[]): Set<Grant> {
   const out = new Set<Grant>();
-  for (const s of screensUnder(nodeKey)) for (const a of actions) out.add(grant(s, a));
+  for (const s of screensUnder(nodeKey)) for (const a of actions) if (actionsFor(s).includes(a)) out.add(grant(s, a));
   return out;
 }

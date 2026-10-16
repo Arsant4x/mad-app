@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker, BranchReadOnly } from '../../components/BranchPicker';
-import type { Employee, EmployeeInput, EmployeeStatus } from '../../api/employees';
+import { getEmployeeSalary, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
+
+/** A salary to save: a number, or null to clear it. Absent when the field was not changed. */
+export type SalaryChange = { baseSalary: number | null };
 
 const STATUS_OPTIONS: { value: EmployeeStatus; labelKey: string }[] = [
   { value: 'ACTIVE', labelKey: 'employees.status.active' },
@@ -16,30 +19,73 @@ const STATUS_OPTIONS: { value: EmployeeStatus; labelKey: string }[] = [
 export function EmployeeModal({
   editing,
   branches,
+  salaryAccess,
   onCancel,
   onSave,
 }: {
   editing: Employee | null;
   branches: Branch[];
+  /** Whether the user holds the salaries action; without it the salary field is not shown at all. */
+  salaryAccess: boolean;
   onCancel: () => void;
-  onSave: (data: EmployeeInput) => Promise<void>;
+  onSave: (data: EmployeeInput, salary?: SalaryChange) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [fullName, setFullName] = useState(editing?.fullName ?? '');
   const [jobTitle, setJobTitle] = useState(editing?.jobTitle ?? '');
   const [department, setDepartment] = useState(editing?.department ?? '');
   const [hireDate, setHireDate] = useState(editing ? editing.hireDate.slice(0, 10) : today());
-  const [baseSalary, setBaseSalary] = useState(editing?.baseSalary ?? '');
+  // The salary is read from its own path when editing; the field shows only once it is known.
+  const [salaryState, setSalaryState] = useState<'hidden' | 'loading' | 'ready'>(!salaryAccess ? 'hidden' : editing ? 'loading' : 'ready');
+  const [savedSalary, setSavedSalary] = useState('');
+  const [baseSalary, setBaseSalary] = useState('');
   const [phone, setPhone] = useState(editing?.phone ?? '');
   const [status, setStatus] = useState<EmployeeStatus>(editing?.status ?? 'ACTIVE');
   const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!salaryAccess || !editing) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await getEmployeeSalary(editing.id);
+        if (cancelled) return;
+        setSavedSalary(s.baseSalary ?? '');
+        setBaseSalary(s.baseSalary ?? '');
+        setSalaryState('ready');
+      } catch {
+        // A salary that cannot be read is not shown, so saving never touches it.
+        if (!cancelled) setSalaryState('hidden');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Read once when the window opens; the employee it was opened for does not change while it is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** The salary to save, only when the field is shown and was changed; an empty field clears it. */
+  function salaryChange(): SalaryChange | undefined | 'invalid' {
+    if (salaryState !== 'ready') return undefined;
+    const text = baseSalary.trim();
+    if (text === savedSalary) return undefined;
+    if (text === '') return { baseSalary: null };
+    const value = Number(text);
+    return Number.isFinite(value) && value >= 0 ? { baseSalary: value } : 'invalid';
+  }
+
   async function handleSubmit() {
     setError(null);
     if (!fullName.trim()) {
       setError(i18n.t('err_employee_name_required'));
+      return;
+    }
+    const salary = salaryChange();
+    if (salary === 'invalid') {
+      setError(t('employees.modal.salary_invalid'));
       return;
     }
     setSaving(true);
@@ -49,12 +95,11 @@ export function EmployeeModal({
         jobTitle: jobTitle.trim() || undefined,
         department: department.trim() || undefined,
         hireDate,
-        baseSalary: parseFloat(String(baseSalary)) || 0,
         phone: phone.trim() || undefined,
         status,
       };
       // The branch is set on create only: the update endpoint rejects it with 400.
-      await onSave(editing ? fields : { ...fields, branchId: branchId || undefined });
+      await onSave(editing ? fields : { ...fields, branchId: branchId || undefined }, salary);
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_employee_save')));
     } finally {
@@ -90,10 +135,12 @@ export function EmployeeModal({
             <label>{t('employees.modal.hire_date')}</label>
             <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
           </div>
-          <div className="field">
-            <label>{t('employees.modal.base_salary')}</label>
-            <input className="num" value={baseSalary} onChange={(e) => setBaseSalary(e.target.value)} placeholder="0.00" />
-          </div>
+          {salaryState === 'ready' && (
+            <div className="field">
+              <label htmlFor="employee-base-salary">{t('employees.modal.base_salary')}</label>
+              <input id="employee-base-salary" className="num" inputMode="decimal" value={baseSalary} onChange={(e) => setBaseSalary(e.target.value)} placeholder="0.00" />
+            </div>
+          )}
         </div>
         <div className="two-col">
           <div className="field">

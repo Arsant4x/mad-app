@@ -32,14 +32,30 @@ const SRC = join(__dirname, '..', '..');
 // باسمها صريحاً (`otherId` · `nationalId` …) أسقطه ① حتى يُستبعَد من السجلّ أو يُعلَن.
 const LOOKS_PERSONAL = /^(phone|mobile|email|website|address|street|district|postalCode|buildingNo|additionalNumber|unitNumber|notes?|reason|description|remark|comment|memo|name|fullName|tenant|orgName|otherId|tenantIdNumber|nationalId|salaryIban|socialInsuranceNo)$/i;
 
-function schemaPersonalNames(): string[] {
+/** Pay is personal whatever surrounds the word, and it is usually a number, not text. */
+const LOOKS_LIKE_PAY = /(salary|wage|allowance|bonus|overtime|payroll|gratuity|stipend)/i;
+const READ_TYPES = new Set(['String', 'Decimal', 'Int', 'BigInt', 'Float']);
+
+type ModelShape = { fields: readonly { kind: string; type: string; name: string }[] };
+
+/**
+ * A column stored encrypted is named in request bodies by its plain name (the client sends `baseSalary`,
+ * the table keeps `baseSalaryCipher`), so the suffix is dropped before the name is judged.
+ */
+function personalNamesOf(models: readonly ModelShape[]): string[] {
   const names = new Set<string>();
-  for (const m of Prisma.dmmf.datamodel.models) {
+  for (const m of models) {
     for (const f of m.fields) {
-      if (f.kind === 'scalar' && f.type === 'String' && LOOKS_PERSONAL.test(f.name)) names.add(f.name);
+      if (f.kind !== 'scalar' || !READ_TYPES.has(f.type)) continue;
+      const requestName = f.name.replace(/(Cipher|Index)$/, '');
+      if (LOOKS_PERSONAL.test(requestName) || LOOKS_LIKE_PAY.test(requestName)) names.add(requestName);
     }
   }
   return [...names].sort();
+}
+
+function schemaPersonalNames(): string[] {
+  return personalNamesOf(Prisma.dmmf.datamodel.models);
 }
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -59,6 +75,18 @@ describe('الحقولُ الشخصية في سجلّ التدقيق — مشت�
     expect(names).toContain('notes');
     expect(names).not.toContain('qtyRemaining');
     expect(names.length).toBeGreaterThan(8);
+  });
+
+  it('reads numeric pay columns, and encrypted columns by their request names', () => {
+    const shape = (fields: [string, string][]) => [{ fields: fields.map(([name, type]) => ({ kind: 'scalar', type, name })) }];
+    // A numeric pay column must be seen, a numeric non-pay column must not.
+    expect(personalNamesOf(shape([['housingAllowance', 'Decimal'], ['qtyRemaining', 'Decimal']]))).toEqual(['housingAllowance']);
+    // An encrypted column is judged by the name the client sends.
+    expect(personalNamesOf(shape([['baseSalaryCipher', 'String'], ['nationalIdIndex', 'String']]))).toEqual(['baseSalary', 'nationalId']);
+    // A relation is not a column.
+    expect(personalNamesOf([{ fields: [{ kind: 'object', type: 'Employee', name: 'salaryHolder' }] }])).toEqual([]);
+    // And the schema itself carries the employee salary under its request name.
+    expect(schemaPersonalNames()).toContain('baseSalary');
   });
 
   it('⭐ ① كلُّ اسمٍ يشبه الشخصيَّ في المخطَّط: مستبعَدٌ أو مُعلَنٌ بحجّته — لا ثالث', () => {
@@ -94,6 +122,7 @@ describe('الحقولُ الشخصية في سجلّ التدقيق — مشت�
     expect(isRedactedKey('otherId')).toBe(true);
     expect(isRedactedKey('tenantIdNumber')).toBe(true);
     expect(isRedactedKey('otherIdScheme')).toBe(false);
+    expect(isRedactedKey('baseSalary')).toBe(true);
     expect(REDACTED_VALUE.length).toBeGreaterThan(5);
     expect([...CONTACT_FIELD_NAMES, ...ADDRESS_PART_NAMES, ...FREE_TEXT_FIELD_NAMES].every((n) => REDACTED_FIELD_NAMES.has(n))).toBe(true);
   });

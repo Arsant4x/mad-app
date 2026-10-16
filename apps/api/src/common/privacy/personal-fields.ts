@@ -42,12 +42,20 @@ export const FREE_TEXT_FIELD_NAMES = ['notes', 'note', 'reason', 'description', 
  */
 export const IDENTITY_FIELD_NAMES = ['nationalid', 'salaryiban', 'socialinsuranceno', 'otherid', 'tenantidnumber'] as const;
 
+/**
+ * Pay amounts, by their names in a request body. The salary is encrypted in its table and shown only to holders
+ * of the salaries action, so its value never goes to the audit log. Rows written before stay as they are (the log
+ * is never modified).
+ */
+export const PAY_FIELD_NAMES = ['basesalary'] as const;
+
 /** ما لا تُكتب قيمتُه في `details` — تُكتب علامةُ التغيّر وحدَها. */
 export const REDACTED_FIELD_NAMES: ReadonlySet<string> = new Set<string>([
   ...CONTACT_FIELD_NAMES,
   ...ADDRESS_PART_NAMES,
   ...FREE_TEXT_FIELD_NAMES,
   ...IDENTITY_FIELD_NAMES,
+  ...PAY_FIELD_NAMES,
 ]);
 
 /** العلامةُ في مكان القيمة — تقول إن الحقل وصل وتغيّر، ولا تقول ماذا صار. */

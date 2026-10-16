@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards , Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, UseGuards , Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -13,7 +13,8 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { TransferEmployeeDto } from './dto/transfer-employee.dto';
 import { LinkLoginAccountDto } from './dto/link-login-account.dto';
 import { ApiOkResponse } from '@nestjs/swagger';
-import { EmployeeWithLoginAccountResponse } from './dto/employee-responses.dto';
+import { EmployeeSalaryResponse, EmployeeWithLoginAccountResponse } from './dto/employee-responses.dto';
+import { SetEmployeeSalaryDto } from './dto/set-employee-salary.dto';
 import { EmployeesService } from './employees.service';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { MSG } from '../common/i18n/messages';
@@ -47,6 +48,22 @@ export class EmployeesController {
   @RequiresAction('view')
   findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.employeesService.findOne(tenant.companyId, tenant.allowedBranchIds, id);
+  }
+
+  /** The base salary lives on its own path, readable only with the salaries action. */
+  @Get(':id/salary')
+  @RequiresAction('salaries')
+  @ApiOkResponse({ type: EmployeeSalaryResponse })
+  getSalary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.employeesService.getSalary(tenant.companyId, tenant.allowedBranchIds, id);
+  }
+
+  /** Sets or clears the base salary; refused without the salaries action. */
+  @Put(':id/salary')
+  @RequiresAction('salaries')
+  @ApiOkResponse({ type: EmployeeSalaryResponse })
+  setSalary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: SetEmployeeSalaryDto) {
+    return this.employeesService.setSalary(tenant.companyId, tenant.allowedBranchIds, id, dto.baseSalary);
   }
 
   @Post()

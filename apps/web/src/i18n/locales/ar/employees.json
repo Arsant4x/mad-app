@@ -18,7 +18,6 @@
     "job": "الوظيفة",
     "department": "القسم",
     "hire_date": "تاريخ التعيين",
-    "base_salary": "الراتب الأساسي",
     "phone": "الجوال",
     "status": "الحالة"
   },
@@ -43,6 +42,7 @@
     "department_placeholder": "المالية",
     "hire_date": "تاريخ التعيين",
     "base_salary": "الراتب الأساسي",
+    "salary_invalid": "اكتب الراتب رقماً موجباً، أو اتركه فارغاً",
     "phone": "رقم الجوال",
     "phone_placeholder": "05XXXXXXXX",
     "status": "الحالة",

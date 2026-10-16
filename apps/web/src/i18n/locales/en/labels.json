@@ -71,6 +71,7 @@
     "delete": "Delete",
     "record": "Record",
     "review": "Review",
-    "audit": "Audit"
+    "audit": "Audit",
+    "salaries": "Salaries"
   }
 }

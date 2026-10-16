@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { ALLOWED_SCREENS, SCREEN_ACTIONS } from './screens';
+import { ALL_ACTIONS, ALLOWED_SCREENS, SCREEN_ACTIONS, SCREEN_ONLY_ACTIONS, actionsFor } from './screens';
 
 /**
  * **مفرداتُ الصلاحيات مولَّدةٌ لا منسوخة** (`ق-١٢٣٤`).
@@ -21,7 +21,13 @@ export const REGENERATE_COMMAND = 'npx ts-node scripts/generate-shared-permissio
 export function renderSharedPermissions(): string {
   const screens = ALLOWED_SCREENS.map((s) => `  '${s}',`).join('\n');
   const actions = SCREEN_ACTIONS.map((a) => `'${a}'`).join(', ');
-  const keys = ALLOWED_SCREENS.flatMap((s) => SCREEN_ACTIONS.map((a) => `  '${s}:${a}',`)).join('\n');
+  const screenOnly = Object.entries(SCREEN_ONLY_ACTIONS)
+    .map(([s, list]) => `${s}: [${list.map((a) => `'${a}'`).join(', ')}]`)
+    .join(', ');
+  const allActions = ALL_ACTIONS.map((a) => `'${a}'`).join(', ');
+  const pairs = ALLOWED_SCREENS.flatMap((s) => actionsFor(s).map((a) => `${s}:${a}`));
+  const keys = pairs.map((k) => `  '${k}',`).join('\n');
+  const extra = pairs.length - ALLOWED_SCREENS.length * SCREEN_ACTIONS.length;
   return [
     '// ⛔ مولَّدٌ — لا يُحرَّر بيد.',
     '// المصدرُ: apps/api/src/templates/screens.ts (ALLOWED_SCREENS × SCREEN_ACTIONS)',
@@ -36,9 +42,15 @@ export function renderSharedPermissions(): string {
     '',
     '/** الأفعالُ التي تُمنح على شاشة — بترتيب المصدر. */',
     `export const SCREEN_ACTIONS = [${actions}] as const;`,
-    'export type ScreenAction = (typeof SCREEN_ACTIONS)[number];',
     '',
-    `/** كلُّ زوجٍ \`شاشة:فعل\` — ${ALLOWED_SCREENS.length} × ${SCREEN_ACTIONS.length} = ${ALLOWED_SCREENS.length * SCREEN_ACTIONS.length}. */`,
+    '/** Actions that exist on one screen only, on top of the general ones. */',
+    `export const SCREEN_ONLY_ACTIONS = { ${screenOnly} } as const;`,
+    '',
+    '/** Every action name: the general ones first, then the screen-only ones. */',
+    `export const ALL_ACTIONS = [${allActions}] as const;`,
+    'export type ScreenAction = (typeof ALL_ACTIONS)[number];',
+    '',
+    `/** Every real screen:action pair: ${ALLOWED_SCREENS.length} screens × ${SCREEN_ACTIONS.length} actions, plus ${extra} screen-only, = ${pairs.length}. */`,
     'export const PERMISSION_KEYS = [',
     keys,
     '] as const;',

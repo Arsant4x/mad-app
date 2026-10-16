@@ -20,7 +20,7 @@ import { TENANT_WIDE_KEY } from './tenant-wide.decorator';
 import { COMPANY_WIDE_FIGURES_KEY } from './company-wide-figures.decorator';
 import { OWNER_ONLY_KEY } from './owner-only.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
-import { clipToCompany, grantsOf } from '../../templates/template-clip.util';
+import { clipToCompany, companyGrantsOf } from '../../templates/template-clip.util';
 import { chainsFor, readDelegationRows } from '../../delegations/chain-source';
 import type { DelegationLink } from '../../delegations/intersection';
 import { delegatedTemplate } from '../../delegations/root-grants';
@@ -92,6 +92,9 @@ export class TenantGuard implements CanActivate {
       const supportShell = this.reflector.getAllAndOverride<boolean | undefined>(SUPPORT_SHELL_KEY, [context.getHandler(), context.getClass()]);
       if (!requiredScreen && !supportShell) throw new ForbiddenException(MSG.support_scope_undeclared);
       if (requiredScreen && !grant.screens.includes(requiredScreen)) throw new ForbiddenException(MSG.support_scope_forbidden);
+      // A support grant names screens, not actions, so it never carries the salaries action.
+      const supportAction = this.reflector.getAllAndOverride<ScreenAction | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
+      if (supportAction === 'salaries') throw new ForbiddenException(MSG.support_scope_forbidden);
 
       // The log line is part of the access itself — if it can't be written,
       // the access doesn't happen.
@@ -167,9 +170,10 @@ export class TenantGuard implements CanActivate {
       if (!isRead && !subscriptionSelfService) throw new AccountFrozenException(neverSubscribed(company) ? MSG.account_frozen_no_subscription : MSG.account_frozen);
     }
 
-    let isAllScreens = company.permissionTemplate.isAllScreens;
-    let allowedScreens: string[] | 'all' = isAllScreens ? 'all' : company.permissionTemplate.allowedScreens;
-    let screenActions = (company.permissionTemplate.screenActions ?? null) as ScreenActionMap | null;
+    const companyGrants = companyGrantsOf(company.permissionTemplate);
+    let isAllScreens = companyGrants.isAllScreens;
+    let allowedScreens: string[] | 'all' = isAllScreens ? 'all' : companyGrants.allowedScreens;
+    let screenActions = companyGrants.screenActions;
     // The company owner always sees every branch, including the consolidated
     // view (CLAUDE.md 6.8) — only employees can be narrowed.
     let allowedBranchIds: string[] | 'all' = 'all';
@@ -240,7 +244,7 @@ export class TenantGuard implements CanActivate {
     // ⚖️ **قالبُ الموظّف ومفتاحُ النظام يُقصّان بقالب المنشأة** (توجيه ٢٧٦ · ق-١٦٠١): كانا يحلّان محلَّه فيرى الموظّفُ ما لا تراه
     //    منشأتُه. والتقاطعُ من الدالّة الواحدة التي يقرؤها `/me/permissions` أيضاً.
     if (payload.actorType === 'COMPANY_USER' || payload.actorType === 'INTEGRATION') {
-      const clipped = clipToCompany({ isAllScreens, allowedScreens: allowedScreens === 'all' ? [] : allowedScreens, screenActions }, grantsOf(company.permissionTemplate));
+      const clipped = clipToCompany({ isAllScreens, allowedScreens: allowedScreens === 'all' ? [] : allowedScreens, screenActions }, companyGrants);
       // An employee holds what the delegation chains still grant within that template,
       // by the same rule /me/permissions applies.
       const effective = delegatedTemplate(clipped, delegationChains);

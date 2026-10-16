@@ -5,6 +5,7 @@ import { Employee, Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { blindIndex, decryptField, encryptField } from '../common/crypto/field-cipher.util';
 import { normalizeIban, normalizeIdentifier } from '../common/identity/identifiers.util';
+import { decryptSalary, encryptSalary } from './employee-salary.util';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { TransferEmployeeDto } from './dto/transfer-employee.dto';
@@ -52,9 +53,12 @@ function identityData(companyId: string, employeeId: string, dto: IdentityInput)
   return data;
 }
 
-/** الصفُّ كما يخرج في كلِّ ردّ: بلا نصٍّ مشفَّرٍ ولا بصمة — وعلامةُ الوجود وحدَها. */
+/**
+ * The row as every general response carries it: no ciphertext and no index, only whether each identity field is on
+ * file. The base salary is left out entirely; it is served by its own path to holders of the salaries action.
+ */
 export function publicEmployee(row: Employee) {
-  const { nationalIdCipher, nationalIdIndex: _index, salaryIbanCipher, socialInsuranceNoCipher, ...rest } = row;
+  const { nationalIdCipher, nationalIdIndex: _index, salaryIbanCipher, socialInsuranceNoCipher, baseSalaryCipher: _salary, ...rest } = row;
   return {
     ...rest,
     identityOnFile: { nationalId: nationalIdCipher !== null, salaryIban: salaryIbanCipher !== null, socialInsuranceNo: socialInsuranceNoCipher !== null },
@@ -112,7 +116,6 @@ export class EmployeesService {
           jobTitle: dto.jobTitle || null,
           department: dto.department || null,
           hireDate: new Date(dto.hireDate),
-          baseSalary: dto.baseSalary ?? 0,
           phone: dto.phone || null,
           status: dto.status ?? 'ACTIVE',
           ...identityData(companyId, id, dto),
@@ -141,12 +144,29 @@ export class EmployeesService {
       if (dto.jobTitle !== undefined) data.jobTitle = dto.jobTitle || null;
       if (dto.department !== undefined) data.department = dto.department || null;
       if (dto.hireDate !== undefined) data.hireDate = new Date(dto.hireDate);
-      if (dto.baseSalary !== undefined) data.baseSalary = dto.baseSalary;
       if (dto.phone !== undefined) data.phone = dto.phone || null;
       if (dto.status !== undefined) data.status = dto.status;
       Object.assign(data, identityData(companyId, id, dto));
 
       return publicEmployee(await tx.employee.update({ where: { id }, data }));
+    });
+  }
+
+  /** The base salary, decrypted, for an employee in the caller's branches. */
+  getSalary(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const row = await this.findVisible(tx, allowedBranchIds, id);
+      return { employeeId: row.id, baseSalary: decryptSalary(companyId, row.id, row.baseSalaryCipher) };
+    });
+  }
+
+  /** Sets the base salary, encrypted for its row; null clears it. */
+  setSalary(companyId: string, allowedBranchIds: string[] | 'all', id: string, baseSalary: number | null) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await this.findVisible(tx, allowedBranchIds, id);
+      const cipher = baseSalary === null ? null : encryptSalary(companyId, id, baseSalary);
+      const row = await tx.employee.update({ where: { id }, data: { baseSalaryCipher: cipher } });
+      return { employeeId: row.id, baseSalary: decryptSalary(companyId, row.id, row.baseSalaryCipher) };
     });
   }
 

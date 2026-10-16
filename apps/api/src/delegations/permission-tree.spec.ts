@@ -1,4 +1,4 @@
-import { ALLOWED_SCREENS, SCREEN_ACTIONS } from '../templates/screens';
+import { ALLOWED_SCREENS, SCREEN_ACTIONS, actionsFor } from '../templates/screens';
 import { allGrants, buildTree, expand, RAW_DOMAINS, screensUnder } from './permission-tree';
 
 /**
@@ -61,15 +61,24 @@ describe('شجرة النطاقات — مشتقّة لا مكتوبة', () => {
     expect(out.has('accounts:view')).toBe(false);
   });
 
-  it('المصفوفة الكاملة = الشاشات × الأفعال (القياس المسجَّل: 24×7=168)', () => {
-    expect(allGrants().size).toBe(ALLOWED_SCREENS.length * SCREEN_ACTIONS.length);
+  it('the full matrix is every screen with the actions that exist on it (25 x 7 plus the salaries action)', () => {
+    expect(allGrants().size).toBe(ALLOWED_SCREENS.length * SCREEN_ACTIONS.length + 1);
+    expect(allGrants().has('employees:salaries')).toBe(true);
+    expect(allGrants().has('contracts:salaries')).toBe(false);
   });
 
-  it('لا نظام صلاحيات ثانٍ — المفردات هي `screens.ts` نفسها', () => {
+  it('a delegation on a domain keeps a screen-only action on its own screen', () => {
+    const out = expand('root', ['view', 'salaries']);
+    expect(out.has('employees:salaries')).toBe(true);
+    expect(out.has('contracts:salaries')).toBe(false);
+    expect(out.size).toBe(ALLOWED_SCREENS.length + 1);
+  });
+
+  it('no second permission system: the vocabulary is screens.ts itself', () => {
     for (const g of allGrants()) {
       const [screen, action] = g.split(':');
       expect(ALLOWED_SCREENS as readonly string[]).toContain(screen);
-      expect(SCREEN_ACTIONS as readonly string[]).toContain(action);
+      expect(actionsFor(screen) as readonly string[]).toContain(action);
     }
   });
 });

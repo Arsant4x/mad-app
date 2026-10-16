@@ -76,6 +76,7 @@
     "name": "Template name",
     "name_placeholder": "Example: contract editor · front desk accountant",
     "hint": "Choose the screens, then set what the employee can do on each one.",
+    "salaries_hint": "Salaries exists on the employees screen only: it shows and sets base salaries. Granting every action on that screen includes it.",
     "col_screen": "Screen",
     "save_edit": "Save changes",
     "create": "Create template"

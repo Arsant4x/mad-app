@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stripComments } from '../common/source-scan.util';
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, isActionAllowed } from '../templates/screens';
-import { Grant, grant } from './permission-tree';
+import { ALLOWED_SCREENS, ALL_ACTIONS, SCREEN_ACTIONS, isActionAllowed } from '../templates/screens';
+import { Grant, allGrants, grant } from './permission-tree';
 import { DelegationLink } from './intersection';
 import { rootGrantsFrom } from './root-grants';
 import { splitLastLink, grantableBy } from './extinguished';
@@ -25,7 +25,17 @@ const row = (grantorId: string, granteeId: string, grants: string[], state = 'AC
 describe('سقف السلسلة يُشتقّ من القالب — لا يُعرَّف من جديد', () => {
   it('«كل الشاشات» يعطي 168 زوجاً — المجموعة القصوى', () => {
     const g = rootGrantsFrom(true, [], null);
-    expect(g.size).toBe(ALLOWED_SCREENS.length * SCREEN_ACTIONS.length);
+    expect(g.size).toBe(allGrants().size);
+    expect(g.has(grant('employees', 'salaries'))).toBe(true);
+    expect(g.has(grant('contracts', 'salaries'))).toBe(false);
+  });
+
+  it('a screen granted with no action list includes its screen-only action', () => {
+    const g = rootGrantsFrom(false, ['employees'], null);
+    expect(g.size).toBe(SCREEN_ACTIONS.length + 1);
+    expect(g.has(grant('employees', 'salaries'))).toBe(true);
+    // An explicit list without it does not.
+    expect(rootGrantsFrom(false, ['employees'], { employees: ['view', 'edit'] }).has(grant('employees', 'salaries'))).toBe(false);
   });
 
   it('[SPEC 1.3] ⭐ شاشةٌ مسموحة بلا تفصيل أفعال ⇒ **كل** أفعالها لا صفر', () => {
@@ -50,11 +60,12 @@ describe('سقف السلسلة يُشتقّ من القالب — لا يُعر
       [false, ['contracts', 'pos'], null],
       [false, ['contracts', 'pos'], { contracts: ['view'] }],
       [false, ['contracts'], { pos: ['view'] }],
+      [false, ['employees'], { employees: ['view', 'salaries'] }],
     ];
     for (const [all, screens, actions] of cases) {
       const derived = rootGrantsFrom(all, screens, actions as any);
       for (const s of ALLOWED_SCREENS) {
-        for (const a of SCREEN_ACTIONS) {
+        for (const a of ALL_ACTIONS) {
           expect(derived.has(grant(s, a))).toBe(isActionAllowed(all, screens, actions as any, s, a));
         }
       }

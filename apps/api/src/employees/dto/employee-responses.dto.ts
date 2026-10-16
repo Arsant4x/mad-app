@@ -36,3 +36,11 @@ export class EmployeeWithLoginAccountResponse {
   createdAt!: string;
   updatedAt!: string;
 }
+
+/** An employee's base salary, served only to holders of the salaries action. */
+export class EmployeeSalaryResponse {
+  employeeId!: string;
+  /** Two decimal text, or null when no salary was entered. */
+  @ApiProperty({ type: String, nullable: true, example: '5000.00' })
+  baseSalary!: string | null;
+}

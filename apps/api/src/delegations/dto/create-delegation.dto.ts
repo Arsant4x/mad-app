@@ -1,6 +1,6 @@
 import { ArrayNotEmpty, IsArray, IsIn, IsString, Matches } from 'class-validator';
-import { ALLOWED_SCREENS, SCREEN_ACTIONS } from '../../templates/screens';
-import { RAW_DOMAINS } from '../permission-tree';
+import { ALLOWED_SCREENS } from '../../templates/screens';
+import { RAW_DOMAINS, allGrants } from '../permission-tree';
 
 /**
  * ⚠️ النمط **مبنيٌّ من `screens.ts` لا مكتوبٌ يدوياً**.
@@ -9,7 +9,8 @@ import { RAW_DOMAINS } from '../permission-tree';
  * فتعمل حراستها ويرفضها هذا الفحص — أو الأسوأ، تُحذف من هناك ويبقى الفحص
  * يقبلها. وهي عائلة الخمسة عشر اسماً المخترَعة بعينها.
  */
-const GRANT_PATTERN = new RegExp(`^(${ALLOWED_SCREENS.join('|')}):(${SCREEN_ACTIONS.join('|')})$`);
+// Every real screen:action pair, so an action that exists on one screen only is refused on the others.
+const GRANT_PATTERN = new RegExp(`^(${[...allGrants()].join('|')})$`);
 
 /**
  * عُقد الشجرة المقبولة: `root` · نطاق · شاشة.

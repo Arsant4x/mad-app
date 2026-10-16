@@ -1,7 +1,7 @@
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
 import { EmployeeStatus } from '@mad-app/db';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateEmployeeDto extends BranchFieldDto {
   @IsString()
@@ -19,10 +19,7 @@ export class CreateEmployeeDto extends BranchFieldDto {
   @IsDateString()
   hireDate!: string;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  baseSalary?: number;
+  // The base salary is not set here: it has its own path, gated by the salaries action.
 
   @IsOptional()
   @IsString()

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, SCREEN_LABELS, ACTION_LABELS } from '../../api/templates';
+import { ALLOWED_SCREENS, SCREEN_LABELS, ACTION_LABELS, actionsFor } from '../../api/templates';
 import { createDelegation, getDelegationView, revokeDelegation, type DelegationView } from '../../api/delegations';
 import { usePermissions, type ExtinctionReason } from '../../auth/PermissionsContext';
 import { apiErrorMessage } from '../../lib/apiError';
@@ -64,7 +64,7 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
    * tree would show what the delegator does not hold.
    */
   const screens = useMemo(
-    () => ALLOWED_SCREENS.filter((s) => SCREEN_ACTIONS.some((a) => grantable.has(`${s}:${a}`))),
+    () => ALLOWED_SCREENS.filter((s) => actionsFor(s).some((a) => grantable.has(`${s}:${a}`))),
     [grantable],
   );
 
@@ -132,7 +132,7 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
               {screens.map((screen) => (
                 <fieldset key={screen} className="deleg-screen">
                   <legend>{SCREEN_LABELS[screen]}</legend>
-                  {SCREEN_ACTIONS.filter((a) => grantable.has(`${screen}:${a}`)).map((action) => {
+                  {actionsFor(screen).filter((a) => grantable.has(`${screen}:${a}`)).map((action) => {
                     const key = `${screen}:${action}`;
                     const dead = extinguished.get(key);
                     const isActive = active.has(key);

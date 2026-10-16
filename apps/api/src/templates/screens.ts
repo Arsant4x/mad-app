@@ -41,7 +41,35 @@ export const ALLOWED_SCREENS = [
  * - audit   = reading the audit trail (who did what).
  */
 export const SCREEN_ACTIONS = ['view', 'add', 'edit', 'delete', 'record', 'review', 'audit'] as const;
-export type ScreenAction = (typeof SCREEN_ACTIONS)[number];
+
+/**
+ * Actions that exist on one screen only, on top of the general ones.
+ *
+ * - salaries = read and set an employee's base salary (employees screen).
+ */
+export const SCREEN_ONLY_ACTIONS = {
+  employees: ['salaries'],
+} as const satisfies Partial<Record<(typeof ALLOWED_SCREENS)[number], readonly string[]>>;
+
+type ScreenOnlyAction = (typeof SCREEN_ONLY_ACTIONS)[keyof typeof SCREEN_ONLY_ACTIONS][number];
+export type ScreenAction = (typeof SCREEN_ACTIONS)[number] | ScreenOnlyAction;
+
+/** Every action name: the general ones first, then the screen-only ones. */
+export const ALL_ACTIONS: readonly ScreenAction[] = [...SCREEN_ACTIONS, ...new Set(Object.values(SCREEN_ONLY_ACTIONS).flat())];
+
+/** The actions that exist on a screen, in order. */
+export function actionsFor(screen: string): readonly ScreenAction[] {
+  const only = (SCREEN_ONLY_ACTIONS as Partial<Record<string, readonly ScreenAction[]>>)[screen] ?? [];
+  return [...SCREEN_ACTIONS, ...only];
+}
+
+/**
+ * Actions the company owner holds on a screen whatever the company template lists, so a template
+ * written before the action existed cannot take it from the owner.
+ */
+export const OWNER_HELD_ACTIONS: Readonly<Record<string, readonly ScreenAction[]>> = {
+  employees: ['salaries'],
+};
 
 /** A screen listed in `allowedScreens` with no explicit action set means "all
  * actions" — this keeps templates made before actions existed fully working. */
@@ -55,6 +83,8 @@ export function isActionAllowed(
   screen: string,
   action: ScreenAction,
 ): boolean {
+  // A screen-only action does not exist on any other screen, not even for an all-screens template.
+  if (!actionsFor(screen).includes(action)) return false;
   if (isAllScreens) return true;
   if (!allowedScreens.includes(screen)) return false;
   const granted = screenActions?.[screen];

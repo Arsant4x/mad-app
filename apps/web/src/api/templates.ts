@@ -1,4 +1,4 @@
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, type ScreenAction, type ScreenKey } from '@mad-app/shared/permissions';
+import { ALL_ACTIONS, ALLOWED_SCREENS, SCREEN_ACTIONS, SCREEN_ONLY_ACTIONS, type ScreenAction, type ScreenKey } from '@mad-app/shared/permissions';
 import { apiClient } from './client';
 import type { CreateTemplateDto } from '@mad-app/shared/api/requests';
 import { labelTable, translateTable } from '../lib/labelTable';
@@ -8,8 +8,14 @@ import { labelTable, translateTable } from '../lib/labelTable';
  * Only the screen and action names live here; their keys come from the generated types, so `tsc`
  * fails on a screen without a name.
  */
-export { ALLOWED_SCREENS, SCREEN_ACTIONS };
+export { ALL_ACTIONS, ALLOWED_SCREENS, SCREEN_ACTIONS };
 export type { ScreenAction, ScreenKey };
+
+/** The actions that exist on a screen: the general ones, plus that screen's own (salaries on employees). */
+export function actionsFor(screen: string): readonly ScreenAction[] {
+  const only = (SCREEN_ONLY_ACTIONS as Partial<Record<string, readonly ScreenAction[]>>)[screen] ?? [];
+  return [...SCREEN_ACTIONS, ...only];
+}
 
 /**
  * Is this a screen from the shared list? A stored template may still name a screen that was dropped
@@ -53,7 +59,7 @@ export const SCREEN_LABELS: Record<ScreenKey, string> = {
 };
 translateTable(SCREEN_LABELS, 'labels.screens');
 
-export const ACTION_LABELS: Record<ScreenAction, string> = labelTable('labels.actions', SCREEN_ACTIONS);
+export const ACTION_LABELS: Record<ScreenAction, string> = labelTable('labels.actions', ALL_ACTIONS);
 
 /** { screen: [actions] }. A screen present in allowedScreens with no entry
  * here means every action on it. */

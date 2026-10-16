@@ -2752,9 +2752,12 @@ model Employee {
   jobTitle   String?
   department String?
   hireDate   DateTime       @db.Date
-  baseSalary Decimal        @default(0) @db.Decimal(18, 2)
   phone      String?
   status     EmployeeStatus @default(ACTIVE)
+
+  /// The base salary, encrypted by the application (`f1:<key id>:…`, bound to companyId|employees.baseSalary|id) as a
+  /// two decimal text. Null when none was entered. Read and written only by holders of the salaries action.
+  baseSalaryCipher String?
 
   /// ⚖️ `ق-١٣٤٥` (الحزمة م①) — **الحقولُ الحسّاسة مشفَّرةٌ في التطبيق من أوّل حقل**: لا عمودَ نصٍّ صريحٍ لها قطّ.
   /// كلُّ قيمةٍ `f1:<معرّفُ المفتاح>:…` يكتبها التطبيقُ مربوطةً بمنشأتها وحقلها وصفّها (`common/crypto/field-cipher.util`)،

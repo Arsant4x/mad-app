@@ -233,6 +233,12 @@ export interface EmployeeLoginAccountResponse {
   branchIds: string[];
 }
 
+/** Response: `EmployeeSalaryResponse` on the server. */
+export interface EmployeeSalaryResponse {
+  baseSalary: string | null;
+  employeeId: string;
+}
+
 /** Response: `EmployeeWithLoginAccountResponse` on the server. */
 export interface EmployeeWithLoginAccountResponse {
   status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';

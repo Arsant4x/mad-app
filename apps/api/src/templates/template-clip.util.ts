@@ -1,4 +1,4 @@
-import type { ScreenActionMap } from './screens';
+import { OWNER_HELD_ACTIONS, type ScreenActionMap } from './screens';
 
 /** ما يمنحه قالب: علَمُ الشمول والشاشاتُ وأفعالُها — كما يقرؤه الحارسُ و`/me/permissions`. */
 export interface TemplateGrants {
@@ -10,6 +10,24 @@ export interface TemplateGrants {
 /** حقولُ القالب كما تخرج من القاعدة إلى `TemplateGrants`. */
 export function grantsOf(t: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown }): TemplateGrants {
   return { isAllScreens: t.isAllScreens, allowedScreens: t.allowedScreens, screenActions: (t.screenActions ?? null) as ScreenActionMap | null };
+}
+
+/**
+ * The company template as its owner holds it: on every screen it lists with an explicit action list, the
+ * owner-held actions are added. Read wherever the company template is, so the owner and everyone clipped
+ * by the company template see the same set.
+ */
+export function companyGrantsOf(t: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown }): TemplateGrants {
+  const grants = grantsOf(t);
+  if (grants.isAllScreens || !grants.screenActions) return grants;
+  const screenActions: ScreenActionMap = { ...grants.screenActions };
+  for (const [screen, held] of Object.entries(OWNER_HELD_ACTIONS)) {
+    const listed = screenActions[screen];
+    // No list means every action already; a screen the template does not grant stays closed.
+    if (!listed || !grants.allowedScreens.includes(screen)) continue;
+    screenActions[screen] = [...listed, ...held.filter((a) => !listed.includes(a))];
+  }
+  return { ...grants, screenActions };
 }
 
 /**
