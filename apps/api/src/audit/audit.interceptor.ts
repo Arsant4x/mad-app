@@ -6,6 +6,7 @@ import { JwtPayload } from '../auth/types';
 import { REDACTED_VALUE, isRedactedKey } from '../common/privacy/personal-fields';
 import { REQUIRES_SCREEN_KEY } from '../common/tenant/requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from '../common/tenant/requires-action.decorator';
+import { withoutVersionPrefix } from '../common/versioning';
 import { AUDIT_CREATED_ID_PATH_KEY, AUDIT_ENTITY_FROM_RESULT_KEY, idFromResultPath } from './audit-entity-from-result.decorator';
 import { NO_AUDIT_KEY } from './no-audit.decorator';
 import { AuditService } from './audit.service';
@@ -133,6 +134,8 @@ export class AuditInterceptor implements NestInterceptor {
         const declaredPath = this.reflector.getAllAndOverride<string | undefined>(AUDIT_CREATED_ID_PATH_KEY, [context.getHandler(), context.getClass()]);
         const created = declaredPath ? idFromResultPath(result, declaredPath) : resultId;
         const createdId = created && created !== entityId ? created : null;
+        // The entity and the wording come from the route, so the version prefix changes neither.
+        const routePath = withoutVersionPrefix(req.path);
 
         this.audit
           .record({
@@ -142,10 +145,10 @@ export class AuditInterceptor implements NestInterceptor {
             actorName: payload.username,
             screen,
             action: action ?? this.fallbackAction(method),
-            entity: this.entityFromPath(req.path),
+            entity: this.entityFromPath(routePath),
             entityId,
             method,
-            path: req.path,
+            path: routePath,
             details: createdId ? { ...safeDetails(req.body), createdId } : safeDetails(req.body),
             ip: req.ip ?? null,
           })
@@ -192,6 +195,7 @@ export class AuditInterceptor implements NestInterceptor {
     const screen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]) ?? 'general';
     const action = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
     const entityId = parentIdFromParams(req.params) ?? (req.params?.id as string | undefined) ?? null;
+    const routePath = withoutVersionPrefix(req.path);
 
     this.audit
       .record({
@@ -201,10 +205,10 @@ export class AuditInterceptor implements NestInterceptor {
         actorName: payload.username,
         screen,
         action: action ?? this.fallbackAction(method),
-        entity: this.entityFromPath(req.path),
+        entity: this.entityFromPath(routePath),
         entityId,
         method,
-        path: req.path,
+        path: routePath,
         // **وقوعُ الرفض وسببُه لا موضوعُه** — ولا جسمَ طلبٍ هنا بحال.
         details: { outcome: 'rejected', status },
         ip: req.ip ?? null,
@@ -220,9 +224,9 @@ export class AuditInterceptor implements NestInterceptor {
     return 'edit';
   }
 
-  /** First path segment — `/contracts/123/payments` → `contracts`. Good enough
-   * to group the trail by area without coupling it to controller internals. */
-  private entityFromPath(path: string): string {
-    return path.split('/').filter(Boolean)[0] ?? 'unknown';
+  /** First segment of the route path, without the version prefix — `/contracts/123/payments` →
+   * `contracts`. Good enough to group the trail by area without coupling it to controller internals. */
+  private entityFromPath(routePath: string): string {
+    return routePath.split('/').filter(Boolean)[0] ?? 'unknown';
   }
 }

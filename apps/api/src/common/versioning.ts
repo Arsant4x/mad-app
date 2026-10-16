@@ -37,3 +37,11 @@ export function applyApiVersioning(app: INestApplication): void {
 
 /** البادئةُ التي تُعلنها الواجهةُ والوثائق — مصدرٌ واحد لا نصٌّ مكرَّر. */
 export const API_VERSION_PREFIX = 'v1';
+
+/**
+ * The request path without its leading URI version segment, so `/v1/customers/1` and
+ * `/customers/1` name the same route wherever the path is read for meaning.
+ */
+export function withoutVersionPrefix(path: string): string {
+  return path.replace(/^\/v\d+(?=\/|$)/, '') || '/';
+}
