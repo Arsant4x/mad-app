@@ -464,4 +464,39 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     expect(after.zatcaHash).toBe(rejectedStd.zatcaHash);
     expect(after.replacedBy!.id).toBe(replacementStd.id);
   }, 60000);
+
+  it('closing a rejected USD invoice reverses the consumed layer cost, not that cost times the rate', async () => {
+    const suffix = Date.now();
+    const usdProduct = (
+      await auth(request(server()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `USD replacement product ${suffix}`, price: 100, cost: 40 }).expect(201)
+    ).body.id as string;
+    const supplierId = (await auth(request(server()).post('/suppliers')).send({ name: `USD replacement supplier ${suffix}` }).expect(201)).body.id;
+    await auth(request(server()).post('/purchases'))
+      .send({ supplierId, date: '2026-05-01', subtotal: 200, warehouseId, branchId, lines: [{ description: 'stocked purchase', productId: usdProduct, quantity: 5, unitPrice: 40, taxRate: 15 }] })
+      .expect(201);
+
+    const costLines = async (memo: string) => {
+      const entry = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+        tx.journalEntry.findFirst({ where: { memo }, include: { lines: { include: { account: { select: { code: true } } } } } }),
+      );
+      expect(entry).not.toBeNull();
+      return entry!.lines.map((l) => ({ code: l.account.code, debit: Number(l.debit), credit: Number(l.credit) })).sort((a, b) => a.code.localeCompare(b.code, 'en'));
+    };
+    // Two units out of a 40 layer: 80 in the company currency whatever the invoice currency.
+    const sold = [
+      { code: '1300', debit: 0, credit: 80 },
+      { code: '5100', debit: 80, credit: 0 },
+    ];
+
+    const rejected = await makeRejected(standardCustomerId, { description: 'stocked sale', productId: usdProduct, quantity: 2, unitPrice: 30, taxRate: 15 }, { currency: 'USD', exchangeRate: 3.75 });
+    expect(await costLines(`تكلفة مبيعات ${rejected.no}`)).toEqual(sold);
+
+    const res = await replace(rejected.id, { issuedAt: new Date().toISOString(), issuedOffsetMin: ISSUED_OFFSET_MIN });
+    expect(res.status).toBe(201);
+    expect(await costLines(`عكس تكلفة مبيعات — إغلاقُ مردودة ${rejected.no}`)).toEqual([
+      { code: '1300', debit: 80, credit: 0 },
+      { code: '5100', debit: 0, credit: 80 },
+    ]);
+    expect(await costLines(`تكلفة مبيعات ${res.body.no}`)).toEqual(sold);
+  });
 });

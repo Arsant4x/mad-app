@@ -17,7 +17,7 @@ import {
   outstandingAfterNotes,
   type NoteKinds,
 } from '../common/adjustment/adjustment-note.util';
-import { toBaseAmount, resolveCurrencyWithin } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { baseCurrencyTotals, computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
@@ -388,8 +388,8 @@ export class InvoicesService {
           documentNo: rejected.no,
           lines: rejected.lines.map((l) => ({ id: l.id, productId: l.productId, quantity: l.quantity, returnsLineId: l.id, returnCondition: 'GOOD' as const })),
         });
-        // ⚖️ ق-١٣٦٤ ومعه ما رُفع على العائد بعد خروجه — بالعملة الأساسية أصلاً (من الطبقة) فلا يُحوَّل.
-        const returnedBase = round2(toBaseAmount(returned.totalCost, rate) + returned.raisedAfterExit);
+        // Both amounts come from the layers, which hold cost in the company currency, so the invoice rate never applies.
+        const returnedBase = round2(returned.totalCost + returned.raisedAfterExit);
         if (returnedBase > 0) {
           await postCogsReversalEntry(tx, companyId, {
             branchId: rejected.branchId,
@@ -738,7 +738,8 @@ export class InvoicesService {
           branchId: created.branchId,
           no: created.no,
           date: created.issueDate,
-          baseCost: toBaseAmount(fulfilment.totalCost, exchangeRate),
+          // Layer cost is already in the company currency; the invoice rate does not apply to it.
+          baseCost: fulfilment.totalCost,
         });
       }
 
@@ -1212,9 +1213,9 @@ export class InvoicesService {
         if (e instanceof ReturnExceedsSoldError) throw returnExceedsSoldRefusal(e);
         throw e;
       }
-      // ⚖️ ق-١٣٦٤ «والوحدةُ تعود بالتكلفة التي خرجت بها، وما رُفع عليها بعد خروجها يُعاد من تكلفة المبيعات إلى المخزون» —
-      // الثاني بالعملة الأساسية أصلاً (من الطبقة) فلا يُحوَّل.
-      const restockedBase = round2(toBaseAmount(restocking.totalCost, rate) + restocking.raisedAfterExit);
+      // The unit returns at the cost it left with, plus what was raised on it after it left; both come from the
+      // layers in the company currency, so the note rate never applies.
+      const restockedBase = round2(restocking.totalCost + restocking.raisedAfterExit);
       if (restockedBase > 0) {
         await postCogsReversalEntry(tx, companyId, {
           branchId: created.branchId,
