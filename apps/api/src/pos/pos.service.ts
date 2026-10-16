@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PosCardVerification, Prisma } from '@mad-app/db';
+import { PosCardVerification, PosShift, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { onceForKey } from '../common/idempotency/idempotency';
@@ -15,7 +15,7 @@ import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentReport } from '../invoices/sale-fulfilment.util';
 import { assertPostingAccounts, invoicePostingCodes } from '../journal/auto-posting.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
-import { round2 } from '../common/money/rounding';
+import { round2, toHalalas } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import {
@@ -149,9 +149,12 @@ interface ShiftTotalsNumeric {
   salesCount: number;
   cashTotal: number;
   cardTotal: number;
-  /** openingFloat + cashTotal — what should be in the drawer. */
+  /** What should be in the drawer: the opening float plus the drawer ledger movement while the shift is open. */
   expectedCash: number;
 }
+
+/** The shift columns the expected cash is computed from. */
+type ShiftForTotals = Pick<PosShift, 'id' | 'openingFloat' | 'status' | 'drawerId' | 'openedAt' | 'declaredClosing' | 'variance'>;
 
 /**
  * ② مجاميعُ المناوبة كما تخرج للكاشير — **المالُ نصّاً بخانتين** (`ق-١٢٣٥` · النطاقُ الثاني):
@@ -161,7 +164,7 @@ export interface ShiftTotals {
   salesCount: number;
   cashTotal: string;
   cardTotal: string;
-  /** openingFloat + cashTotal — what should be in the drawer. */
+  /** What should be in the drawer: the opening float plus the drawer ledger movement while the shift is open. */
   expectedCash: string;
 }
 
@@ -179,8 +182,8 @@ const totalsText = (t: ShiftTotalsNumeric): ShiftTotals => ({
  * A POS sale is not a parallel document type: it goes through
  * InvoicesService.create — same numbering chain, same VAT math, same ledger
  * auto-posting — then gets stamped PAID onto the open shift. The drawer's
- * expected cash is *derived* from those invoices, never accumulated in a
- * mutable counter that could drift.
+ * expected cash is *derived* from the drawer account in the ledger, never
+ * accumulated in a mutable counter that could drift.
  */
 @Injectable()
 export class PosService {
@@ -279,7 +282,7 @@ export class PosService {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) return null;
-      return { ...shift, ...totalsText(await this.totalsFor(tx, shift.id, Number(shift.openingFloat))) };
+      return { ...shift, ...totalsText(await this.totalsFor(tx, shift)) };
     });
   }
 
@@ -335,7 +338,7 @@ export class PosService {
       });
       await tx.posPaymentAttempt.updateMany({ where: { shiftId: id, status: 'CREATED' }, data: { status: 'CANCELLED', resolution: 'CANCELLED', resolvedAt: new Date() } });
 
-      const totals = await this.totalsFor(tx, shift.id, Number(shift.openingFloat));
+      const totals = await this.totalsFor(tx, shift);
       /** موجب = زيادة في الدرج، سالب = عجز. */
       const variance = round2(dto.declaredClosing - totals.expectedCash);
 
@@ -640,13 +643,14 @@ export class PosService {
       await assertPostingAccounts(tx, invoicePostingCodes({ baseTotal: totals.total, baseSubtotal: totals.subtotal, baseTaxTotal: totals.taxTotal }));
       if (dto.paymentMethod === 'SPLIT') {
         if (!dto.payments?.length) throw new BadRequestException(MSG.pos_split_parts_required);
-        const paid = dto.payments.reduce((sum, p) => sum + p.amount, 0);
-        if (Math.abs(paid - total) > 0.01) throw new BadRequestException(MSG.pos_split_mismatch);
+        // Compared in whole halalas: a float tolerance let a part one halala over or under the total through.
+        const paid = dto.payments.reduce((sum, p) => sum + toHalalas(p.amount), 0);
+        if (paid !== toHalalas(total)) throw new BadRequestException(MSG.pos_split_mismatch);
       } else if (dto.payments?.length) {
         throw new BadRequestException(MSG.pos_split_only_for_split);
       }
-      // صفّ دفعة لكل طريقة: البيع البسيط جزءٌ واحد بكامل المبلغ، والمقسّم كما فصّله الكاشير.
-      const parts: SalePart[] = dto.paymentMethod === 'SPLIT' ? dto.payments!.map((p) => ({ method: p.method, amount: p.amount })) : [{ method: dto.paymentMethod, amount: total }];
+      // One payment row per method: a simple sale is one part for the whole amount, a split sale its parts as checked above.
+      const parts: SalePart[] = dto.paymentMethod === 'SPLIT' ? dto.payments!.map((p) => ({ method: p.method, amount: round2(p.amount) })) : [{ method: dto.paymentMethod, amount: total }];
       const cardParts = parts.filter((p) => p.method === 'CARD');
       /**
        * ⚖️ **ونقدُ البيع يُرحَّل إلى درج المناوبة، و`1000` حين لا درجَ لها** (`ق-١٤٩٠` · INV-⑥) — فيُفحص حسابُه هنا
@@ -833,9 +837,10 @@ export class PosService {
           };
         }),
       });
-      // حسابُ درج المناوبة — إليه يدخل نقدُ البيع (ق-٣٠٩). و`null` لمناوبةٍ سبقت موجةَ الأدراج: تسقط إلى `1000` بإعلانٍ في مُرحِّلها.
-      const shift = await tx.posShift.findUniqueOrThrow({ where: { id: prepared.shiftId }, select: { drawerId: true } });
-      const drawerAccountId = await this.shiftDrawerAccountId(tx, shift.drawerId);
+      // Sale cash goes to the shift's drawer account, or to 1000 when the shift has no drawer. A card attempt can
+      // complete after its shift closed; that drawer was already counted, so its cash goes to 1000 as well.
+      const shift = await tx.posShift.findUniqueOrThrow({ where: { id: prepared.shiftId }, select: { drawerId: true, status: true } });
+      const drawerAccountId = shift.status === 'OPEN' ? await this.shiftDrawerAccountId(tx, shift.drawerId) : null;
       const shiftBranchId = prepared.shiftBranchId;
 
       /**
@@ -970,8 +975,8 @@ export class PosService {
 
 
   /** مناوبةٌ واحدة — حالةٌ خاصّة من الجمع، لا حسابٌ ثانٍ (`totalsForMany`). */
-  private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotalsNumeric> {
-    return (await this.totalsForMany(tx, [{ id: shiftId, openingFloat }])).get(shiftId)!;
+  private async totalsFor(tx: Prisma.TransactionClient, shift: ShiftForTotals): Promise<ShiftTotalsNumeric> {
+    return (await this.totalsForMany(tx, [shift])).get(shift.id)!;
   }
 
   /**
@@ -989,7 +994,7 @@ export class PosService {
    * مستدعٍ قرأها مرشَّحةً أو تحقّق منها — فالمرشِّحُ هنا مجموعةُ معرّفاتٍ لا
    * قائمةُ رؤية.
    */
-  private async totalsForMany(tx: Prisma.TransactionClient, shifts: { id: string; openingFloat: number | Prisma.Decimal }[]): Promise<Map<string, ShiftTotalsNumeric>> {
+  private async totalsForMany(tx: Prisma.TransactionClient, shifts: ShiftForTotals[]): Promise<Map<string, ShiftTotalsNumeric>> {
     const ids = shifts.map((s) => s.id);
     const [payments, counts] = ids.length
       ? await Promise.all([
@@ -1010,14 +1015,69 @@ export class PosService {
     }
     const salesCount = new Map(counts.map((c) => [c.posShiftId!, c._count._all]));
 
+    /**
+     * Movement of the drawer account since the shift opened, in base currency. Two shifts can be open on one
+     * drawer, so what another shift on the same drawer posted is left out: its sales receipts, the cash refunds
+     * of its sales, and the count variance it posted when it closed.
+     */
+    const drawerMovementSince = async (shift: ShiftForTotals, drawerAccountId: string): Promise<number> => {
+      const lines = await tx.journalLine.findMany({
+        where: { accountId: drawerAccountId, journalEntry: { createdAt: { gte: shift.openedAt } } },
+        select: { debit: true, credit: true, journalEntryId: true },
+      });
+      if (lines.length === 0) return 0;
+      const sameDrawerOtherShift: Prisma.InvoiceWhereInput = { posShift: { is: { drawerId: shift.drawerId, id: { not: shift.id } } } };
+      const otherShiftEntries = await tx.payment.findMany({
+        where: {
+          journalEntryId: { in: [...new Set(lines.map((l) => l.journalEntryId))] },
+          OR: [{ allocations: { some: { invoice: sameDrawerOtherShift } } }, { refundsInvoice: { is: { relatedInvoice: { is: sameDrawerOtherShift } } } }],
+        },
+        select: { journalEntryId: true },
+      });
+      const skip = new Set(otherShiftEntries.map((p) => p.journalEntryId));
+      const otherVariances = await tx.posShift.aggregate({
+        where: { drawerId: shift.drawerId, id: { not: shift.id }, status: 'CLOSED', closedAt: { gte: shift.openedAt } },
+        _sum: { variance: true },
+      });
+      let halalas = -toHalalas(Number(otherVariances._sum.variance ?? 0));
+      for (const l of lines) if (!skip.has(l.journalEntryId)) halalas += toHalalas(Number(l.debit)) - toHalalas(Number(l.credit));
+      return halalas / 100;
+    };
+
+    /** A shift without a drawer pays cash refunds of its own sales from 1000, yet the cash still leaves its till. */
+    const cashRefundsWithoutDrawer = async (shift: ShiftForTotals): Promise<number> => {
+      const refunds = await tx.payment.aggregate({
+        where: { kind: 'REFUND', method: 'CASH', bankId: null, createdAt: { gte: shift.openedAt }, refundsInvoice: { is: { relatedInvoice: { is: { posShiftId: shift.id } } } } },
+        _sum: { baseAmount: true },
+      });
+      return Number(refunds._sum.baseAmount ?? 0);
+    };
+
+    /**
+     * The opening float plus every posting on the drawer account since the shift opened, so cash refunds,
+     * deposits and manual entries count without a list of cash paths to keep up to date. A closed shift keeps
+     * the figure it was closed against (the declared count minus the stored variance), and shifts closed before
+     * the variance column existed keep the old sum, so only open shifts read the ledger.
+     */
+    const expectedCashOf = async (shift: ShiftForTotals, cashTotal: number): Promise<number> => {
+      const float = Number(shift.openingFloat);
+      if (shift.status === 'CLOSED') {
+        if (shift.declaredClosing !== null && shift.variance !== null) return round2(Number(shift.declaredClosing) - Number(shift.variance));
+        return round2(float + cashTotal);
+      }
+      const drawerAccountId = await this.shiftDrawerAccountId(tx, shift.drawerId);
+      if (!drawerAccountId) return round2(float + cashTotal + (await cashRefundsWithoutDrawer(shift)));
+      return round2(float + (await drawerMovementSince(shift, drawerAccountId)));
+    };
+
     const totals = new Map<string, ShiftTotalsNumeric>();
     for (const s of shifts) {
-      const cashTotal = cash.get(s.id) ?? 0;
+      const cashTotal = round2(cash.get(s.id) ?? 0);
       totals.set(s.id, {
         salesCount: salesCount.get(s.id) ?? 0,
-        cashTotal: round2(cashTotal),
+        cashTotal,
         cardTotal: round2(card.get(s.id) ?? 0),
-        expectedCash: round2(Number(s.openingFloat) + cashTotal),
+        expectedCash: await expectedCashOf(s, cashTotal),
       });
     }
     return totals;
