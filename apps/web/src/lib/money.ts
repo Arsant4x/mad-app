@@ -29,6 +29,50 @@ export function formatMoney(value: number, scale = 2): string {
   return roundMoney(value, scale).toFixed(scale);
 }
 
+/** A number as the decimal it is written as (its shortest round trip text): whole units and a count of places. */
+function exactDecimal(value: number): { units: bigint; places: number } {
+  const [mantissa, exponent = '0'] = String(value).split('e');
+  const negative = mantissa.startsWith('-');
+  const [whole, fraction = ''] = (negative ? mantissa.slice(1) : mantissa).split('.');
+  const places = fraction.length - Number(exponent);
+  const digits = BigInt(whole + fraction);
+  const units = places < 0 ? digits * 10n ** BigInt(-places) : digits;
+  return { units: negative ? -units : units, places: Math.max(places, 0) };
+}
+
+/**
+ * percent% of amount rounded once on the exact decimal, the server's roundPercentOf
+ * (apps/api/src/common/money/rounding.ts): 100.30 at 15% is 15.045 and gives 15.05, not the binary 15.04.
+ */
+export function roundPercentOf(amount: number, percent: number, scale = 2): number {
+  if (!Number.isFinite(amount) || !Number.isFinite(percent)) return roundMoney((amount * percent) / 100, scale);
+  const x = exactDecimal(amount);
+  const y = exactDecimal(percent);
+  const product = x.units * y.units;
+  const places = x.places + y.places + 2;
+  const magnitude = product < 0n ? -product : product;
+  let rounded: bigint;
+  if (places <= scale) {
+    rounded = magnitude * 10n ** BigInt(scale - places);
+  } else {
+    const divisor = 10n ** BigInt(places - scale);
+    rounded = magnitude / divisor;
+    if (2n * (magnitude % divisor) >= divisor) rounded += 1n;
+  }
+  if (rounded === 0n) return 0;
+  return Number(`${product < 0n ? '-' : ''}${rounded}e-${scale}`);
+}
+
+/**
+ * The totals the server stores for a document taxed on its net as one amount (a purchase or a supplier
+ * note): the server's computeNetTotals, so a preview shows the stored numbers.
+ */
+export function netTotals(net: number, taxRate: number): { subtotal: number; tax: number; total: number } {
+  const subtotal = round2(net);
+  const tax = roundPercentOf(subtotal, taxRate);
+  return { subtotal, tax, total: round2(subtotal + tax) };
+}
+
 // ─── ② المالُ نصّاً بدقّة صنفه (`ق-١٢٣٥`) — مرآةُ الأنواع وقراءتُها ─────────────────────────────
 
 /**

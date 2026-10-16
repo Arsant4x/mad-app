@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { formatMoney, num, num0, round2, roundMoney, sumMoney } from './money';
+import { formatMoney, netTotals, num, num0, round2, roundMoney, roundPercentOf, sumMoney } from './money';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (0.1 ث — ثلاثةُ أضعافه دون الافتراضيّ، فالميزانيةُ الافتراضيُّ نفسُه).
 //    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
@@ -53,5 +53,37 @@ describe('② المالُ نصّاً — القراءةُ رقماً (ق-١٢٣
     expect(sumMoney(['0.10', '0.20'])).toBe(0.3); // لا 0.30000000000000004
     expect(sumMoney(['1.005', null, 2])).toBe(3.01);
     expect(sumMoney([])).toBe(0);
+  });
+});
+
+/** n / d for integers with d > 0, rounded half away from zero: an exact oracle in whole halalas. */
+const divideHalfAway = (n: number, d: number) => Math.sign(n) * Math.floor((Math.abs(n) + d / 2) / d);
+
+describe('Net document totals match the server on half halala ties', () => {
+  it('roundPercentOf rounds an exact half halala away from zero, keeps the sign and gives no negative zero', () => {
+    expect(roundPercentOf(100.3, 15)).toBe(15.05);
+    expect(roundPercentOf(-100.3, 15)).toBe(-15.05);
+    expect(roundPercentOf(100.2, 15)).toBe(15.03);
+    expect(roundPercentOf(33.3, 15)).toBe(5);
+    expect(Object.is(roundPercentOf(-0.01, 15), 0)).toBe(true);
+    expect(roundPercentOf(1e21, 15)).toBe(1.5e20);
+    expect(roundPercentOf(Number.NaN, 15)).toBeNaN();
+  });
+
+  it('netTotals gives the stored tax and total on every tie from 0.01 to 10,000.00', () => {
+    let checked = 0;
+    const misses: string[] = [];
+    for (let halalas = 10; halalas <= 1_000_000; halalas += 20) {
+      checked++;
+      const tax = divideHalfAway(halalas * 15, 100);
+      const got = netTotals(halalas / 100, 15);
+      if (got.subtotal !== halalas / 100 || got.tax !== tax / 100 || got.total !== (halalas + tax) / 100) misses.push(`${halalas / 100}: ${got.tax} ${got.total}`);
+    }
+    expect({ checked, misses: misses.length, first: misses.slice(0, 3) }).toEqual({ checked: 50_000, misses: 0, first: [] });
+  });
+
+  it('netTotals at a zero rate keeps the rounded net as the total', () => {
+    expect(netTotals(100.3, 0)).toEqual({ subtotal: 100.3, tax: 0, total: 100.3 });
+    expect(netTotals(1.005, 0)).toEqual({ subtotal: 1.01, tax: 0, total: 1.01 });
   });
 });

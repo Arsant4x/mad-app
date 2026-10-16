@@ -7,7 +7,7 @@ import { STANDARD_VAT_RATE } from '../../lib/vat';
 import type { CreatePurchaseInput, Purchase } from '../../api/purchases';
 import type { Supplier } from '../../api/suppliers';
 import { fmt, today } from '../../lib/format';
-import { round2 } from '../../lib/money';
+import { netTotals } from '../../lib/money';
 import i18n from '../../i18n';
 
 /**
@@ -97,10 +97,10 @@ export function PurchaseModal({
   // which shows the control only when that category is selected.
   const isIncorporation = categoryCodeOf(category) === 'FORMATION';
 
+  // The same totals the server stores for this subtotal, so the preview never shows another number.
   const preview = useMemo(() => {
-    const sub = parseFloat(String(subtotal)) || 0;
-    const tax = exempt ? 0 : round2((sub * STANDARD_VAT_RATE) / 100);
-    return { tax, total: sub + tax };
+    const { tax, total } = netTotals(parseFloat(String(subtotal)) || 0, exempt ? 0 : STANDARD_VAT_RATE);
+    return { tax, total };
   }, [subtotal, exempt]);
 
   async function handleSubmit() {

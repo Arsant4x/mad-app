@@ -1,5 +1,5 @@
 import { buildUnsignedInvoiceXml, type UblInvoiceInput, type UblInvoiceLine } from '../../zatca/ubl/invoice-xml.util';
-import { formatMoney, roundTo } from './rounding';
+import { formatMoney, roundPercentOf, roundTo } from './rounding';
 import { computeDocumentTotals, lineNet, lineTax, type MoneyLine } from './totals';
 
 /**
@@ -58,7 +58,7 @@ describe('مجاميع المستند — خصائصٌ مضمونة', () => {
     expect(roundTo(t.subtotal + t.taxTotal, 'INVOICE_TOTAL')).toBe(t.total);
     expect(t.subtotal).toBe(ADVERSARIAL.reduce((s, l) => roundTo(s + lineNet(l), 'INVOICE_TOTAL'), 0));
     expect(t.taxTotal).toBe(t.byRate.reduce((s, b) => roundTo(s + b.tax, 'VAT_AMOUNT'), 0));
-    for (const b of t.byRate) expect(b.tax).toBe(roundTo(b.taxable * (b.rate / 100), 'VAT_AMOUNT'));
+    for (const b of t.byRate) expect(b.tax).toBe(roundPercentOf(b.taxable, b.rate, 'VAT_AMOUNT'));
   });
 
   it('⭐ الطريقة القديمة كانت تختلف بهللة على البنود النصفية — والفرق مقيسٌ لا مزعوم', () => {
