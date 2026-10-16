@@ -57,6 +57,8 @@ if (!API) {
 const DEMO_USER = process.env.SEED_USER || 'rikz-demo-realestate';
 const DEMO_PASS = process.env.SEED_PASS || 'RikzDemo2026!';
 const ORG = process.env.SEED_ORG || 'شركة رِكز للاستثمار العقاري (عرض)';
+// Registration requires the owner's e-mail, where a password reset link is sent.
+const DEMO_EMAIL = process.env.SEED_EMAIL || `${DEMO_USER}@example.com`;
 
 /**
  * القطاع (النشاط الرئيس) — **فارغٌ افتراضاً**، وضبطه يُشغّل ترشيح الشاشات.
@@ -123,7 +125,7 @@ async function main() {
   }
 
   log('▶ إنشاء المنشأة…');
-  const reg = await api('POST', '/auth/register', { orgName: ORG, username: DEMO_USER, password: DEMO_PASS });
+  const reg = await api('POST', '/auth/register', { orgName: ORG, username: DEMO_USER, password: DEMO_PASS, email: DEMO_EMAIL });
   token = reg.accessToken;
   log(`  ✔ ${ORG}`);
 

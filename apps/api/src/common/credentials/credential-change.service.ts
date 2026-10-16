@@ -19,8 +19,8 @@ const CHANGE_TEXT: Record<CredentialChange, string> = {
 };
 
 /**
- * The one path every change of sign-in credentials goes through, whoever makes it: the owner, the
- * platform administrator, a reset link or the second factor screen.
+ * The one path every change of sign-in credentials goes through, whoever makes it: the owner for an
+ * employee, a reset link or the second factor screen. The platform administrator changes none.
  */
 @Injectable()
 export class CredentialChangeService {

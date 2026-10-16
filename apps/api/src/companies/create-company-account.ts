@@ -37,8 +37,8 @@ export interface CreateCompanyAccountInput {
   password: string;
   orgName: string;
   permissionTemplateId: string;
-  /** بريد المنشأة — اختياري اليوم. سيصير إلزامياً في مسار التسجيل الذاتي (بند ⑪). */
-  email?: string | null;
+  /** The owner's e-mail, required on both channels: a password reset link is only ever sent there. */
+  email: string;
   /**
    * 🔴 `ق-١٣٦٨` — **دولةُ المنشأة المعلَنة** (ISO 3166-1 alpha-2). والغيابُ يأخذ الإقليمَ **الوحيد** الذي تخدمه المنصّة — ويصير
    * الإعلانُ إلزامياً من تلقاء نفسه حين يُضاف ثانٍ (`regionForNewCompany`). ومنها تُكتب الحقولُ الأربعة صراحةً: لا افتراضَ في القاعدة.
@@ -106,7 +106,7 @@ export async function createCompanyAccount(
         company: {
           create: {
             orgName: input.orgName.trim(),
-            email: input.email?.trim() || null,
+            email: input.email.trim(),
             permissionTemplateId: input.permissionTemplateId,
             subStart,
             subEnd,

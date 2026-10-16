@@ -53,7 +53,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
     await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ orgName: `منشأة الدليل (مدير) ${tag} ${suffix}`, username, password: 'ChartPass123!', permissionTemplateId: fullAccess.id })
+      .send({ orgName: `منشأة الدليل (مدير) ${tag} ${suffix}`, username, password: 'ChartPass123!', email: `${username}@example.com`, permissionTemplateId: fullAccess.id })
       .expect(201);
 
     return (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ChartPass123!' }).expect(200)).body.accessToken;
@@ -64,7 +64,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
     const username = `chart-self-${tag}-${suffix}`;
     const res = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ orgName: `منشأة الدليل (ذاتي) ${tag} ${suffix}`, username, password: 'ChartPass123!' })
+      .send({ orgName: `منشأة الدليل (ذاتي) ${tag} ${suffix}`, username, password: 'ChartPass123!', email: `${username}@example.com` })
       .expect(201);
     return res.body.accessToken;
   }

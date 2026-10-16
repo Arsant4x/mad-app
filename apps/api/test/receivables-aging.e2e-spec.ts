@@ -177,7 +177,7 @@ describe('Receivables aging (e2e)', () => {
     await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ orgName: `منشأة الأعمار ${suffix}`, username, password: 'AgingPass123!', permissionTemplateId: preset.id })
+      .send({ orgName: `منشأة الأعمار ${suffix}`, username, password: 'AgingPass123!', email: `${username}@example.com`, permissionTemplateId: preset.id })
       .expect(201);
     const coToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'AgingPass123!' })).body.accessToken;
     const co = (r: request.Test) => r.set('Authorization', `Bearer ${coToken}`);

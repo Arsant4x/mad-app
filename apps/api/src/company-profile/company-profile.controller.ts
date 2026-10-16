@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -22,8 +23,10 @@ export class CompanyProfileController {
     return this.companyProfileService.get(tenant.companyId);
   }
 
+  /** A change of the e-mail checks the current password, so saves are limited to ten a minute for one account. */
   @Patch()
   @OwnerOnly(MSG.company_profile_owner_only)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   update(@CurrentTenant() tenant: TenantContext, @Body() dto: UpdateCompanyProfileDto) {
     return this.companyProfileService.update(tenant.companyId, tenant.actorType, dto);
   }

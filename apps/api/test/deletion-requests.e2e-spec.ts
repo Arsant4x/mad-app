@@ -53,7 +53,7 @@ describe('Account deletion requests (e2e)', () => {
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
     const username = `del-co-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'DelPass1234!', orgName: `منشأة حذف ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'DelPass1234!', orgName: `منشأة حذف ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
       .expect(201);
     cleanupCompanyIds.push(res.body.id);
     madeCompanyIds.push(res.body.id);

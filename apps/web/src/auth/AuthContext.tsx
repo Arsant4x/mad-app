@@ -10,7 +10,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   bootLoading: boolean;
   login: (username: string, password: string, code?: string) => Promise<void>;
-  register: (orgName: string, username: string, password: string, email?: string) => Promise<void>;
+  register: (orgName: string, username: string, password: string, email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -60,8 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(res.data.accessToken);
         setUser(res.data.user);
       },
-      async register(orgName: string, username: string, password: string, email?: string) {
-        const res = await apiClient.post<LoginResponse>('/auth/register', { orgName, username, password, email: email || undefined });
+      // The e-mail is required: it is where a password reset link is sent.
+      async register(orgName: string, username: string, password: string, email: string) {
+        const res = await apiClient.post<LoginResponse>('/auth/register', { orgName, username, password, email: email.trim() });
         setAccessToken(res.data.accessToken);
         setUser(res.data.user);
       },

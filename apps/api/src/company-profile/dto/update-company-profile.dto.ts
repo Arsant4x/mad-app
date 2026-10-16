@@ -1,6 +1,7 @@
-import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { MaxUtf8Bytes } from '../../common/dto/max-utf8-bytes.decorator';
 import { MSG } from '../../common/i18n/messages';
+import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 import { ZATCA_QR_MAX_VALUE_BYTES } from '../../zatca/qr.util';
 
 export class UpdateCompanyProfileDto {
@@ -63,6 +64,12 @@ export class UpdateCompanyProfileDto {
   @ValidateIf((o) => !!o.email)
   @IsEmail({}, { message: MSG.email_invalid })
   email?: string;
+
+  /// The owner's current password, needed only when the e-mail changes: the reset link goes there.
+  @IsOptional()
+  @IsString()
+  @MaxLength(PASSWORD_MAX_LENGTH)
+  currentPassword?: string;
 
   @IsOptional()
   @IsString()

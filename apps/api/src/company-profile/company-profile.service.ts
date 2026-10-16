@@ -1,5 +1,7 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
+import * as argon2 from 'argon2';
+import { MailService } from '../common/mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -60,6 +62,7 @@ export class CompanyProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
+    private readonly mail: MailService,
   ) {}
 
   get(companyId: string) {
@@ -92,8 +95,37 @@ export class CompanyProfileService {
     return slug;
   }
 
+  /**
+   * The company e-mail is where a password reset link goes, so a change takes the owner's current
+   * password, and it is replaced but never cleared. Returns what the previous address needs to be told.
+   */
+  private async checkEmailChange(companyId: string, requested: string, currentPassword: string | undefined): Promise<{ previous: string | null; orgName: string } | null> {
+    const row = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { email: true, orgName: true, loginIdentityId: true } });
+    const next = emptyToNull(requested);
+    if (next === row.email) return null;
+    if (next === null) throw new BadRequestException(MSG.profile_email_not_cleared);
+    if (!currentPassword) throw new BadRequestException(MSG.profile_email_password_required);
+    const identity = await this.prisma.loginIdentity.findUniqueOrThrow({ where: { id: row.loginIdentityId }, select: { passwordHash: true } });
+    if (!(await argon2.verify(identity.passwordHash, currentPassword))) throw new UnauthorizedException(MSG.current_password_invalid);
+    return { previous: row.email, orgName: row.orgName };
+  }
+
+  /** After the change has committed. A delivery failure is logged, never thrown: the change stands. */
+  private tellPreviousAddress(previous: string, orgName: string): void {
+    void this.mail
+      .send(
+        previous,
+        'تنبيه: تغيّر البريد الإلكتروني للمنشأة — mad-app',
+        `تغيّر البريد الإلكتروني لحساب «${orgName}»، ولم يعد هذا البريد يستقبل رابط استعادة كلمة المرور.\n\n` +
+          `إن لم يكن هذا التغيير منك فتواصل مع الدعم فوراً.`,
+      )
+      .catch((e: Error) => this.logger.warn(`notice of the changed company e-mail not sent: ${e.message}`));
+  }
+
   async update(companyId: string, actorType: string, dto: UpdateCompanyProfileDto) {
     assertIsCompanyOwner(actorType);
+
+    const emailChange = dto.email !== undefined ? await this.checkEmailChange(companyId, dto.email, dto.currentPassword) : null;
 
     // ⛔ **ولا يُمحى بعد اختياره**: `''` على هذا الحقل يعني «امحه» في بقيّة الحقول،
     //    وهنا محوٌ يترك روابطَ التاجر بلا وجهة. يُستبدل ولا يُفرَّغ.
@@ -156,6 +188,7 @@ export class CompanyProfileService {
       await this.files.remove(companyId, staleKey).catch((e: Error) => this.logger.warn(`Could not delete replaced logo "${staleKey}": ${e.message}`));
     }
 
+    if (emailChange?.previous) this.tellPreviousAddress(emailChange.previous, emailChange.orgName);
     return updated;
   }
 }

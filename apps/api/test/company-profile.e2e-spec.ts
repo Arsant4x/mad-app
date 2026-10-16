@@ -38,6 +38,8 @@ describe('Company profile (e2e)', () => {
         vatNumber: '300000000000003',
         crNumber: '1010123456',
         email: 'test-a@example.com',
+        // A change of the e-mail takes the owner's current password (owner-recovery-email.e2e-spec.ts).
+        currentPassword: 'DemoPass123!',
       })
       .expect(200);
     expect(updated.body.legalName).toBe('شركة اختبار العزل المحدودة');
@@ -157,7 +159,7 @@ describe('Company profile (e2e)', () => {
   it('🔴 وما لم يُرسَل من بقية الحقول يبقى — وما أُرسل فارغاً يُمحى وحده', async () => {
     const patch = (body: Record<string, string | number>) => request(app.getHttpServer()).patch('/company-profile').set('Authorization', `Bearer ${tokenA}`).send(body);
 
-    await patch({ vatNumber: '300000000000003', crNumber: '1010123456', email: 'test-a@example.com', city: 'الرياض', postalCode: '12211' }).expect(200);
+    await patch({ vatNumber: '300000000000003', crNumber: '1010123456', email: 'test-a@example.com', currentPassword: 'DemoPass123!', city: 'الرياض', postalCode: '12211' }).expect(200);
 
     // حقلٌ واحد — والبقية كما هي.
     const patched = await patch({ posOfflineGapMinutes: 2 }).expect(200);

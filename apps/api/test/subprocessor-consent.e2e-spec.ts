@@ -42,7 +42,7 @@ describe('Sub-processor consent (e2e)', () => {
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
     const username = `consent-co-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'ConsentPass123!', orgName: `منشأة موافقة ${username}`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'ConsentPass123!', orgName: `منشأة موافقة ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
       .expect(201);
     cleanupCompanyIds.push(res.body.id);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ConsentPass123!' });

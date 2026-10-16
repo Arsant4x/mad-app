@@ -30,7 +30,7 @@ export async function registerIsolatedCompany(app: INestApplication, tag: string
   await app.get(PrismaService).$queryRaw`SELECT 1`;
   const res = await request(app.getHttpServer())
     .post('/auth/register')
-    .send({ orgName: `منشأة معزولة ${tag} ${stamp}`, username, password: ISOLATED_PASSWORD })
+    .send({ orgName: `منشأة معزولة ${tag} ${stamp}`, username, password: ISOLATED_PASSWORD, email: `${username}@example.com` })
     .expect(201);
   const companyId: string | null = res.body.user?.companyId ?? null;
   if (!companyId) throw new Error(`التسجيلُ لم يُعد معرّفَ منشأة: ${JSON.stringify(res.body).slice(0, 200)}`);

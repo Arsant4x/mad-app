@@ -125,7 +125,7 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
   it('④ صاحبُ المنشأة شاملٌ في المسارين: لوحةُ المدير ترفض قالباً غيرَ شامل للمنشأة إنشاءً وتغييراً', async () => {
     const narrow = narrowId ?? (await tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.create({ data: { name: `ضيّق ${suffix}`, companyId: null, isAllScreens: false, allowedScreens: ['invoice'] } }))).id;
     narrowId = narrow;
-    const body = (tag: string, permissionTemplateId: string) => ({ username: `own-${tag}-${suffix}`, password: 'OwnPass1234!', orgName: `منشأة ${tag} ${suffix}`, permissionTemplateId, subEnd: '2030-01-01' });
+    const body = (tag: string, permissionTemplateId: string) => ({ username: `own-${tag}-${suffix}`, password: 'OwnPass1234!', orgName: `منشأة ${tag} ${suffix}`, email: `own-${tag}-${suffix}@example.com`, permissionTemplateId, subEnd: '2030-01-01' });
     const refused = await admin(http().post('/companies')).send(body('narrow', narrow));
     if (refused.status === 201) madeCompanies.push(refused.body.id);
     expect(refused.status).toBe(400);

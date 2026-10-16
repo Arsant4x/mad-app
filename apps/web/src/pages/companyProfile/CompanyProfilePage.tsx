@@ -31,6 +31,9 @@ export function CompanyProfilePage() {
   const [crNumber, setCrNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  // The reset link goes to the e-mail, so a change of it is sent with the current password.
+  const [savedEmail, setSavedEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [website, setWebsite] = useState('');
   const [address, setAddress] = useState('');
   const [street, setStreet] = useState('');
@@ -71,6 +74,7 @@ export function CompanyProfilePage() {
         setCrNumber(p.crNumber ?? '');
         setPhone(p.phone ?? '');
         setEmail(p.email ?? '');
+        setSavedEmail(p.email ?? '');
         setWebsite(p.website ?? '');
         setAddress(p.address ?? '');
         setStreet(p.street ?? '');
@@ -166,6 +170,8 @@ export function CompanyProfilePage() {
     return next && next !== savedSlug ? next : null;
   })();
 
+  const emailChanged = email.trim() !== savedEmail;
+
   async function handleSave() {
     setSaved(false);
     setFormError(null);
@@ -182,6 +188,7 @@ export function CompanyProfilePage() {
         crNumber: crNumber.trim(),
         phone: phone.trim(),
         email: email.trim(),
+        ...(emailChanged && currentPassword ? { currentPassword } : {}),
         website: website.trim(),
         address: address.trim(),
         street: street.trim(),
@@ -199,6 +206,8 @@ export function CompanyProfilePage() {
       // The slug is read from the server's answer, not from screen state: the server normalized and accepted it.
       setSlug(profile.slug ?? '');
       setSavedSlug(profile.slug ?? null);
+      setSavedEmail(profile.email ?? '');
+      setCurrentPassword('');
       setSaved(true);
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
@@ -394,8 +403,16 @@ export function CompanyProfilePage() {
             <label>{t('company_profile.page.email')}</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} disabled={!canEdit} placeholder={t('company_profile.page.email_placeholder')} />
             {fieldErrors.email && <p className="error-text">{fieldErrors.email}</p>}
+            <p className="hint">{t('company_profile.page.email_hint')}</p>
           </div>
         </div>
+        {canEdit && emailChanged && (
+          <div className="field">
+            <label htmlFor="profile-current-password">{t('company_profile.page.current_password')}</label>
+            <input id="profile-current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            <p className="hint">{t('company_profile.page.current_password_hint')}</p>
+          </div>
+        )}
         <div className="field">
           <label>{t('company_profile.page.website')}</label>
           <input value={website} onChange={(e) => setWebsite(e.target.value)} disabled={!canEdit} placeholder={t('company_profile.page.website_placeholder')} />

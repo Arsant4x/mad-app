@@ -76,7 +76,7 @@
   "err_customer_name_required": "الرجاء إدخال اسم العميل",
   "err_customer_save": "تعذّر حفظ العميل",
   "err_customer_delete": "تعذّر حذف العميل",
-  "err_company_fields": "أكمل الاسم واسم الدخول وكلمة المرور",
+  "err_company_fields": "أكمل الاسم واسم الدخول وكلمة المرور والبريد الإلكتروني لصاحب الحساب",
   "err_template_delete": "تعذّر حذف النموذج",
   "err_template_name_required": "الرجاء إدخال اسم النموذج",
   "err_template_screen_required": "اختر قسماً واحداً على الأقل",

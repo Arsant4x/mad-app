@@ -636,6 +636,11 @@ export interface OpenNetworkReceiptsResponse {
   summary: NetworkTransitSummaryResponse;
 }
 
+/** Response: `OwnerResetLinkResponse` on the server. */
+export interface OwnerResetLinkResponse {
+  sentTo: string;
+}
+
 /** Response: `PagedBankRowResponse` on the server. */
 export interface PagedBankRowResponse {
   items: BankRowResponse[];

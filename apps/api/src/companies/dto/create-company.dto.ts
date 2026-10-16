@@ -1,4 +1,5 @@
-import { IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsISO8601, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { MSG } from '../../common/i18n/messages';
 import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 
 export class CreateCompanyDto {
@@ -14,6 +15,11 @@ export class CreateCompanyDto {
   @IsString()
   @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
+
+  /// The owner's e-mail: a password reset link is only ever sent there.
+  @IsNotEmpty({ message: MSG.owner_email_required })
+  @IsEmail({}, { message: MSG.email_invalid })
+  email!: string;
 
   @IsString()
   permissionTemplateId!: string;

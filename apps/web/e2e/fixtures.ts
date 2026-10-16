@@ -57,7 +57,7 @@ export async function registerCompany(request: APIRequestContext, tag: string): 
   const password = 'E2ePlaywright123!';
 
   const res = await request.post(`${API}/auth/register`, {
-    data: { orgName: `منشأة اختبار ${tag} ${stamp}`, username, password },
+    data: { orgName: `منشأة اختبار ${tag} ${stamp}`, username, password, email: `${username}@example.com` },
   });
   if (!res.ok()) throw new Error(`تعذّر تسجيل منشأة الاختبار: ${res.status()} ${await res.text()}`);
   const body = await res.json();

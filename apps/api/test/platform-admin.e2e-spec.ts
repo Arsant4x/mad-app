@@ -127,13 +127,13 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ orgName: `شركة اختبار ${suffix}`, username, password: 'TestPass123!', permissionTemplateId: fullAccess.id })
+      .send({ orgName: `شركة اختبار ${suffix}`, username, password: 'TestPass123!', email: `${username}@example.com`, permissionTemplateId: fullAccess.id })
       .expect(201);
 
     await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ orgName: 'تكرار', username, password: 'AnotherPass123!', permissionTemplateId: fullAccess.id })
+      .send({ orgName: 'تكرار', username, password: 'AnotherPass123!', email: `${username}-again@example.com`, permissionTemplateId: fullAccess.id })
       .expect(409);
 
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'TestPass123!' }).expect(200);
@@ -149,7 +149,7 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ orgName: `شركة تجميد ${suffix}`, username: `freeze-test-${suffix}`, password: 'TestPass123!', permissionTemplateId: fullAccess.id })
+      .send({ orgName: `شركة تجميد ${suffix}`, username: `freeze-test-${suffix}`, password: 'TestPass123!', email: `freeze-test-${suffix}@example.com`, permissionTemplateId: fullAccess.id })
       .expect(201);
     expect(created.body.status).toBe('ACTIVE');
 

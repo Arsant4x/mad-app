@@ -47,7 +47,7 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
     // أخرى تعمل عليها — وهو بالضبط ما تمنعه قاعدة العزل.
     const reg = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ orgName: `منشأة القطاعات ${suffix}`, username, password: 'SectorPass123!' })
+      .send({ orgName: `منشأة القطاعات ${suffix}`, username, password: 'SectorPass123!', email: `${username}@example.com` })
       .expect(201);
     token = reg.body.accessToken;
     companyId = reg.body.user.companyId;

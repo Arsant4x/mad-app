@@ -22,6 +22,8 @@ export const requestTypesRejectServerRejectedFields = [
   { fullName: 'موظّف', branchId: 'br1' } satisfies EmployeeUpdateInput, // i18n-exempt: sample payload in a type check
   // @ts-expect-error `UpdateCompanyDto` does not accept `subEnd` (the subscription has its own path)
   { orgName: 'منشأة', subEnd: '2027-01-01' } satisfies CompanyUpdateInput, // i18n-exempt: sample payload in a type check
+  // @ts-expect-error `UpdateCompanyDto` does not accept `password` nor `username`: only the owner sets them
+  { orgName: 'org', password: 'Chosen-by-platform-1' } satisfies CompanyUpdateInput,
   // @ts-expect-error `UpdateInvoiceDto` does not accept `creditOverride` (nor `issuedAt`, `issuedOffsetMin`, `prepaymentInvoiceIds`)
   { notes: 'ملاحظة', creditOverride: true } satisfies UpdateInvoiceInput, // i18n-exempt: sample payload in a type check
 ];
