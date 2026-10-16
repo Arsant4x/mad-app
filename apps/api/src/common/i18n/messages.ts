@@ -239,6 +239,7 @@ export const MSG = {
   bank_transfer_later_postings: 'banks.transfer_later_postings',
   bank_transaction_not_found: 'transactions.not_found',
   bank_transaction_reconciled: 'transactions.reconciled',
+  bank_transaction_reconciled_add: 'transactions.reconciled_add',
   bank_transaction_matched: 'transactions.matched',
   bank_transaction_posted: 'transactions.posted',
   // bank reconciliation (ق-١٢٦١ ج)
@@ -1338,6 +1339,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.bank_transaction_reconciled]: {
     ar: 'حساب البنك «{bank}» مُسوّى حتى {until} — لا تُعدَّل حركةٌ بتاريخٍ قبله ولا تُحذف ولا تُنقل إليه؛ أعد فتح التسوية أولاً',
     en: 'Bank "{bank}" is reconciled through {until} — a transaction on or before that date cannot be edited, deleted or moved into it; reopen the reconciliation first',
+  },
+  [MSG.bank_transaction_reconciled_add]: {
+    ar: 'حساب البنك «{bank}» مُسوّى حتى {until} — لا تُضاف حركةٌ بتاريخٍ قبله أو فيه؛ أعد فتح التسوية أولاً',
+    en: 'Bank "{bank}" is reconciled through {until} — a transaction on or before that date cannot be added; reopen the reconciliation first',
   },
   [MSG.bank_transaction_matched]: {
     ar: 'هذه الحركة مطابَقة في التسوية البنكية — لا تُعدَّل ولا تُحذف؛ فكّ المطابقة أولاً',
