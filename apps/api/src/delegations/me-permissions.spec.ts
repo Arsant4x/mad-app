@@ -245,6 +245,26 @@ describe('الشرط ①: تُحسب حيّاً — ولا تُذكَّر مؤق
     // «لا تفويض» و«لم أرَ شيئاً» يبدوان سواء. وقد أوقعنا هذا فعلاً.
     expect(code).toContain('runInTenantContext');
     expect(/this\.prisma\.\$queryRaw/.test(code)).toBe(false);
-    expect(/delegation_logs/.test(code.slice(code.indexOf('runInTenantContext')))).toBe(true);
+    // The query lives in one reader shared with the tenant guard; it runs on the transaction it is given.
+    expect(/runInTenantContext\([^)]*\(tx\)\s*=>\s*readDelegationRows\(tx\)\)/.test(code)).toBe(true);
+    const reader = stripComments(readFileSync(join(__dirname, 'chain-source.ts'), 'utf8'));
+    const body = reader.slice(reader.indexOf('export function readDelegationRows('));
+    expect(body.startsWith('export function readDelegationRows(tx: Prisma.TransactionClient)')).toBe(true);
+    expect(/^\s*return tx\.\$queryRaw[^`]*`[^`]*FROM "delegation_logs"/.test(body.slice(body.indexOf('{') + 1))).toBe(true);
+    expect(/PrismaService|this\./.test(reader)).toBe(false);
+  });
+
+  it('the tenant guard reads the delegation rows inside the tenant context on every request and keeps no state', () => {
+    const guard = stripComments(readFileSync(join(__dirname, '..', 'common', 'tenant', 'tenant.guard.ts'), 'utf8'));
+    const context = guard.indexOf('runInTenantContext(payload.companyId, async (tx) => [');
+    expect(context).toBeGreaterThan(-1);
+    const call = guard.slice(context, guard.indexOf('] as const)', context));
+    expect(call).toContain('await readDelegationRows(tx)');
+    expect(guard).toContain('delegatedTemplate(clipped, delegationChains)');
+    const fields = [...guard.matchAll(/^\s{2}(?:private|public|protected|readonly|static)[^(\n]*?(\w+)\s*[:=]/gm)].map((m) => m[1]);
+    expect(fields).toEqual([]);
+    for (const token of ['CacheModule', 'cacheManager', 'CACHE_MANAGER', '@Cacheable', 'memoize', 'setTimeout', 'new Map', 'new WeakMap']) {
+      expect({ token, present: guard.includes(token) }).toEqual({ token, present: false });
+    }
   });
 });

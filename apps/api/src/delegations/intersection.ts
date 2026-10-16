@@ -82,6 +82,18 @@ export function effectiveGrants(root: RootGrants, chain: readonly DelegationLink
 }
 
 /**
+ * What an actor holds: the template ceiling when nobody delegated to them, otherwise the
+ * union over every chain of that ceiling narrowed along the chain. The tenant guard,
+ * /me/permissions and delegation writes all call this one rule so they cannot disagree.
+ */
+export function actorGrants(root: RootGrants, chains: readonly (readonly DelegationLink[])[]): Set<Grant> {
+  if (chains.length === 0) return new Set(root);
+  const out = new Set<Grant>();
+  for (const chain of chains) for (const g of effectiveGrants(root, chain)) out.add(g);
+  return out;
+}
+
+/**
  * الفحص على طلب واحد — المسار الساخن.
  *
  * لا يبني مجموعةً: يمرّ على الحلقات ويخرج عند أول رفض. قِيس بـ0.22–0.48 µs.

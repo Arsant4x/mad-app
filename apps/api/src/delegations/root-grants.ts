@@ -1,6 +1,7 @@
-import { ALLOWED_SCREENS, SCREEN_ACTIONS, ScreenActionMap, isActionAllowed } from '../templates/screens';
+import { ALLOWED_SCREENS, SCREEN_ACTIONS, ScreenAction, ScreenActionMap, isActionAllowed } from '../templates/screens';
+import type { TemplateGrants } from '../templates/template-clip.util';
 import { Grant, grant } from './permission-tree';
-import { RootGrants } from './intersection';
+import { DelegationLink, RootGrants, actorGrants } from './intersection';
 
 /**
  * سقف السلسلة — يُشتقّ من القالب القائم، **ولا يُعرَّف من جديد**.
@@ -44,4 +45,23 @@ export function rootGrantsFrom(
     }
   }
   return out;
+}
+
+/**
+ * The template the tenant guard checks once delegation is applied: unchanged when nobody
+ * delegated to the actor, otherwise exactly what actorGrants leaves, every remaining screen
+ * listing its own actions so isActionAllowed reads the same set /me/permissions returns.
+ */
+export function delegatedTemplate(template: TemplateGrants, chains: readonly (readonly DelegationLink[])[]): TemplateGrants {
+  if (chains.length === 0) return template;
+  const held = actorGrants(rootGrantsFrom(template.isAllScreens, template.allowedScreens, template.screenActions), chains);
+  const allowedScreens: string[] = [];
+  const screenActions: ScreenActionMap = {};
+  for (const screen of ALLOWED_SCREENS) {
+    const actions: ScreenAction[] = SCREEN_ACTIONS.filter((action) => held.has(grant(screen, action)));
+    if (actions.length === 0) continue;
+    allowedScreens.push(screen);
+    screenActions[screen] = actions;
+  }
+  return { isAllScreens: false, allowedScreens, screenActions };
 }

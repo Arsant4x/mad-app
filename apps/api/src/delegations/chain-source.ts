@@ -1,3 +1,4 @@
+import type { Prisma } from '@mad-app/db';
 import { Grant } from './permission-tree';
 import { DelegationLink } from './intersection';
 
@@ -108,6 +109,19 @@ export function chainsFor(rows: readonly DelegationRow[], actorId: string): Dele
 
   walk(actorId, [], new Set([actorId]));
   return paths;
+}
+
+/**
+ * Every delegation row of the company in log order. It takes the transaction of the
+ * request's tenant context because the table is under forced row level security, where
+ * a read outside the context returns nothing and looks like no delegation.
+ */
+export function readDelegationRows(tx: Prisma.TransactionClient): Promise<DelegationRow[]> {
+  return tx.$queryRaw<DelegationRow[]>`
+    SELECT "grantorId", "granteeId", "grants", "state"
+    FROM "delegation_logs"
+    ORDER BY "seq" ASC
+  `;
 }
 
 /** الحواف النافذة — مُدخَل `wouldCreateCycle`. */
