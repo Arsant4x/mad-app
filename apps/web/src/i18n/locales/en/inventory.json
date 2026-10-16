@@ -93,6 +93,7 @@
     "reverse_action": "↩ Reverse movement",
     "reverse_title": "Reverse movement",
     "reverse_body": "An opposite movement is created that points to this one and undoes its effect on balance and cost; both stay in the log, nothing is deleted. A movement with a document (sale, receipt or write-off) is reversed from its document, and one whose cost layer has been consumed cannot be reversed.",
-    "reverse_confirm": "Reverse"
+    "reverse_confirm": "Reverse",
+    "reverse_failed": "Could not reverse the movement"
   }
 }
