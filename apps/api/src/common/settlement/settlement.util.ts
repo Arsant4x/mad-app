@@ -79,8 +79,8 @@ export interface SettlementTarget {
   payableKinds: readonly string[];
   /** The credit note kind on this side: it lowers what its related document still owes. */
   creditKind: string;
-  /** Credit notes issued on each document, summed in the document's own currency. */
-  creditedBy: (documentIds: string[]) => Promise<Map<string, number>>;
+  /** The credit notes issued on the document, summed in its own currency. */
+  creditedOn: (documentId: string) => Promise<number>;
   /** Whether the document was closed without a balance (a voided purchase, a rejected invoice that was replaced). */
   isClosed: (documentId: string) => Promise<boolean>;
   /** رسالتا الرفض المسمّاتان — مستندٌ لا يوجد، ومستندٌ لطرفٍ آخر. */
@@ -133,8 +133,7 @@ export function withRemaining<T extends { id: string; docType: string; total: Pr
 export async function settlementStatusOf(target: SettlementTarget, doc: { id: string; docType: string; total: Prisma.Decimal | number | string }): Promise<SettlementStatus> {
   // A credit note owes nothing: it is the reduction itself.
   if (doc.docType === target.creditKind) return 'PAID';
-  const credited = (await target.creditedBy([doc.id])).get(doc.id) ?? 0;
-  return deriveSettlementStatus(await allocatedFor(target, doc.id), Number(doc.total), credited);
+  return deriveSettlementStatus(await allocatedFor(target, doc.id), Number(doc.total), await target.creditedOn(doc.id));
 }
 
 /**
@@ -226,8 +225,7 @@ export async function lockAndAssertAllocationsFit(
     }
 
     // Read under the lock: a credit note on this document locks the same row before it is written.
-    const credited = (await target.creditedBy([doc.id])).get(doc.id) ?? 0;
-    const remaining = outstandingAfterNotes(doc, credited, await allocatedFor(target, a.documentId), target.creditKind);
+    const remaining = outstandingAfterNotes(doc, await target.creditedOn(doc.id), await allocatedFor(target, a.documentId), target.creditKind);
     if (a.amount > remaining + SETTLEMENT_EPS) {
       throw new BadRequestException(
         formatMessage(MSG.allocation_exceeds_remaining, { no: doc.no, remaining: formatMoney(remaining), amount: formatMoney(a.amount) }),

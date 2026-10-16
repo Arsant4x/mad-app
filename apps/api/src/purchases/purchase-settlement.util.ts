@@ -34,7 +34,7 @@ export const purchaseTarget = (tx: Prisma.TransactionClient): SettlementTarget =
   allocations: tx.supplierPaymentAllocation,
   payableKinds: PAYABLE_PURCHASE_KINDS,
   creditKind: 'SUPPLIER_CREDIT_NOTE',
-  creditedBy: (ids) => creditedByPurchase(tx, ids),
+  creditedOn: async (id) => (await creditedByPurchase(tx, [id])).get(id) ?? 0,
   isClosed: async (id) => (await tx.purchase.findUnique({ where: { id }, select: { voidedAt: true } }))?.voidedAt != null,
   documentNotFound: MSG.purchase_not_found,
   wrongParty: MSG.allocation_wrong_supplier,

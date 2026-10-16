@@ -28,7 +28,7 @@ import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DE
 import { resolveDeclaredLineTax, type LineTax } from '../common/vat/line-tax.util';
 import { InvoicesService } from '../invoices/invoices.service';
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
-import { creditedByInvoice, invoiceTarget, RECEIVABLE_INVOICE_KINDS, recomputeInvoiceStatus } from '../invoices/invoice-settlement.util';
+import { CREDIT_NOTES_ON_DOCUMENT, creditedTotal, invoiceTarget, RECEIVABLE_INVOICE_KINDS, recomputeInvoiceStatus } from '../invoices/invoice-settlement.util';
 import { assertPrepaymentIssuable } from '../invoices/issue-prechecks.util';
 import { unallocatedReceivableRate } from './voucher-receivable-rate.util';
 
@@ -149,11 +149,11 @@ export class PaymentsService {
       // The branch filter and the replacement condition are both OR clauses, so they sit under AND.
       const invoices = await tx.invoice.findMany({
         where: { customerId, docType: { in: [...RECEIVABLE_INVOICE_KINDS] }, status: { not: 'PAID' }, AND: [branchFilter(allowedBranchIds), NOT_REPLACED_REJECTED] },
-        select: { id: true, no: true, docType: true, issueDate: true, dueDate: true, total: true, currency: true, status: true },
+        select: { id: true, no: true, docType: true, issueDate: true, dueDate: true, total: true, currency: true, status: true, adjustments: CREDIT_NOTES_ON_DOCUMENT },
         orderBy: { issueDate: 'asc' },
       });
-      const ids = invoices.map((i) => i.id);
-      const open = withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), ids), await creditedByInvoice(tx, ids), 'CREDIT_NOTE');
+      const credited = new Map(invoices.map((i) => [i.id, creditedTotal(i.adjustments)]));
+      const open = withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), invoices.map((i) => i.id)), credited, 'CREDIT_NOTE');
       // ② المسدَّدُ والمتبقّي نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والترشيحُ داخل `withRemaining` رقمٌ كما كان.
       return open.map((doc) => ({
         id: doc.id,
@@ -339,11 +339,11 @@ export class PaymentsService {
   private async openRemainingOf(tx: Prisma.TransactionClient, customerId: string): Promise<number> {
     const open = await tx.invoice.findMany({
       where: { customerId, status: { not: 'PAID' }, docType: { in: [...RECEIVABLE_INVOICE_KINDS] }, ...NOT_REPLACED_REJECTED },
-      select: { id: true, docType: true, total: true },
+      select: { id: true, docType: true, total: true, adjustments: CREDIT_NOTES_ON_DOCUMENT },
     });
     if (open.length === 0) return 0;
-    const ids = open.map((i) => i.id);
-    const remaining = withRemaining(open, await allocatedByDocument(invoiceTarget(tx), ids), await creditedByInvoice(tx, ids), 'CREDIT_NOTE');
+    const credited = new Map(open.map((i) => [i.id, creditedTotal(i.adjustments)]));
+    const remaining = withRemaining(open, await allocatedByDocument(invoiceTarget(tx), open.map((i) => i.id)), credited, 'CREDIT_NOTE');
     return round2(remaining.reduce((s, d) => s + d.remaining, 0));
   }
 
