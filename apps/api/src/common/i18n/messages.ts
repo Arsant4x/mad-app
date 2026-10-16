@@ -225,6 +225,9 @@ export const MSG = {
   bank_transfer_foreign_currency: 'banks.transfer_foreign_currency',
   bank_transfer_later_postings: 'banks.transfer_later_postings',
   bank_transaction_not_found: 'transactions.not_found',
+  bank_transaction_reconciled: 'transactions.reconciled',
+  bank_transaction_matched: 'transactions.matched',
+  bank_transaction_posted: 'transactions.posted',
   // bank reconciliation (ق-١٢٦١ ج)
   bank_reconciled_locked: 'banks.reconciled_locked',
   reconciliation_already_matched: 'reconciliation.already_matched',
@@ -1282,6 +1285,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The cash box account has postings after {date} — the count covers the whole ledger, so pick a date not before the last movement',
   },
   [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
+  [MSG.bank_transaction_reconciled]: {
+    ar: 'حساب البنك «{bank}» مُسوّى حتى {until} — لا تُعدَّل حركةٌ بتاريخٍ قبله ولا تُحذف ولا تُنقل إليه؛ أعد فتح التسوية أولاً',
+    en: 'Bank "{bank}" is reconciled through {until} — a transaction on or before that date cannot be edited, deleted or moved into it; reopen the reconciliation first',
+  },
+  [MSG.bank_transaction_matched]: {
+    ar: 'هذه الحركة مطابَقة في التسوية البنكية — لا تُعدَّل ولا تُحذف؛ فكّ المطابقة أولاً',
+    en: 'This bank transaction is matched in the bank reconciliation — it cannot be edited or deleted; unmatch it first',
+  },
+  [MSG.bank_transaction_posted]: {
+    ar: 'هذه الحركة كتبها القيد {entry} وتتبع الدفتر — لا تُعدَّل ولا تُحذف؛ صحّح القيد أو مستنده',
+    en: 'This bank transaction was written by entry {entry} and follows the ledger — it cannot be edited or deleted; correct the entry or its source document',
+  },
 
   [MSG.property_not_found]: { ar: 'العقار غير موجود', en: 'Property not found' },
   [MSG.property_has_owner_lessor_contracts]: {

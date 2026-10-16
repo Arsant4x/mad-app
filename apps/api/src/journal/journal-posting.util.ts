@@ -7,6 +7,7 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { sumMoney } from '../common/money/allocation';
 import { round2, toHalalas } from '../common/money/rounding';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
+import { lockReconciledBanks } from '../banks/reconciliation-lock.util';
 
 /** Account types whose balance increases with a debit (asset, expense);
  * the rest (liability, equity, revenue) increase with a credit. Matches
@@ -26,7 +27,9 @@ export interface PostingLine {
  * **على مستوى المنشأة بحقّها**: حارسٌ على حسابات القيد كلِّها — بنكٌ في أيِّ فرعٍ يحرس حسابَه، والقيدُ نفسُه هو الذي
  * حُدّد فرعُه قبل الوصول هنا؛ فمرشِّحُ فروع القارئ يُعمي الحارسَ عن بنكِ فرعٍ آخر يخصّ القيدَ نفسَه.
  */
-async function assertBankNotReconciled(tx: Prisma.TransactionClient, accountIds: string[], date: Date): Promise<void> {
+async function assertBankNotReconciled(tx: Prisma.TransactionClient, companyId: string, accountIds: string[], date: Date): Promise<void> {
+  // The shared lock makes a reconciliation close wait for this posting; no bank among the accounts means nothing to check.
+  if ((await lockReconciledBanks(tx, companyId, { accountIds })).length === 0) return;
   const locked = await tx.bank.findFirst({
     where: { accountId: { in: accountIds }, reconciledUntil: { gte: date } },
     select: { name: true, reconciledUntil: true },
@@ -227,7 +230,7 @@ export async function createJournalEntry(
   // writing anything — see fetchAccountTypes for why this must come first.
   const accountIds = [...new Set(input.lines.map((l) => l.accountId))];
   const accountTypes = await fetchAccountTypes(tx, accountIds);
-  await assertBankNotReconciled(tx, accountIds, input.date);
+  await assertBankNotReconciled(tx, input.companyId, accountIds, input.date);
 
   // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`) — ومن يُعلن عملتَه لا يدفع قراءةً زائدة.
   const { currency, exchangeRate } = await resolveCurrencyWithin(tx, input.companyId, input);

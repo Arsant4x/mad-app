@@ -19,6 +19,7 @@
     "delete_title": "Delete transaction",
     "delete_body": "Delete this transaction?",
     "delete_confirm": "Delete",
+    "delete_failed": "Could not delete the bank transaction",
     "no_bank_title": "No bank account",
     "no_bank_body": "Add a bank account first from the \"Bank accounts\" screen before recording a transaction.",
     "ok": "OK"
