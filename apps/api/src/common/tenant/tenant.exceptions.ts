@@ -5,9 +5,13 @@ import { formatMessage, MSG } from '../i18n/messages';
  * client branches on it (the frozen/stopped screens in AppShell), so the code
  * must stay stable and language-independent while `message` is localized by
  * HttpExceptionFilter. */
+/** The message names only a cause the caller knows: a lapsed subscription, no subscription ever, or
+ * the employee's own account being turned off. */
+export type AccountFrozenMessage = typeof MSG.account_frozen | typeof MSG.account_frozen_no_subscription | typeof MSG.account_user_inactive;
+
 export class AccountFrozenException extends ForbiddenException {
-  constructor() {
-    super({ code: 'ACCOUNT_FROZEN', message: MSG.account_frozen });
+  constructor(message: AccountFrozenMessage) {
+    super({ code: 'ACCOUNT_FROZEN', message });
   }
 }
 

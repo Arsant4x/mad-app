@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { evaluateCompanyStatus, FROZEN_TO_STOPPED_GRACE_DAYS } from '../common/tenant/company-status.util';
+import { evaluateCompanyStatus, FROZEN_TO_STOPPED_GRACE_DAYS, neverSubscribed } from '../common/tenant/company-status.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 function daysBetween(from: Date, to: Date): number {
@@ -38,10 +38,6 @@ export class SubscriptionService {
       graceDaysLeft = Math.max(0, daysBetween(now, stopsAt));
     }
 
-    // A company is born with an end equal to its start, so a term of no length means it never had a
-    // subscription, and the screen must not tell it that its subscription ended.
-    const neverSubscribed = !!company.subStart && !!company.subEnd && company.subEnd.getTime() <= company.subStart.getTime();
-
     return {
       orgName: company.orgName,
       status: evaluated.status,
@@ -50,7 +46,7 @@ export class SubscriptionService {
       daysLeft,
       inGrace: evaluated.status === 'FROZEN',
       graceDaysLeft,
-      neverSubscribed,
+      neverSubscribed: neverSubscribed(company),
     };
   }
 }

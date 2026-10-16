@@ -735,6 +735,8 @@ export const MSG = {
 
   // tenant status / screen access
   account_frozen: 'tenant.account_frozen',
+  account_frozen_no_subscription: 'tenant.account_frozen_no_subscription',
+  account_user_inactive: 'tenant.account_user_inactive',
   account_stopped: 'tenant.account_stopped',
   account_closed: 'tenant.account_closed',
   consent_required: 'tenant.consent_required',
@@ -2379,6 +2381,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
 
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
+  [MSG.account_frozen_no_subscription]: { ar: 'الحساب مجمّد: لا يوجد اشتراك فعّال لمنشأتك', en: 'Account is frozen: your company has no active subscription' },
+  [MSG.account_user_inactive]: { ar: 'حساب المستخدم غير مفعّل', en: 'This user account is not active' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.account_closed]: {
     ar: 'حسابُك مغلقٌ بطلبك، وبياناتُك محفوظةٌ بمدد الحفظ النظامية حتى {retainUntil} على الأقلّ ثم تُمحى — ويكتمل الإتلافُ خلال أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية. ويمكنك طلبُ إعادة الفتح حتى {reopenUntil}، وبعدها تُمحى بياناتُك غيرُ الملزِمة آلياً ولا عودة',
