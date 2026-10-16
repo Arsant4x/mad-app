@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { assertBoxInBranch, branchFilter, maskForeignDocument, resolveBranchId } from '../branches/branch-scope.util';
+import { companyToday } from '../common/company-day.util';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
@@ -329,7 +330,7 @@ export class SupplierPaymentsService {
           supplierId: payment.supplierId,
           paymentNo: payment.no,
           supplierName: supplier.name,
-          date: new Date(),
+          date: await companyToday(tx, companyId),
           baseCash: 0,
           basePayable: difference,
           branchId: payment.branchId,
@@ -370,8 +371,8 @@ export class SupplierPaymentsService {
 
         const amount = round2(-Number(original.amount));
         const rate = Number(original.exchangeRate);
-        // يومُ التاجر أولاً (`ق-٧٣٦`)، ولحظةٌ واحدة للرقم وللصفّ معاً.
-        const reversalDate = date ? new Date(date) : new Date();
+        // The requested day, else the company's own day: one value for the number and the row.
+        const reversalDate = date ? new Date(date) : await companyToday(tx, companyId);
         const no = await this.nextPaymentNumber(tx, companyId, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
 

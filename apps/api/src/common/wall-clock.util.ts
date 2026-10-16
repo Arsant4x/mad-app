@@ -95,6 +95,26 @@ export function dayStartOf(instant: Date, offsetMin = 0): Date {
   return new Date(`${localDateOf(instant, offsetMin)}T00:00:00.000Z`);
 }
 
+/**
+ * Offset of an IANA time zone from UTC at an instant, in minutes, read from the zone itself so the
+ * answer follows the zone's own rules (daylight saving included) rather than the server's zone.
+ */
+export function zoneOffsetMin(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes): number => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+  return Math.round((wall - (instant.getTime() - instant.getUTCMilliseconds())) / 60_000);
+}
+
 /** آخرُ لحظةٍ في يوم اللحظة المعلَن — لحدودِ «حتى تاريخ كذا» على أعمدةٍ تحمل وقتاً. */
 export function dayEndOf(instant: Date, offsetMin = 0): Date {
   return new Date(`${localDateOf(instant, offsetMin)}T23:59:59.999Z`);
