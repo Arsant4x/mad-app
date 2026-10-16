@@ -97,10 +97,11 @@ export class InventoryController {
     return this.inventoryService.openProvisional(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
+  /** Record for every movement; one that reduces inventory value (stock out, negative adjustment) also needs review. */
   @Post('movements')
   @RequiresAction('record')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateStockMovementDto) {
-    return this.inventoryService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+    return this.inventoryService.create(tenant, dto);
   }
 
   /** ㉙ عكسُ الحركة بحركةٍ مقابلة — لا حذف (ق-١٠٦٣): تاريخُ المخزون لا يُمحى. */

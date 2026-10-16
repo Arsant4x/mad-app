@@ -156,6 +156,7 @@ export const MSG = {
   unit_code_required: 'products.unit_code_required',
   unit_code_unknown: 'products.unit_code_unknown',
   expiry_tracked_required: 'products.expiry_tracked_required',
+  product_has_open_stock: 'products.has_open_stock',
   // ⑧ فئةُ ضريبة القيمة المضافة — على الصنف وعلى سطرٍ بلا صنف (ق-١٢١١ · ق-١٢١٢ · ق-١٢٢٢)
   tax_category_required: 'vat.category_required',
   tax_category_unknown: 'vat.category_unknown',
@@ -186,6 +187,7 @@ export const MSG = {
   adjustment_cannot_be_zero: 'inventory.adjustment_cannot_be_zero',
   unit_cost_required: 'inventory.unit_cost_required',
   stock_movement_reason_required: 'inventory.stock_movement_reason_required',
+  stock_out_needs_review: 'inventory.stock_out_needs_review',
   movement_is_reversal: 'inventory.movement_is_reversal',
   movement_already_reversed: 'inventory.movement_already_reversed',
   movement_has_document: 'inventory.movement_has_document',
@@ -1118,6 +1120,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.unit_code_required]: { ar: 'وحدة القياس مطلوبة — تُعلَن من القائمة ولا تُفترض', en: 'Unit of measure is required — declare it from the list; none is assumed' },
   [MSG.unit_code_unknown]: { ar: 'وحدة القياس ليست من القائمة المعتمدة (رموز UN/ECE Rec 20)', en: 'Unit of measure is not in the approved list (UN/ECE Rec 20 codes)' },
   [MSG.expiry_tracked_required]: { ar: 'إعلانُ التتبّع بالدفعة والانتهاء مطلوب — يُعلَن على البطاقة (نعم أو لا) ولا يُخمَّن', en: 'Batch-and-expiry tracking must be declared on the product (yes or no) — it is not assumed' },
+  [MSG.product_has_open_stock]: {
+    ar: 'لا يُحذف صنفٌ ما زال له رصيدٌ في المخزون. أخرج رصيده أولاً، أو أرشفه ليختفي من القوائم ويبقى في الحسابات.',
+    en: 'A product that still holds stock cannot be deleted. Take its stock out first, or archive it to hide it from lists while it stays in the books.',
+  },
   [MSG.tax_category_required]: { ar: 'فئةُ ضريبة القيمة المضافة مطلوبة — تُعلَن (خاضع · نسبة الصفر · معفى · خارج النطاق) ولا تُخمَّن', en: 'The VAT category is required — declare it (standard, zero-rated, exempt or out of scope); none is assumed' },
   [MSG.tax_category_unknown]: { ar: 'فئةُ الضريبة ليست من الفئات المعتمدة (S · Z · E · O)', en: 'The VAT category is not one of the approved categories (S · Z · E · O)' },
   [MSG.tax_reason_code_required]: { ar: 'فئةُ نسبة الصفر أو المعفى تحتاج سببَ الإعفاء من قائمة الهيئة', en: 'A zero-rated or exempt category requires an exemption reason from the authority list' },
@@ -1150,6 +1156,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.adjustment_cannot_be_zero]: { ar: 'قيمة التسوية يجب ألا تساوي صفراً', en: 'Adjustment amount cannot be zero' },
   [MSG.unit_cost_required]: { ar: 'تكلفة الوحدة مطلوبة للإدخال اليدوي — لا تؤخذ من بطاقة الصنف', en: 'Unit cost is required for manual stock entry — it is not taken from the product card' },
   [MSG.stock_movement_reason_required]: { ar: 'سببُ الحركة اليدوية مطلوب — اكتب لماذا تتحرّك الكمّية (جرد · تصحيحُ إدخال · نقل…)', en: 'A reason is required for a manual stock movement — say why the quantity moves (count · entry correction · transfer…)' },
+  [MSG.stock_out_needs_review]: {
+    ar: 'هذه الحركة تُنقص قيمة المخزون وتحتاج صلاحية «مراجعة» على شاشة المخزون، ولم يُكتب شيء. اطلبها من صاحب المنشأة أو ممّن يملك هذه الصلاحية.',
+    en: 'This movement reduces inventory value and needs the review permission on the inventory screen; nothing was written. Ask the company owner or someone who holds that permission.',
+  },
   [MSG.movement_is_reversal]: { ar: 'هذه الحركة عكسٌ لحركةٍ أخرى — لا يُعكَس العكس، والتصحيح بحركةٍ جديدة', en: 'This movement is itself a reversal — reversals are not reversed; correct with a new movement' },
   [MSG.movement_already_reversed]: { ar: 'عُكست هذه الحركة من قبل — ولا تُعكَس مرّتين', en: 'This movement has already been reversed' },
   [MSG.movement_has_document]: { ar: 'الحركة لها مستند (بيع أو استلام أو شطب) — تُعكَس من مستندها لا من هنا', en: 'This movement belongs to a document (sale, receipt or write-off) — reverse it from its document' },
