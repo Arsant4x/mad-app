@@ -194,8 +194,6 @@ export interface CreateCompanyDto {
   password: string;
   email: string;
   permissionTemplateId: string;
-  subStart?: string;
-  subEnd?: string;
   country?: string;
 }
 
@@ -1026,11 +1024,6 @@ export interface RenewContractDto {
   no?: string;
   ejarNo?: string;
   carryDeposits?: boolean;
-}
-
-/** Request body: `RenewSubscriptionDto` on the server. */
-export interface RenewSubscriptionDto {
-  months: number;
 }
 
 /** Request body: `ReopenPeriodDto` on the server. */

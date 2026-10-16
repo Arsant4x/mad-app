@@ -34,7 +34,6 @@ describe('مسارُ المدير لا يركّب منشأةً على قالب �
     orgName: `منشأة قالب ${tag} ${suffix}`,
     email: `sys-tpl-${tag}-${suffix}@example.com`,
     permissionTemplateId,
-    subEnd: '2030-01-01',
   });
 
   beforeAll(async () => {

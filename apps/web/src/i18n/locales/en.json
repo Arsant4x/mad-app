@@ -147,7 +147,6 @@
   "register_email": "Email (for password recovery)",
   "register_submit": "Create account",
   "register_back": "Have an account? Sign in",
-  "register_trial_hint": "Starts with a full-featured free trial.",
   "forgot_title": "Password recovery",
   "forgot_hint": "Enter your username — if the account has an email on file, a link will be sent.",
   "forgot_submit": "Send reset link",

@@ -114,7 +114,7 @@ describe('New password rules (e2e)', () => {
   // The platform admin no longer sets an owner password on update at all (owner-reset-link.e2e-spec.ts).
   it('the platform admin cannot create a company with a short password', async () => {
     const username = `pw-admin-co-${stamp}`;
-    const created = await admin(http().post('/companies')).send({ username, password: 'Abcdefgh12!', orgName: `pw ${username}`, email: `${username}@example.com`, permissionTemplateId: companyTemplateId, subEnd: '2030-01-01' });
+    const created = await admin(http().post('/companies')).send({ username, password: 'Abcdefgh12!', orgName: `pw ${username}`, email: `${username}@example.com`, permissionTemplateId: companyTemplateId });
     if (created.status === 201) createdCompanies.push(created.body.id);
     expect(created.status).toBe(400);
   });

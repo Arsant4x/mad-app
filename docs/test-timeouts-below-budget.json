@@ -82,7 +82,7 @@
     "scripts-tenant-isolation.e2e-spec.ts": 1,
     "structural-wave.e2e-spec.ts": 1,
     "subprocessor-consent.e2e-spec.ts": 6,
-    "subscription.e2e-spec.ts": 4,
+    "subscription.e2e-spec.ts": 1,
     "supplier-notes.e2e-spec.ts": 8,
     "supplier-payments.e2e-spec.ts": 10,
     "suppliers-purchases-tenant-isolation.e2e-spec.ts": 3,

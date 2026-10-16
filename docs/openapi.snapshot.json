@@ -4072,15 +4072,6 @@
       "201"
     ]
   },
-  "POST /v1/subscription/renew": {
-    "parameters": [],
-    "requiredBody": [
-      "months"
-    ],
-    "responses": [
-      "201"
-    ]
-  },
   "POST /v1/supplier-payments": {
     "parameters": [],
     "requiredBody": [

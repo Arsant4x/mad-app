@@ -1,7 +1,9 @@
-import { IsEmail, IsISO8601, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 import { PASSWORD_MAX_LENGTH } from '../../common/password/password-policy';
 
+// No subscription dates: the company subscribes like any merchant, and the global validation pipe
+// refuses subStart or subEnd by name.
 export class CreateCompanyDto {
   @IsString()
   @MinLength(1)
@@ -23,14 +25,6 @@ export class CreateCompanyDto {
 
   @IsString()
   permissionTemplateId!: string;
-
-  @IsOptional()
-  @IsISO8601()
-  subStart?: string;
-
-  @IsOptional()
-  @IsISO8601()
-  subEnd?: string;
 
   /// 🔴 `ق-١٣٦٨` — دولةُ المنشأة (ISO 3166-1 alpha-2) — كالتسجيل الذاتيّ: اختياريّةٌ ما دام الإقليمُ واحداً.
   @IsOptional()

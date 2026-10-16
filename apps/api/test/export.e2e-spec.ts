@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantTestSubscription } from './test-subscription';
 /**
  * ⚠️ **يُقرأ اسم المفتاح من مصدره لا يُكتب حرفياً.**
  *
@@ -54,6 +55,7 @@ describe('Data export (e2e)', () => {
       .send({ orgName: `منشأة تصدير ${username}`, username, password: 'ExpPass1234!', email: `${username}@example.com` })
       .expect(201);
     cleanupCompanyIds.push(res.body.user.companyId);
+    await grantTestSubscription(app.get(PrismaService), res.body.user.companyId);
     return res.body.accessToken as string;
   }
 

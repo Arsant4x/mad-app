@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ClosedAccountView } from '../pages/subscription/ClosedAccountView';
 import { ConsentRequiredView } from '../pages/subscription/ConsentRequiredView';
 import { getConsentState, type ConsentState } from '../api/consent';
+import { getSubscription } from '../api/subscription';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
 import { getZatcaUnreported, type ZatcaUnreported } from '../api/zatca';
@@ -183,6 +184,24 @@ export function AppShell() {
     };
   }, []);
 
+  /**
+   * A frozen company that never had a subscription must not be told its subscription ended. Until the
+   * answer arrives, or if it fails, the banner says only that there is no active subscription, which
+   * is true for every frozen company.
+   */
+  const frozenOwner = user?.status === 'FROZEN' && user.actorType === 'COMPANY';
+  const [subscriptionEnded, setSubscriptionEnded] = useState(false);
+  useEffect(() => {
+    if (!frozenOwner) return;
+    let cancelled = false;
+    getSubscription()
+      .then((s) => !cancelled && setSubscriptionEnded(!s.neverSubscribed))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [frozenOwner]);
+
   // A lookup in a set the server decided; no rule lives here (see PermissionsContext).
   const { canSee } = usePermissions();
 
@@ -325,9 +344,9 @@ export function AppShell() {
               flexWrap: 'wrap',
             }}
           >
-            <span>{t('shell.frozen_banner')}</span>
+            <span>{subscriptionEnded ? t('shell.frozen_banner') : t('shell.no_subscription_banner')}</span>
             <NavLink to="/subscription" className="btn btn-primary btn-sm" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              {t('shell.renew_now')}
+              {t('shell.subscription_link')}
             </NavLink>
           </div>
         )}

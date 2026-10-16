@@ -8,6 +8,7 @@ import { ConsentService } from '../src/consent/consent.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantTestSubscription } from './test-subscription';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (42.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(130000);
@@ -42,9 +43,10 @@ describe('Sub-processor consent (e2e)', () => {
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
     const username = `consent-co-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'ConsentPass123!', orgName: `منشأة موافقة ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'ConsentPass123!', orgName: `منشأة موافقة ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId })
       .expect(201);
     cleanupCompanyIds.push(res.body.id);
+    await grantTestSubscription(prisma, res.body.id);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ConsentPass123!' });
     return { id: res.body.id, token: login.body.accessToken, username };
   }

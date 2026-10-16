@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { sendOwnerResetLink, type Company, type CompanyInput } from '../../api/companies';
+import { sendOwnerResetLink, type Company, type CompanyFormValues } from '../../api/companies';
 import { companyTemplateChoices, type PermissionTemplate } from '../../api/templates';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
@@ -56,7 +56,7 @@ export function CompanyModal({
   templates: PermissionTemplate[];
   editing: Company | null;
   onCancel: () => void;
-  onSave: (data: Partial<CompanyInput>) => Promise<void>;
+  onSave: (data: CompanyFormValues) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [orgName, setOrgName] = useState(editing?.orgName ?? '');
@@ -87,8 +87,9 @@ export function CompanyModal({
         // The owner's sign-in details and e-mail are set once, when the account is created.
         ...(editing ? {} : { username: username.trim(), password, email: email.trim() }),
         ...(permissionTemplateId !== editing?.permissionTemplateId ? { permissionTemplateId } : {}),
-        subStart: subStart || undefined,
-        subEnd: subEnd || undefined,
+        // The subscription dates belong to the finance route of an existing company. A new company
+        // subscribes like any merchant, so the server refuses dates on create.
+        ...(editing ? { subStart: subStart || undefined, subEnd: subEnd || undefined } : {}),
       });
     } catch (e) {
       setError(serverMessage(e) ?? i18n.t('err_account_save'));
@@ -139,17 +140,23 @@ export function CompanyModal({
             ))}
           </select>
         </div>
-        <div className="two-col">
-          <div className="field">
-            <label>{t('developer.company_modal.sub_start')}</label>
-            <input type="date" value={subStart} onChange={(e) => setSubStart(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>{t('developer.company_modal.sub_end')}</label>
-            <input type="date" value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
-          </div>
-        </div>
-        <p className="field hint">{t('developer.company_modal.hint')}</p>
+        {editing ? (
+          <>
+            <div className="two-col">
+              <div className="field">
+                <label>{t('developer.company_modal.sub_start')}</label>
+                <input type="date" value={subStart} onChange={(e) => setSubStart(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>{t('developer.company_modal.sub_end')}</label>
+                <input type="date" value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
+              </div>
+            </div>
+            <p className="field hint">{t('developer.company_modal.hint')}</p>
+          </>
+        ) : (
+          <p className="field hint">{t('developer.company_modal.create_hint')}</p>
+        )}
         {editing && <OwnerSignInPanel company={editing} />}
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">

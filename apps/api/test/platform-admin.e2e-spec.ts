@@ -141,7 +141,7 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     expect(login.body.user.actorType).toBe('COMPANY');
   });
 
-  it('shows a lapsed subscription as FROZEN in the company list without waiting for that company to log in first, and reactivates it by pushing subEnd forward', async () => {
+  it('starts a new company frozen, activates it by pushing subEnd forward on a two person decision, and shows a lapse as FROZEN in the company list without waiting for that company to log in first', async () => {
     const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${platformAdminToken}`).expect(200);
     const fullAccess = templates.body.find((t: { isAllScreens: boolean; isSystem: boolean }) => t.isAllScreens && !t.isSystem);
 
@@ -151,10 +151,19 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
       .set('Authorization', `Bearer ${platformAdminToken}`)
       .send({ orgName: `شركة تجميد ${suffix}`, username: `freeze-test-${suffix}`, password: 'TestPass123!', email: `freeze-test-${suffix}@example.com`, permissionTemplateId: fullAccess.id })
       .expect(201);
-    expect(created.body.status).toBe('ACTIVE');
+    // Born without a subscription.
+    expect(created.body.status).toBe('FROZEN');
 
-    // ⑪A2 (`ق-١٣١٧`): الاشتراكُ انتقل إلى مسارِه — **للمالية وحدَها**، والحسابُ في مساره.
-    // ⑪A1 (`ق-١٣١٨`): **وتعديلُه بيدين** — فيُطلب القرارُ ويُقرّه ثانٍ قبل كلِّ تعديل.
+    // The subscription has its own route for the finance role, behind a two person decision.
+    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
+    const activated = await request(app.getHttpServer())
+      .patch(`/companies/${created.body.id}/subscription`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({ subEnd: '2030-01-01' })
+      .expect(200);
+    expect(activated.body.status).toBe('ACTIVE');
+    expect(activated.body.frozenAt).toBeNull();
+
     await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
     await request(app.getHttpServer())
       .patch(`/companies/${created.body.id}/subscription`)
@@ -169,15 +178,6 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     const listAfterLapse = await request(app.getHttpServer()).get('/companies').set('Authorization', `Bearer ${platformAdminToken}`).expect(200);
     const foundFrozen = listAfterLapse.body.find((c: { id: string }) => c.id === created.body.id);
     expect(foundFrozen.status).toBe('FROZEN');
-
-    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
-    const reactivated = await request(app.getHttpServer())
-      .patch(`/companies/${created.body.id}/subscription`)
-      .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ subEnd: '2030-01-01' })
-      .expect(200);
-    expect(reactivated.body.status).toBe('ACTIVE');
-    expect(reactivated.body.frozenAt).toBeNull();
   });
 
   it("keeps a company token from managing platform-level companies, and a platform-admin token from hitting a company-scoped route", async () => {

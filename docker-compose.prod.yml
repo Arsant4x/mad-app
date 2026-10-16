@@ -120,7 +120,6 @@ services:
       MAIL_DAILY_LIMIT: ${MAIL_DAILY_LIMIT:-}
       # متتبّعُ الأخطاء (GlitchTip) — فارغاً حتى يوجد خادمُه المستقلّ داخل المملكة؛ شرطُ تشغيل (ق-١٣٣١ · ③).
       ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
-      TRIAL_DAYS: ${TRIAL_DAYS:-14}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
       # Platform accounts sign in with a second factor; the boot guard refuses any value but true.
       MFA_REQUIRED_FOR_PLATFORM_ADMIN: ${MFA_REQUIRED_FOR_PLATFORM_ADMIN:-true}

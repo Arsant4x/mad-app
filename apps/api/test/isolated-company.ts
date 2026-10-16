@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantTestSubscription } from './test-subscription';
 
 /**
  * **منشأةٌ معزولةٌ للاختبار** (`ق-٧٢٢` · `§8.30`): تُنشأ **بالمسار الحقيقيّ** (`POST /auth/register` — الميلادُ
@@ -34,6 +35,8 @@ export async function registerIsolatedCompany(app: INestApplication, tag: string
     .expect(201);
   const companyId: string | null = res.body.user?.companyId ?? null;
   if (!companyId) throw new Error(`التسجيلُ لم يُعد معرّفَ منشأة: ${JSON.stringify(res.body).slice(0, 200)}`);
+  // Registration grants no subscription time; suites using this helper write, so they get a test term.
+  await grantTestSubscription(app.get(PrismaService), companyId);
   return { companyId, token: res.body.accessToken as string, username };
 }
 

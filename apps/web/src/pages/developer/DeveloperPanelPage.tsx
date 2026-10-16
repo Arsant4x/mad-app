@@ -5,7 +5,7 @@ import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { PublicFormTemplatesSection } from './PublicFormTemplatesSection';
 import { SubProcessorsSection } from './SubProcessorsSection';
 import { SupportAccessSection } from './SupportAccessSection';
-import { createCompany, listCompanies, updateCompany, updateCompanySubscription, type Company, type CompanyInput } from '../../api/companies';
+import { createCompany, listCompanies, updateCompany, updateCompanySubscription, type Company, type CompanyFormValues, type CompanyInput } from '../../api/companies';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, type PermissionTemplate, type TemplateInput } from '../../api/templates';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -59,7 +59,7 @@ export function DeveloperPanelPage() {
     [companies],
   );
 
-  async function handleSaveCompany(data: Partial<CompanyInput>) {
+  async function handleSaveCompany(data: CompanyFormValues) {
     if (companyModal?.mode === 'edit') {
       // The subscription has its own route and role, so money is never sent with the name. The owner's
       // sign-in details are never sent: the edit form has none.

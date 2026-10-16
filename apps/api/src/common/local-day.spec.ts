@@ -223,10 +223,11 @@ describe('يومٌ يُقاس بمنطقة العملية يُصلَح أو يُ
     expect(bad).toEqual([]);
   });
 
-  it('والإعلانُ آليةٌ تعمل — الشجرةُ تحمل موضعاً معلَناً واحداً على الأقلّ يقرؤه الحارس', () => {
-    // `resolveSubStart` (قسمةُ المالك ②: رفضٌ يقرؤه مديرُ المنصّة لا التاجر) — فإن زال الإعلانُ
-    // من الشجرة كلِّها فالآليةُ لم تعد مُثبَتةً بحالةٍ حيّة.
-    expect(CALLS.filter((c) => c.reason !== null && c.reason.length >= MIN_REASON_LENGTH).length).toBeGreaterThan(0);
+  it('every declaration in the tree is read by the guard and carries a reason long enough', () => {
+    // The one live declaration was the admin subscription start check, removed with that field. The
+    // mechanism itself stays proven by the known cases below, so no live declaration is required.
+    const declared = CALLS.filter((c) => c.reason !== null);
+    expect(declared.filter((c) => c.reason!.length < MIN_REASON_LENGTH)).toEqual([]);
   });
 
   describe('مصادقةُ المسبار بحالاتٍ معلومة (ق-٢٦٢)', () => {

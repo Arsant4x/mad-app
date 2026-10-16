@@ -10,10 +10,11 @@ export interface SubscriptionStatus {
   inGrace: boolean;
   /** Days of read-only grace remaining before the account stops. */
   graceDaysLeft: number | null;
+  /** The company has never had a subscription term, so nothing has "ended". */
+  neverSubscribed: boolean;
 }
 
 export const getSubscription = () => apiClient.get<SubscriptionStatus>('/subscription').then((r) => r.data);
-export const renewSubscription = (months: number) => apiClient.post<SubscriptionStatus>('/subscription/renew', { months }).then((r) => r.data);
 
 /** The company's full data as one JSON document (owner-only; works during the
  * grace period — that is the "export" in "view and export only"). */

@@ -49,7 +49,7 @@ export class AuthController {
     return { ok: true };
   }
 
-  /** Self-signup with a trial — returns a working session immediately. */
+  /** Self signup: returns a working session immediately, on a company that is read only until it subscribes. */
   @Post('register')
   @ThrottleByClientIp(5)
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<{ accessToken: string; user: AuthUserView }> {

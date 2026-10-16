@@ -10,7 +10,7 @@ import i18n from '../i18n';
 type Mode = 'login' | 'register' | 'forgot';
 
 /**
- * The SaaS front door: sign in, self-register with a trial, or start a
+ * The SaaS front door: sign in, self-register, or start a
  * password reset — one card, three modes, so the visitor never leaves the
  * page to change their mind.
  */
@@ -158,7 +158,6 @@ export function LoginPage() {
           </label>
         )}
 
-        {mode === 'register' && <p className="hint">{t('register_trial_hint')}</p>}
         {mode === 'forgot' && <p className="hint">{t('forgot_hint')}</p>}
 
         {error && <p className="error-text">{error}</p>}

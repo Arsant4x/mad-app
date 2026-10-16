@@ -1,4 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { test, type APIRequestContext } from '@playwright/test';
 
 /**
@@ -61,7 +64,19 @@ export async function registerCompany(request: APIRequestContext, tag: string): 
   });
   if (!res.ok()) throw new Error(`تعذّر تسجيل منشأة الاختبار: ${res.status()} ${await res.text()}`);
   const body = await res.json();
+  grantTestSubscription(body.user.companyId);
   return { username, password, companyId: body.user.companyId, token: body.accessToken };
+}
+
+/**
+ * A registered company is read only (no free trial), and the browser suite writes. The API runs as a
+ * separate process with no route that grants subscription time, so the API test helper is run as a
+ * command against the same database (DATABASE_URL, set in CI).
+ */
+function grantTestSubscription(companyId: string): void {
+  const apiDir = fileURLToPath(new URL('../../api/', import.meta.url));
+  const tsNode = createRequire(import.meta.url).resolve('ts-node/dist/bin.js');
+  execFileSync(process.execPath, [tsNode, '--transpile-only', 'test/test-subscription.ts', companyId], { cwd: apiDir, stdio: 'inherit' });
 }
 
 /** يُنظّف بصلاحية مدير المنصة. يبتلع الفشل عمداً: تنظيفٌ متعثّر يجب ألّا

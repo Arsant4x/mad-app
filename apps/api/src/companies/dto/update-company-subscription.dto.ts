@@ -8,8 +8,8 @@ import { IsISO8601, IsOptional } from 'class-validator';
  * `UpdateCompanyDto` إلى مسارٍ بدوره: من أرسلهما إلى المسار العامّ يُردّ `400` **باسمهما**
  * لا يُتجاهلان صامتَين (`forbidNonWhitelisted`).
  *
- * ⚠️ **وميلادُ الحساب يبقى في مساره** بالدورين معاً: الفترةُ الأولى جزءٌ من الميلاد،
- * **وتقسيمُه على دورين يجعل التسجيلَ مستحيلاً على كلٍّ منهما وحدَه**.
+ * This route, behind a two person decision, is the only one that moves a subscription end: a new
+ * company is born with none.
  */
 export class UpdateCompanySubscriptionDto {
   @IsOptional()

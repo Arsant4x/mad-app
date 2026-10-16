@@ -21,6 +21,12 @@ export interface Company {
 
 export type CompanyInput = CreateCompanyDto;
 
+/**
+ * What the company form hands back. Creating sends no subscription dates (a new company subscribes like
+ * any merchant); editing may carry them for the finance route, which is called separately.
+ */
+export type CompanyFormValues = Partial<CompanyInput> & { subStart?: string; subEnd?: string };
+
 export const listCompanies = () => apiClient.get<Company[]>('/companies').then((r) => r.data);
 export const createCompany = (dto: CompanyInput) => apiClient.post<Company>('/companies', dto).then((r) => r.data);
 /**

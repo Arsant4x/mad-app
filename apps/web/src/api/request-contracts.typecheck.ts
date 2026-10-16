@@ -4,12 +4,12 @@
  * The server runs with `whitelist + forbidNonWhitelisted`, so a field the DTO does not know is answered
  * with `400`. Every marked line below must fail to type check; if a rejected field returns to its type,
  * the line becomes valid and the build fails with `TS2578` (an unused `@ts-expect-error`). It is built
- * with the web app (`tsc -b`) in the light CI on every push. It covers only the five named types until
+ * with the web app (`tsc -b`) in the light CI on every push. It covers only the six named types until
  * request types are generated.
  */
 import type { ActivityInput } from './activities';
 import type { BankUpdateInput } from './banks';
-import type { CompanyUpdateInput } from './companies';
+import type { CompanyInput, CompanyUpdateInput } from './companies';
 import type { EmployeeUpdateInput } from './employees';
 import type { UpdateInvoiceInput } from './invoices';
 
@@ -24,6 +24,8 @@ export const requestTypesRejectServerRejectedFields = [
   { orgName: 'منشأة', subEnd: '2027-01-01' } satisfies CompanyUpdateInput, // i18n-exempt: sample payload in a type check
   // @ts-expect-error `UpdateCompanyDto` does not accept `password` nor `username`: only the owner sets them
   { orgName: 'org', password: 'Chosen-by-platform-1' } satisfies CompanyUpdateInput,
+  // @ts-expect-error `CreateCompanyDto` does not accept `subEnd` (nor `subStart`): a new company subscribes like any merchant
+  { orgName: 'org', subEnd: '2099-01-01' } satisfies Partial<CompanyInput>,
   // @ts-expect-error `UpdateInvoiceDto` does not accept `creditOverride` (nor `issuedAt`, `issuedOffsetMin`, `prepaymentInvoiceIds`)
   { notes: 'ملاحظة', creditOverride: true } satisfies UpdateInvoiceInput, // i18n-exempt: sample payload in a type check
 ];

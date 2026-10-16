@@ -13,6 +13,7 @@ import { PersonalDataErasureService, REOPEN_WINDOW_DAYS } from '../src/deletion-
 import { gunzipSync } from 'node:zlib';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 import { grantPlatformDecision, releaseSecondHand } from './platform-decision';
+import { grantTestSubscription } from './test-subscription';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (73.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(220000);
@@ -53,10 +54,11 @@ describe('Account deletion requests (e2e)', () => {
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
     const username = `del-co-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'DelPass1234!', orgName: `منشأة حذف ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'DelPass1234!', orgName: `منشأة حذف ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId })
       .expect(201);
     cleanupCompanyIds.push(res.body.id);
     madeCompanyIds.push(res.body.id);
+    await grantTestSubscription(app.get(PrismaService), res.body.id);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'DelPass1234!' });
     return { id: res.body.id, token: login.body.accessToken, username };
   }
@@ -460,7 +462,9 @@ describe('Account deletion requests (e2e)', () => {
     expect(blocked.body.message).toContain(company!.retainUntil!.toISOString().slice(0, 10));
     // ودورةُ النسخ تُعلَن في الرسالة لا تُخفى (`ق-٥٦٠`).
     expect(blocked.body.message).toContain('أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية');
-    await request(app.getHttpServer()).post('/subscription/renew').set('Authorization', `Bearer ${closedToken}`).send({ months: 1 }).expect(403);
+    // The subscription route lets a lapsed company in, but not a closed one.
+    const closedSub = await request(app.getHttpServer()).get('/subscription').set('Authorization', `Bearer ${closedToken}`).expect(403);
+    expect(closedSub.body.code).toBe('ACCOUNT_CLOSED');
     const account = await request(app.getHttpServer()).get('/deletion-request/account').set('Authorization', `Bearer ${closedToken}`).expect(200);
     expect(account.body.status).toBe('CLOSED');
     const mine = await request(app.getHttpServer()).get('/deletion-request').set('Authorization', `Bearer ${closedToken}`).expect(200);

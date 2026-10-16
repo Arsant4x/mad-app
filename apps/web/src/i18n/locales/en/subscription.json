@@ -84,10 +84,10 @@
       "active": "Active",
       "frozen": "Grace period (view only)",
       "stopped": "Stopped",
-      "closed": "Closed at your request"
+      "closed": "Closed at your request",
+      "none": "No subscription (view only)"
     },
     "err_load": "Could not load subscription details",
-    "err_renew": "Could not renew the subscription",
     "loading": "Loading…",
     "start": "Subscription start: {{date}}",
     "end": "Subscription end: {{date}}",
@@ -95,15 +95,12 @@
     "frozen": "Your subscription has ended. You are in a grace period for viewing and export only. Renew to restore adding and editing.",
     "frozen_grace": "Your subscription has ended. You are in a grace period for viewing and export only ({{n}} days left before suspension). Renew to restore adding and editing.",
     "stopped": "The account is stopped. Renew your subscription to restore full access.",
-    "renew_title": "Renew subscription",
-    "months": "{{n}} mo",
-    "renewing": "Renewing…",
-    "renew": "Renew for {{n}} mo",
+    "no_subscription": "Your company has no active subscription. You can view and export your data; adding, editing and deleting open once a subscription is active.",
     "export_title": "A copy of your data",
     "export_hint": "A single JSON file with all your company's data, always available, even during the grace period.",
     "exporting": "Preparing…",
     "export": "Export all data",
     "title": "Subscription",
-    "subtitle": "Your subscription status and renewal, inside the platform"
+    "subtitle": "Your subscription status and a copy of your data"
   }
 }

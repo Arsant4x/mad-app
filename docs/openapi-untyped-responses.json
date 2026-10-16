@@ -293,7 +293,6 @@
     "POST /v1/reminders/installments/{installmentId}/send",
     "POST /v1/reservations",
     "POST /v1/scripts",
-    "POST /v1/subscription/renew",
     "POST /v1/supplier-payments",
     "POST /v1/supplier-payments/{id}/allocate",
     "POST /v1/supplier-payments/{id}/reverse",

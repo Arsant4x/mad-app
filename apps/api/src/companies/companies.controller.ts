@@ -22,9 +22,8 @@ import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 // The company account itself is an operations matter: its name and its template. The owner's login
 // name and password are the owner's alone; the platform can only have a reset link sent to the owner.
-// ⚠️ **واشتراكُها خرج من هنا** (`ق-١٣١٧`) إلى مسارٍ بدوره: **مالٌ يُحصَّل ويُردّ**.
-// **والميلادُ يبقى بالدورين معاً**: الفترةُ الأولى جزءٌ منه، **وتقسيمُه يجعل التسجيلَ
-// مستحيلاً على كلٍّ منهما وحدَه**. و`OWNER` يمرّ بتعريفه.
+// The subscription is money and has its own route for the finance role. Creating a company sets no
+// subscription dates, so both roles keep it. `OWNER` passes by definition.
 @RequiresPlatformRole(PlatformRole.OPERATIONS, PlatformRole.FINANCE)
 @PlatformAuditTarget('id')
 export class CompaniesController {

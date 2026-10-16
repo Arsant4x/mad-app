@@ -1,28 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { evaluateCompanyStatus, FROZEN_TO_STOPPED_GRACE_DAYS } from '../common/tenant/company-status.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { MSG } from '../common/i18n/messages';
-
-function addMonths(from: Date, months: number): Date {
-  const d = new Date(from);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
 
 function daysBetween(from: Date, to: Date): number {
   return Math.ceil((to.getTime() - from.getTime()) / 86400000);
 }
 
-/** Only the company owner manages the subscription — an employee sub-account
- * can view the platform but never renew or pay for it. */
-function assertOwner(actorType: string): void {
-  if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.sub_owner_only);
-}
-
 /**
- * Subscription self-service: what state the subscription is in, and renewing it
- * from inside the platform. Works even when the tenant is frozen or stopped —
- * that is the whole point (no contacting the provider).
+ * What state the company's subscription is in. Reachable even when the tenant is frozen or stopped,
+ * so the owner always sees why writing is closed. Nothing here grants subscription time: that happens
+ * only on the platform's two person subscription decision.
  *
  * Uses the raw PrismaService: `companies` carries no RLS (it's the tenant root),
  * and access is scoped by the verified companyId from the guard.
@@ -51,6 +38,10 @@ export class SubscriptionService {
       graceDaysLeft = Math.max(0, daysBetween(now, stopsAt));
     }
 
+    // A company is born with an end equal to its start, so a term of no length means it never had a
+    // subscription, and the screen must not tell it that its subscription ended.
+    const neverSubscribed = !!company.subStart && !!company.subEnd && company.subEnd.getTime() <= company.subStart.getTime();
+
     return {
       orgName: company.orgName,
       status: evaluated.status,
@@ -59,38 +50,7 @@ export class SubscriptionService {
       daysLeft,
       inGrace: evaluated.status === 'FROZEN',
       graceDaysLeft,
+      neverSubscribed,
     };
-  }
-
-  /**
-   * Extends the subscription and reactivates it. In production this runs only
-   * after a successful payment; that gateway step is deferred, so for now this
-   * is the renewal itself.
-   *
-   * The new end date is `months` past whichever is later — today or the current
-   * end — so renewing early adds to the remaining time instead of throwing it
-   * away, and renewing after a lapse starts the fresh term from today.
-   */
-  async renew(companyId: string, actorType: string, months: number) {
-    assertOwner(actorType);
-    const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { subStart: true, subEnd: true } });
-    if (!company) throw new NotFoundException(MSG.company_not_found);
-
-    const now = new Date();
-    const base = company.subEnd && company.subEnd > now ? company.subEnd : now;
-    const newSubEnd = addMonths(base, months);
-
-    await this.prisma.company.update({
-      where: { id: companyId },
-      data: {
-        subEnd: newSubEnd,
-        // subStart is fixed at first activation; only set it if somehow missing.
-        ...(company.subStart ? {} : { subStart: now }),
-        status: 'ACTIVE',
-        frozenAt: null,
-      },
-    });
-
-    return this.status(companyId);
   }
 }

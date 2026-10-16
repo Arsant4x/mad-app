@@ -7,11 +7,11 @@
 |---|---|
 | بنود SPEC | 284 |
 | منها في جداولٍ لها عمودُ حالة | 190 |
-| تقول الوثيقة ✅ | 100 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 97 |
+| تقول الوثيقة ✅ | 99 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 96 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 3 (منها 3 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 406 / 2662 |
+| اختباراتٌ موسومة / كل الاختبارات | 406 / 2890 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -21,7 +21,7 @@
 | 1.4 | حسابات موظفين بصلاحيات محدودة | ✅ | ✅ | `api/test/company-user-deactivation.e2e-spec.ts` :: [SPEC 1.4] ① the employee works before deactivation (e2e)<br>`api/test/company-user-deactivation.e2e-spec.ts` :: [SPEC 1.4] ② after deactivation the very next request is refused, and the session cannot be refreshed (e2e)<br>`api/test/company-user-deactivation.e2e-spec.ts` :: [SPEC 1.4] ③ re-activation does not revive the old session — its refresh token was revoked, and a fresh login is required (e2e)<br>`api/test/company-user-deactivation.e2e-spec.ts` :: [SPEC 1.4] ④ 🔴 تغييرُ المالك لكلمة الموظف يُنهي جلساتِه كالتعطيل — R48 (ق-١٢٧٨/④) (e2e)<br>`api/test/owner-templates.e2e-spec.ts` :: [SPEC 1.4 1.5] that template governs the employee it is assigned to (e2e)<br>`api/test/permission-actions.e2e-spec.ts` :: [SPEC 1.4] a view-only employee reads contracts but cannot create one (e2e)<br>`api/test/permission-actions.e2e-spec.ts` :: [SPEC 1.4] a view+add employee gets past the guard on create (reaches validation, not 403) (e2e) |
 | 1.5 | حراسة الشاشات (ScreenGuard) | ✅ | ✅ | `api/test/owner-templates.e2e-spec.ts` :: [SPEC 1.4 1.5] that template governs the employee it is assigned to (e2e)<br>`api/test/sector-screens.e2e-spec.ts` :: [SPEC 1.5] ⭐④ التطبيق يُرشِّح — والعنوان المباشر يُرفض بـ403 لا 404 (e2e)<br>`api/test/sector-screens.e2e-spec.ts` :: [SPEC 1.5] ⭐⑥ موظفٌ يعمل على شاشة ثم يُعطَّل نشاطها — يُرفض في **الطلب التالي** بلا إعادة دخول (e2e) |
 | 1.6 | لوحة المطوّر (إدارة الاشتراكات) | ✅ | ⬜ (دَين معلَن) | ⚠️ لوحة المطوّر (إدارة الاشتراكات) — لا اختبار يمرّ بمسار PLATFORM_ADMIN أو حارس اللوحة أو تعديل اشتراكٍ من مدير؛ اختبارات دورة حياة الاشتراك (company-status.util.spec.ts) تثبت 15.1 و15.2 لا اللوحة. يلزم اختبار. |
-| 1.7 | التسجيل الذاتي للعميل | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation (e2e)<br>`api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7] refuses a taken username (e2e) |
+| 1.7 | التسجيل الذاتي للعميل | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7] registers a merchant with an immediate session, no free subscription time, and full isolation (e2e)<br>`api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7] refuses a taken username (e2e) |
 | 1.8 | OTP: تسجيل · جهاز جديد · عملية حساسة | ⬜ | ⬜ | — |
 | 1.9 | قفل المستخدم (User Lock) للكاشير | ⬜ | ⬜ | — |
 | 1.10 | وضع الدعم الفني بإذن العميل + سجل | ✅ | ✅ | `api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] no consent, no entry — with or without the header (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] the owner approves → read opens, writes stay closed (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] 🔴 the scope is enforced: outside it 403, undeclared routes 403, the shell 200 (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] every support request lands in the owner-visible log, named and reasoned (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] 🔴 a second platform admin cannot enter on another admin\'s consent (e2e) |
@@ -165,7 +165,7 @@
 | 15.9 | ✅ **محسوم (2026-08-12)** — نموذج «رئيسي + إضافية». التفصيل تحت الجدول. | ⬜ | ⬜ | — |
 | 15.5 | **تسعير شهري/سنوي حسب النشاط** | ⬜ | ⬜ | — |
 | 15.6 | باقات جاهزة أو باقة يصممها العميل | ⬜ | ⬜ | — |
-| 15.7 | تجربة مجانية | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation (e2e) |
+| 15.7 | تجربة مجانية | ⬜ | ⬜ | — |
 | 15.8 | تسعير معلن وشفاف | ⬜ | ⬜ | — |
 | 30.1 | **نوعان:** مرتجع مبيعات ⇒ **إشعار دائن** · مرتجع مشتريات ⇒ **إشعار مدين** | ✅ | ✅ | `api/test/supplier-notes.e2e-spec.ts` :: [SPEC 30.1] ② إعادةُ ٤ إلى المورّد بإشعاره الدائن — تخرج من طبقتها الأصلية، والذمّةُ والمدخلاتُ والإقرارُ تنخفض بإشارتها (e2e) |
 | 30.2 | **مرتبط بفاتورة أصلية إلزاماً** — لا مرتجع معلّق | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.2] سطرُ المرتجع يشير إلى سطرٍ من الفاتورة الأصلية نفسها — لا من فاتورةٍ أخرى (e2e) |

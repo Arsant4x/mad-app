@@ -1,6 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Company, Prisma } from '@mad-app/db';
-import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { createCompanyAccount } from './create-company-account';
@@ -36,26 +35,6 @@ export function blockingRecordsFrom(fieldName: unknown): string {
   return RECORD_NAMES[table] ?? table;
 }
 
-/**
- * Subscription start is anchored to the **actual** activation day and never
- * accepts an earlier date (owner's rule): a backdated start would grant a
- * shorter or already-lapsed subscription and muddy every grace-period
- * calculation. A missing value means "activate now"; a future value (scheduled
- * start) is allowed, an earlier one is refused.
- *
- * يومُ منطقة العملية بحقّه: الرفضُ هنا يقرؤه مديرُ المنصّة وحدَه عند تأريخ اشتراكٍ رجعياً — لا رقمٌ
- * يقرؤه التاجر ولا يبني عليه (قسمةُ المالك ② في `ق-١١٩٠`: يُعلَن بحجّته ولا يُصلَح). والأثرُ
- * الأقصى ثلاثُ ساعاتٍ عند حدّ اليوم على خادمٍ بتوقيت الرياض، في رفضٍ يُعاد بتاريخ اليوم.
- */
-function resolveSubStart(dtoSubStart?: string): Date {
-  if (!dtoSubStart) return new Date();
-  const requested = new Date(dtoSubStart);
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  if (requested < startOfToday) throw new BadRequestException(MSG.sub_start_no_backdate);
-  return requested;
-}
-
 @Injectable()
 export class CompaniesService {
   private readonly logger = new Logger(CompaniesService.name);
@@ -63,18 +42,9 @@ export class CompaniesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
-    private readonly config: ConfigService,
     private readonly decisions: PlatformDecisionsService,
     private readonly auth: AuthService,
   ) {}
-
-  /**
-   * نفس مصدر `AuthService.register` — لا رقمٌ ثانٍ. مدة التجربة قرار تجاري
-   * يُضبط من البيئة بلا نشر، وقناتان تقرآنه من موضعين تفترقان عند أول تغيير.
-   */
-  private trialDays(): number {
-    return parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10);
-  }
 
   async list(query?: PagedQueryDto) {
     const where: Prisma.CompanyWhereInput = { ...searchWhere(searchTerm(query), COMPANY_SEARCH_FIELDS) };
@@ -134,14 +104,8 @@ export class CompaniesService {
   async create(dto: CreateCompanyDto) {
     await this.assertCompanyTemplate(dto.permissionTemplateId);
 
-    // الإنشاء في `createCompanyAccount` — نواة واحدة يتقاسمها هذا المسار ومسار
-    // التسجيل الذاتي. وما يخصّ لوحة المدير وحدها يبقى هنا: التحقق من أن القالب
-    // عامّ، وقبول تواريخ اشتراك يدوية.
-    //
-    // ⚠️ و`subEnd` يبقى اختيارياً في العقد — لكن النواة **تسقط على مدة التجربة**
-    // عند غيابه بدل أن تُنتج منشأةً بلا تاريخ نهاية. الصفّ ذاك كان لا يتجمّد
-    // أبداً (`evaluateCompanyStatus` يعيد الحالة كما هي حين يغيب `subEnd`) — أي
-    // قناةُ إنشاءٍ خارج دورة الحياة كلها، وهو نقيض «نموذجٍ واحد».
+    // One birth core shared with self signup. What belongs to the admin panel alone stays here: the
+    // template check. The admin sets no subscription dates: the company subscribes like any merchant.
     const { companyId } = await createCompanyAccount(this.prisma, {
       username: dto.username,
       password: dto.password,
@@ -150,9 +114,6 @@ export class CompaniesService {
       // ق-١٣٦٨ — الدولةُ المعلَنة، وغيابُها يأخذ الإقليمَ الوحيد ما دام وحيداً.
       country: dto.country,
       permissionTemplateId: dto.permissionTemplateId,
-      subStart: resolveSubStart(dto.subStart),
-      subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
-      trialDays: this.trialDays(),
     });
 
     // تُقرأ بعد الالتزام بالـ`include` الذي تحتاجه اللوحة — النواة تعيد المعرّف
