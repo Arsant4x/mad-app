@@ -36,13 +36,20 @@ async function secondHand(app: INestApplication): Promise<{ id: string; token: s
  * **يطلب القرارَ بيدٍ ويُقرّه بأخرى** — فيصير الفعلُ الحرج ممكناً في الحزمة.
  *
  * `requesterToken` يدُ الحزمة نفسِها؛ والإقرارُ من اليد الثانية.
+ * A subscription change carries the end date it approves in `values.subEnd`.
  */
-export async function grantPlatformDecision(app: INestApplication, action: PlatformDecisionAction, targetId: string, requesterToken: string): Promise<void> {
+export async function grantPlatformDecision(
+  app: INestApplication,
+  action: PlatformDecisionAction,
+  targetId: string,
+  requesterToken: string,
+  values: { subEnd?: string } = {},
+): Promise<void> {
   const other = await secondHand(app);
   const asked = await request(app.getHttpServer())
     .post('/admin/decisions')
     .set('Authorization', `Bearer ${requesterToken}`)
-    .send({ action, targetId, summary: `إقرارٌ للاختبار على ${targetId}` })
+    .send({ action, targetId, summary: `إقرارٌ للاختبار على ${targetId}`, ...values })
     .expect(201);
   await request(app.getHttpServer()).post(`/admin/decisions/${asked.body.id}/approve`).set('Authorization', `Bearer ${other.token}`).expect(201);
 }
@@ -55,7 +62,7 @@ export async function releaseSecondHand(app: INestApplication): Promise<void> {
   const admin = await prisma.platformAdmin.findUnique({ where: { loginIdentityId: made.id }, select: { id: true } });
   if (admin) {
     // القراراتُ تشير إلى المديرَين بـ`Restrict` — فتُزال قبلهما (وهي من صنع الحزمة وحدها).
-    await prisma.platformDecision.deleteMany({ where: { OR: [{ requestedById: admin.id }, { decidedById: admin.id }] } });
+    await prisma.platformDecision.deleteMany({ where: { OR: [{ requestedById: admin.id }, { decidedById: admin.id }, { executedById: admin.id }] } });
   }
   await prisma.loginIdentity.delete({ where: { id: made.id } }).catch(() => undefined);
   created.delete(app);

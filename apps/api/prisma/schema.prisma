@@ -254,6 +254,14 @@ model PlatformDecision {
   /// متى نُفِّذ الفعلُ فعلاً — **فالإقرارُ ليس تنفيذاً**، وقرارٌ أُقرّ ولم يُنفَّذ يبقى صالحاً مرّةً واحدة.
   executedAt DateTime?
 
+  /// The administrator who applied the decision. Restrict like the requester and the approver.
+  executedById String?
+  executedBy   PlatformAdmin? @relation("PlatformDecisionExecutor", fields: [executedById], references: [id], onDelete: Restrict)
+
+  /// The subscription end a SUBSCRIPTION_CHANGE decision approves, written when it is requested.
+  /// Applying any other end is refused. No other action carries it.
+  requestedSubEnd DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([action, targetId, status])
@@ -275,6 +283,7 @@ model PlatformAdmin {
   /// ومن أقرّ لا يُمحى أثرُه بحذف حسابه**.
   decisionsRequested PlatformDecision[] @relation("PlatformDecisionRequester")
   decisionsDecided   PlatformDecision[] @relation("PlatformDecisionDecider")
+  decisionsExecuted  PlatformDecision[] @relation("PlatformDecisionExecutor")
 
   /// Every request this administrator made on a platform route. Restrict on the other side:
   /// deleting an administrator cannot erase their trail.

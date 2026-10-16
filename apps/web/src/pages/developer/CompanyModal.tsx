@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { sendOwnerResetLink, type Company, type CompanyFormValues } from '../../api/companies';
 import { companyTemplateChoices, type PermissionTemplate } from '../../api/templates';
-import { today } from '../../lib/format';
 import i18n from '../../i18n';
 
 function serverMessage(e: unknown): string | undefined {
@@ -69,7 +68,8 @@ export function CompanyModal({
   const current = editing ? templates.find((tpl) => tpl.id === editing.permissionTemplateId) : undefined;
   const options = current && !choices.some((tpl) => tpl.id === current.id) ? [current, ...choices] : choices;
   const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? choices[0]?.id ?? '');
-  const [subStart, setSubStart] = useState(editing?.subStart?.slice(0, 10) ?? today());
+  // The start date is the activation day and no route changes it, so it is shown and never sent.
+  const subStart = editing?.subStart?.slice(0, 10) ?? '';
   const [subEnd, setSubEnd] = useState(editing?.subEnd?.slice(0, 10) ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,9 +87,9 @@ export function CompanyModal({
         // The owner's sign-in details and e-mail are set once, when the account is created.
         ...(editing ? {} : { username: username.trim(), password, email: email.trim() }),
         ...(permissionTemplateId !== editing?.permissionTemplateId ? { permissionTemplateId } : {}),
-        // The subscription dates belong to the finance route of an existing company. A new company
+        // The end date belongs to the finance route of an existing company. A new company
         // subscribes like any merchant, so the server refuses dates on create.
-        ...(editing ? { subStart: subStart || undefined, subEnd: subEnd || undefined } : {}),
+        ...(editing ? { subEnd: subEnd || undefined } : {}),
       });
     } catch (e) {
       setError(serverMessage(e) ?? i18n.t('err_account_save'));
@@ -145,7 +145,7 @@ export function CompanyModal({
             <div className="two-col">
               <div className="field">
                 <label>{t('developer.company_modal.sub_start')}</label>
-                <input type="date" value={subStart} onChange={(e) => setSubStart(e.target.value)} />
+                <input type="date" value={subStart} readOnly disabled />
               </div>
               <div className="field">
                 <label>{t('developer.company_modal.sub_end')}</label>

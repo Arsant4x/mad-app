@@ -31,7 +31,7 @@ export class PlatformDecisionsController {
   @Post()
   request(@Req() req: Request, @Body() dto: RequestDecisionDto) {
     const payload = req.user as JwtPayload;
-    return this.service.request(dto.action, dto.targetId, dto.summary, payload.profileId);
+    return this.service.request(dto.action, dto.targetId, dto.summary, payload.profileId, { subEnd: dto.subEnd });
   }
 
   @Post(':id/approve')

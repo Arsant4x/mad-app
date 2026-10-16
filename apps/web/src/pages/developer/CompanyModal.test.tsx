@@ -97,4 +97,18 @@ describe('The platform company form and the subscription', () => {
     render(<CompanyModal templates={[full]} editing={company()} onCancel={() => {}} onSave={vi.fn()} />);
     expect(document.querySelectorAll('input[type="date"]')).toHaveLength(2);
   });
+
+  it('shows the start date read only and sends only the end date when editing', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<CompanyModal templates={[full]} editing={company()} onCancel={() => {}} onSave={onSave} />);
+    const [start, end] = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    expect(start.value).toBe('2026-01-01');
+    expect(start.disabled).toBe(true);
+    fireEvent.change(end, { target: { value: '2028-01-01' } });
+    fireEvent.click(screen.getByText('حفظ الحساب'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const sent = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(sent.subEnd).toBe('2028-01-01');
+    expect('subStart' in sent).toBe(false);
+  });
 });

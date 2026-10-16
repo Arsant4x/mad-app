@@ -1,5 +1,5 @@
 import { PlatformDecisionAction } from '@mad-app/db';
-import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 /**
  * ⚖️ `ق-١٣٨٣` — **في ملفّ `.dto.ts` لا في المتحكّم**: مُلحَقُ `@nestjs/swagger` يقرأ هذه اللاحقةَ وحدَها
@@ -18,6 +18,14 @@ export class RequestDecisionDto {
   @MinLength(10)
   @MaxLength(500)
   summary!: string;
+
+  /**
+   * The subscription end a subscription change decision approves. Required for that action and
+   * refused for the others; applying the decision requires this same date.
+   */
+  @IsOptional()
+  @IsISO8601()
+  subEnd?: string;
 }
 
 export class DecideDto {

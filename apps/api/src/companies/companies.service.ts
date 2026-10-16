@@ -164,13 +164,13 @@ export class CompaniesService {
    * **والتشغيلُ يخصّ الخادمَ والنسخ لا المال**. خرج من `update` إلى هنا **ليُحرَس بدورٍ آخر**
    * لا لتغيير سلوكه — والمنطقُ منقولٌ كما هو.
    */
-  async updateSubscription(id: string, dto: UpdateCompanySubscriptionDto) {
+  async updateSubscription(id: string, dto: UpdateCompanySubscriptionDto, executedById: string) {
     const existing = await this.prisma.company.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.company_not_found);
 
-    // 🔴 **بيدين لا بيد** (`ق-١٣١٨` · ⑪A1): تعديلُ اشتراكٍ يدويّ **مالٌ يقع مرّةً**، فيُستهلك
-    //    قرارٌ أقرّه **مديرٌ آخر**. ⛔ **ولا يعمل بحسابٍ منصّيٍّ واحد** — وهو المقصود لا عطل.
-    await this.decisions.consume('SUBSCRIPTION_CHANGE', id);
+    // A manual subscription change is money, so it spends a decision another administrator
+    // approved for this very end date, and the decision records who applied it.
+    await this.decisions.consume('SUBSCRIPTION_CHANGE', id, executedById, { subEnd: dto.subEnd ? new Date(dto.subEnd) : null });
 
     const newSubEnd = dto.subEnd ? new Date(dto.subEnd) : existing.subEnd;
     // Editing subEnd forward is this app's only "renew" lever (matches the
@@ -184,8 +184,7 @@ export class CompaniesService {
     return this.prisma.company.update({
       where: { id },
       data: {
-        // subStart is intentionally not editable — it is fixed to the actual
-        // activation day (owner's rule). Renewal moves subEnd, never subStart.
+        // subStart is not part of this route: it stays the activation day. Renewal moves subEnd.
         subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
         ...(reactivate ? { status: 'ACTIVE', frozenAt: null } : {}),
       },

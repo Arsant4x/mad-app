@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import { PLATFORM_DECISION_ACTION_VALUES } from '@mad-app/shared/api/enums';
 import type { PlatformDecisionAction, PlatformDecisionStatus } from '@mad-app/shared/api/enums';
+import type { RequestDecisionDto } from '@mad-app/shared/api/requests';
 
 /**
  * **القراراتُ المنصّية الحرجة** (`ق-١٣١٨` · ⑪A1) — الفعلُ الذي لا يُردّ **بيدين لا بيد**.
@@ -20,14 +21,17 @@ export interface PlatformDecision {
   decidedAt: string | null;
   executedAt: string | null;
   note: string | null;
+  /** The subscription end a subscription change approves; applying it requires this same date. */
+  requestedSubEnd: string | null;
   requestedBy: { displayName: string };
   decidedBy: { displayName: string } | null;
+  executedBy: { displayName: string } | null;
 }
 
 export const listPlatformDecisions = (status?: PlatformDecisionStatus) =>
   apiClient.get<PlatformDecision[]>('/admin/decisions', { params: status ? { status } : {} }).then((r) => r.data);
 
-export const requestPlatformDecision = (dto: { action: PlatformDecisionAction; targetId: string; summary: string }) =>
+export const requestPlatformDecision = (dto: RequestDecisionDto) =>
   apiClient.post<PlatformDecision>('/admin/decisions', dto).then((r) => r.data);
 
 /** ⚠️ **ومن طلبه لا يُقرّه** — الخادمُ يردّ `409`، والقاعدةُ تردّه كذلك. */
