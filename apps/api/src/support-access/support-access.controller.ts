@@ -7,6 +7,7 @@ import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guar
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
 import { PlatformRole } from '@mad-app/db';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { OwnerOnlyGuard } from '../common/tenant/owner-only.guard';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
@@ -43,6 +44,8 @@ export class SupportAccessAdminController {
 @Controller('support-access')
 @UseGuards(JwtAuthGuard, TenantGuard, OwnerOnlyGuard)
 @RequiresScreen('settings')
+// Declared so the tenant guard knows these writes need no template action.
+@OwnerOnly()
 export class SupportAccessOwnerController {
   constructor(private readonly supportAccessService: SupportAccessService) {}
 

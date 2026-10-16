@@ -31,9 +31,9 @@ export const ALLOWED_SCREENS = [
 
 /**
  * Actions a permission may grant on a screen. The owner assigns any combination
- * per screen (e.g. contracts: view + add, invoices: view only). Enforcement is
- * **opt-in per endpoint** via @RequiresAction — an endpoint with no action
- * declared is still gated only by its screen, so nothing regresses.
+ * per screen (e.g. contracts: view + add, invoices: view only). Each endpoint
+ * names its action via @RequiresAction; a write under a screen without one is
+ * refused by TenantGuard unless marked @OwnerOnly or @TenantWide.
  *
  * - view/add/edit/delete map to the obvious CRUD operations.
  * - record  = posting/committing a transaction (a journal entry, a payment).

@@ -72,6 +72,14 @@ export class ActionForbiddenException extends ForbiddenException {
   }
 }
 
+/** A write route under a screen that names no action: nothing in a template can
+ * grant it, so it is refused for every actor until the route declares one. */
+export class ActionUndeclaredException extends ForbiddenException {
+  constructor() {
+    super({ code: 'ACTION_UNDECLARED', message: MSG.action_undeclared });
+  }
+}
+
 /** Raised when the company has frozen its master records and this actor is
  * not the owner nor exempted. */
 export class MasterDataLockedException extends ForbiddenException {

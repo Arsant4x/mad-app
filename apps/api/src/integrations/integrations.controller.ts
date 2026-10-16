@@ -3,6 +3,7 @@ import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateIntegrationDto, SetEnabledDto } from './dto/integration.dto';
@@ -16,6 +17,8 @@ import { MSG } from '../common/i18n/messages';
 @Controller('integrations')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('settings')
+// Declared so the tenant guard refuses employees itself; assertOwner below stays as a second layer.
+@OwnerOnly(MSG.integration_owner_only)
 export class IntegrationsController {
   constructor(private readonly integrationsService: IntegrationsService) {}
 
