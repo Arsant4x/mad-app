@@ -129,8 +129,8 @@ export class TenantGuard implements CanActivate {
       });
     }
 
-    // Subscription self-service (view + renew/pay) is the one thing a lapsed
-    // tenant may always reach, so it can reactivate from inside the platform.
+    // Routes a lapsed tenant may always reach: its subscription state, the
+    // export of its data and the request to close the account.
     const subscriptionSelfService = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_INACTIVE_KEY, [context.getHandler(), context.getClass()]);
 
     // CLOSED (`ق-٥٤٧`): الوصولُ مقطوعٌ إلا حالُ الطلب وطلبُ إعادة الفتح — ولا يعود بالدفع،
@@ -159,7 +159,7 @@ export class TenantGuard implements CanActivate {
     if (evaluated.status === 'STOPPED' && !subscriptionSelfService) throw new AccountStoppedException();
     // FROZEN is the post-expiry grace period: the tenant may still read and
     // export its own data, but not add/edit/delete anything (owner's rule). So
-    // only mutating methods are blocked; GET/HEAD and renewal pass through.
+    // only mutating methods are blocked; GET/HEAD and the routes above pass through.
     if (evaluated.status === 'FROZEN') {
       const method = req.method.toUpperCase();
       const isRead = method === 'GET' || method === 'HEAD';

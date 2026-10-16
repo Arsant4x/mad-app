@@ -76,3 +76,25 @@ describe('The platform company form and the owner sign-in details', () => {
     expect(onSave.mock.calls[0][0]).toMatchObject({ username: 'new-owner', email: 'new-owner@example.com' });
   });
 });
+
+describe('The platform company form and the subscription', () => {
+  it('sets no subscription dates when creating: the new company subscribes like any merchant', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<CompanyModal templates={[full]} editing={null} onCancel={() => {}} onSave={onSave} />);
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    expect(screen.getByText('تبدأ المنشأة بلا اشتراك فعّال، للاطلاع فقط، وتشترك بالطريقة نفسها التي يشترك بها أي تاجر.')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('مثال: شركة أفق العقارية'), { target: { value: 'New company' } });
+    fireEvent.change(screen.getByPlaceholderText('username'), { target: { value: 'new-owner' } });
+    fireEvent.change(document.querySelector('input[type="password"]') as HTMLInputElement, { target: { value: 'OwnerPass123!' } });
+    fireEvent.change(screen.getByPlaceholderText('owner@example.com'), { target: { value: 'new-owner@example.com' } });
+    fireEvent.click(screen.getByText('حفظ الحساب'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const sent = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect('subStart' in sent || 'subEnd' in sent).toBe(false);
+  });
+
+  it('keeps the subscription dates of an existing company for the finance route', () => {
+    render(<CompanyModal templates={[full]} editing={company()} onCancel={() => {}} onSave={vi.fn()} />);
+    expect(document.querySelectorAll('input[type="date"]')).toHaveLength(2);
+  });
+});

@@ -9,6 +9,7 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { ConsentService } from '../src/consent/consent.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantTestSubscription } from './test-subscription';
 
 // Suite budget: about three times the measured run, declared here instead of the five second default.
 jest.setTimeout(120000);
@@ -35,9 +36,10 @@ describe('Processing agreement acceptance records the trusted client address (e2
   async function makeCompany(): Promise<{ id: string; token: string }> {
     const username = `consent-ip-${suffix}-${seq++}`;
     const res = await admin(request(app.getHttpServer()).post('/companies'))
-      .send({ username, password: 'ConsentPass123!', orgName: `Consent IP ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId, subEnd: '2030-01-01' })
+      .send({ username, password: 'ConsentPass123!', orgName: `Consent IP ${username}`, email: `${username}@example.com`, permissionTemplateId: templateId })
       .expect(201);
     companyIds.push(res.body.id);
+    await grantTestSubscription(prisma, res.body.id);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ConsentPass123!' }).expect(200);
     return { id: res.body.id, token: login.body.accessToken };
   }

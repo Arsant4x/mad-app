@@ -60,6 +60,7 @@
     "sub_start": "Subscription start",
     "sub_end": "Subscription end",
     "hint": "When the subscription ends, the account is frozen automatically for 30 days, then stopped for good unless renewed. To renew, change the end date to a future date.",
+    "create_hint": "The company starts with no active subscription, view only, and subscribes the same way as any merchant.",
     "save": "Save account"
   },
   "template_modal": {

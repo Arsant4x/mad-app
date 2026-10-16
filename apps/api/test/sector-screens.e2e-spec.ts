@@ -6,6 +6,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantTestSubscription } from './test-subscription';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (14.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(45000);
@@ -51,6 +52,7 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
       .expect(201);
     token = reg.body.accessToken;
     companyId = reg.body.user.companyId;
+    await grantTestSubscription(app.get(PrismaService), companyId);
 
     const adminLogin = await request(app.getHttpServer())
       .post('/auth/login')

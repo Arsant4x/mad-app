@@ -5,6 +5,8 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { DEFAULT_CHART } from '../src/accounts/default-chart';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { grantTestSubscription } from './test-subscription';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (16.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(55000);
@@ -50,11 +52,13 @@ describe('Default chart of accounts on company creation (e2e)', () => {
     const fullAccess = templates.find((t: { isAllScreens: boolean; isSystem: boolean }) => t.isAllScreens && !t.isSystem);
 
     const username = `chart-admin-${tag}-${suffix}`;
-    await request(app.getHttpServer())
+    const created = await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ orgName: `منشأة الدليل (مدير) ${tag} ${suffix}`, username, password: 'ChartPass123!', email: `${username}@example.com`, permissionTemplateId: fullAccess.id })
       .expect(201);
+    // A company is born read only; this suite posts documents, so it gets a test term.
+    await grantTestSubscription(app.get(PrismaService), created.body.id);
 
     return (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ChartPass123!' }).expect(200)).body.accessToken;
   }
@@ -66,6 +70,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
       .post('/auth/register')
       .send({ orgName: `منشأة الدليل (ذاتي) ${tag} ${suffix}`, username, password: 'ChartPass123!', email: `${username}@example.com` })
       .expect(201);
+    await grantTestSubscription(app.get(PrismaService), res.body.user.companyId);
     return res.body.accessToken;
   }
 

@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
+import { grantTestSubscription } from './test-subscription';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (32.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(100000);
@@ -174,11 +175,13 @@ describe('Receivables aging (e2e)', () => {
     const preset = templates.find((t) => !t.isSystem && t.isAllScreens && t.companyId === null)!;
 
     const username = `aging-co-${suffix}`;
-    await request(app.getHttpServer())
+    const created = await request(app.getHttpServer())
       .post('/companies')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ orgName: `منشأة الأعمار ${suffix}`, username, password: 'AgingPass123!', email: `${username}@example.com`, permissionTemplateId: preset.id })
       .expect(201);
+    // A company is born read only; this case posts documents, so it gets a test term.
+    await grantTestSubscription(app.get(PrismaService), created.body.id);
     const coToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'AgingPass123!' })).body.accessToken;
     const co = (r: request.Test) => r.set('Authorization', `Bearer ${coToken}`);
 

@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import type { ResponseSchema } from '../src/common/response-schema.util';
 import { hardDeleteCompanyForTest } from '../test/hard-delete-company';
+import { grantTestSubscription } from '../test/test-subscription';
 
 /**
  * ⚖️ **حارسُ صدق الردود — على التطبيق المبنيّ وبقاعدةٍ حيّة** (`ق-١٤٣٨` · خطّةُ الأنواع ④ البند ٣ · الخيار «أ»).
@@ -177,6 +178,8 @@ async function main(): Promise<void> {
   const reg = await http().post('/v1/auth/register').send({ orgName: `حارس الصدق ${stamp}`, username: `truth-${stamp}`, password: 'TruthPass123!', email: `truth-${stamp}@example.com` });
   if (reg.status !== 201) throw new Error(`التسجيلُ ردّ ${reg.status}: ${reg.text.slice(0, 200)}`);
   const companyId = reg.body.user?.companyId as string;
+  // A registered company is born read only; the routes under test write, so it gets a test subscription.
+  await grantTestSubscription(prisma as never, companyId);
   const token = reg.body.accessToken as string;
   const as = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
 

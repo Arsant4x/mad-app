@@ -18,8 +18,9 @@ import { assertPasswordPolicy } from '../common/password/password-policy';
  * واحد لا مسارات موازية**. فأي إضافة للتسجيل (نشاط · باقة · نوع الكيان) كانت
  * تُكتب مرتين أو **تُنسى في أحدهما** — وهذا بالضبط ما يمنعه وجود نواة واحدة.
  *
- * وما بقي مختلفاً بين القناتين بقي **وسيطاً** لا فرعاً في الشيفرة:
- * قالب الصلاحيات (الذاتي يأخذ الأوسع · المدير يختار) · وتواريخ الاشتراك.
+ * What still differs between the two channels stays a parameter, not a branch in the code: the
+ * permission template (self signup takes the broadest, the admin chooses). The subscription does not
+ * differ: no channel sets subscription dates.
  *
  * ⚠️ وثلاث ضمانات لا تُكسَر — كلٌّ منها كان عطلاً قبل أن يصير قاعدة:
  *
@@ -28,9 +29,10 @@ import { assertPasswordPolicy } from '../common/password/password-policy';
  *    الوسطى أسوأ من فشل الإنشاء — ولذلك لا تُولد أصلاً.
  * ٢. **`set_config` قبل الإدراج.** سياسة RLS على `accounts` تفحص الإدراج أيضاً
  *    (`WITH CHECK`)، والسياق لا يُضبط قبل هذه اللحظة لأن المعرّف يولد مع الصف.
- * ٣. **`subEnd` لا يُترك فارغاً.** `evaluateCompanyStatus` يعيد الحالة كما هي حين
- *    يغيب، فمنشأةٌ بلا تاريخ نهاية **لا تتجمّد أبداً** — أي قناةٌ خارج دورة
- *    الحياة كلها. فالنواة تسقط على مدة التجربة عند الغياب بدل أن تُنتج ذلك الصفّ.
+ * 3. No subscription time at birth, and `subEnd` is never left empty. A company is born with its end
+ *    equal to its start, frozen read only, until the platform's two person subscription decision
+ *    activates it. An empty end would never freeze (`evaluateCompanyStatus` keeps the status as it is),
+ *    which would make the company active forever.
  */
 export interface CreateCompanyAccountInput {
   username: string;
@@ -44,12 +46,6 @@ export interface CreateCompanyAccountInput {
    * الإعلانُ إلزامياً من تلقاء نفسه حين يُضاف ثانٍ (`regionForNewCompany`). ومنها تُكتب الحقولُ الأربعة صراحةً: لا افتراضَ في القاعدة.
    */
   country?: string | null;
-  /** بداية الاشتراك. الغياب = الآن. */
-  subStart?: Date;
-  /** نهاية الاشتراك. **الغياب = الآن + `trialDays`** — انظر الضمانة ٣. */
-  subEnd?: Date;
-  /** مدة التجربة بالأيام — تُقرأ من البيئة لدى المستدعي لا هنا (قرار تجاري بلا نشر). */
-  trialDays: number;
   /**
    * هل القناة **عامّة بلا مصادقة**؟ يقرّر **رسالة تكرار اسم المستخدم** وحدها.
    *
@@ -89,8 +85,7 @@ export async function createCompanyAccount(
     );
   }
 
-  const subStart = input.subStart ?? new Date();
-  const subEnd = input.subEnd ?? addDays(subStart, input.trialDays);
+  const born = new Date();
   // يُحلّ قبل المعاملة: إقليمٌ غيرُ مدعوم أو غيرُ معلَنٍ حين يلزم يُردّ `400` قبل أن يُكتب صفّ.
   const region = regionForNewCompany(input.country);
 
@@ -108,8 +103,12 @@ export async function createCompanyAccount(
             orgName: input.orgName.trim(),
             email: input.email.trim(),
             permissionTemplateId: input.permissionTemplateId,
-            subStart,
-            subEnd,
+            // Born without a subscription: an end equal to the start, in the read only state the
+            // status rules would give it on its first evaluation.
+            subStart: born,
+            subEnd: born,
+            status: 'FROZEN',
+            frozenAt: born,
             // ق-١٣٦٨ — الأربعةُ صراحةً من سجلّ الأقاليم؛ ولا افتراضَ في القاعدة يكتبها بدلاً منه.
             country: region.country,
             timeZone: region.timeZone,
@@ -138,10 +137,4 @@ export async function createCompanyAccount(
      */
     timeout: 20_000,
   });
-}
-
-function addDays(from: Date, days: number): Date {
-  const d = new Date(from);
-  d.setDate(d.getDate() + days);
-  return d;
 }

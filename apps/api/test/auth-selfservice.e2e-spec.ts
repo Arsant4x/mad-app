@@ -13,7 +13,7 @@ jest.setTimeout(95000);
 /**
  * Self-service auth — the SaaS front door:
  *  - a merchant registers itself and walks away with a working, isolated
- *    trial account (CLAUDE.md §10);
+ *    account that is read only until it subscribes (CLAUDE.md §10);
  *  - a forgotten password is recovered by emailed link — single-use,
  *    short-lived, and silent about which usernames exist.
  *
@@ -61,7 +61,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     await app.close();
   });
 
-  it('[SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation', async () => {
+  it('[SPEC 1.7] registers a merchant with an immediate session, no free subscription time, and full isolation', async () => {
     const username = `reg-${suffix}`;
     const { accessToken, user } = await registerCompany(username);
 
@@ -70,14 +70,11 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     // …and the new tenant starts empty — sees nobody else's data.
     expect(customers.body).toHaveLength(0);
 
-    // Trial subscription: starts today, ends TRIAL_DAYS (default 14) out.
+    // No trial: the company has no subscription yet, so it is read only until it subscribes.
     const sub = await request(app.getHttpServer()).get('/subscription').set('Authorization', `Bearer ${accessToken}`).expect(200);
-    expect(sub.body.status).toBe('ACTIVE');
-    expect(sub.body.daysLeft).toBeGreaterThan(0);
-    expect(sub.body.daysLeft).toBeLessThanOrEqual(14);
-
-    // And it can write — a real account, not a viewer.
-    await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${accessToken}`).send({ kind: 'NATURAL', name: `عميل ${username}` }).expect(201);
+    expect(sub.body.status).toBe('FROZEN');
+    expect(sub.body.neverSubscribed).toBe(true);
+    await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${accessToken}`).send({ kind: 'NATURAL', name: `عميل ${username}` }).expect(403);
     expect(user.companyId).toBeTruthy();
 
     // 🔴 (ق-٦٤٤) **القالبُ الذي يركب عليه التاجرُ ليس نظامياً**: كان التسجيلُ يأخذ

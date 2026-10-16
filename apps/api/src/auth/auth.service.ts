@@ -294,10 +294,10 @@ export class AuthService {
       if (evaluated.status !== company.status || evaluated.frozenAt?.getTime() !== company.frozenAt?.getTime()) {
         await this.prisma.company.update({ where: { id: company.id }, data: { status: evaluated.status, frozenAt: evaluated.frozenAt } });
       }
-      // Deliberately NO STOPPED block here anymore: a stopped company must be
-      // able to log in **to renew from inside the platform** (owner's rule — no
-      // contacting the provider). The TenantGuard keeps a stopped tenant locked
-      // to subscription self-service only; every other endpoint still 403s.
+      // Deliberately NO STOPPED block here: a stopped company must still be able
+      // to log in to see its subscription, export its data and ask to close the
+      // account. The TenantGuard keeps a stopped tenant locked to those routes;
+      // every other endpoint still 403s.
 
       payload = { sub: identity.id, actorType: 'COMPANY', companyId: company.id, profileId: company.id, username: identity.username };
       user = {
@@ -483,14 +483,13 @@ export class AuthService {
   // ---------- Self-registration ----------
 
   /**
-   * A merchant signs itself up (CLAUDE.md §10: «العميل يسجّل بنفسه») and gets a
-   * trial subscription. TRIAL_DAYS is env-config, not code — trial length is a
-   * commercial decision the owner adjusts without a deploy.
+   * A merchant signs itself up (CLAUDE.md §10). No subscription time is granted:
+   * the company is born read only until it subscribes, and no setting can turn a
+   * free trial back on.
    *
-   * الإنشاء نفسه في `createCompanyAccount` — **نواة واحدة** يتقاسمها هذا المسار
-   * ومسار لوحة المدير (قرار المالك 2026-08-14: القنوات الأخرى أدوارٌ على نموذجٍ
-   * واحد لا مسارات موازية). وما يخصّ التسجيل الذاتي وحده يبقى هنا: مفتاح
-   * الإطفاء · اختيار القالب الأوسع · مدة التجربة.
+   * The company itself is created in `createCompanyAccount`, one core shared with
+   * the admin panel path. What belongs to self signup alone stays here: the off
+   * switch and the broadest template.
    *
    * واختيار النشاط عند التسجيل (بند ٢ في ترتيب التنفيذ المعتمد) لم يُبنَ بعد —
    * وقد صار قراراً محسوماً لا معلَّقاً، فيُضاف **داخل** النواة لا هنا.
@@ -500,8 +499,8 @@ export class AuthService {
       throw new ForbiddenException(MSG.register_disabled);
     }
 
-    // The broadest template: a new merchant sees the whole product during its
-    // trial; narrowing is what employee sub-accounts are for.
+    // The broadest template: the owner sees the whole product; narrowing is what
+    // employee sub-accounts are for.
     //
     // 🔴 **وليس النظاميَّ** (`ق-٦٤٤`): كان الاختيارُ «أوّلَ قالبٍ عامٍّ شامل» بترتيب
     // الإنشاء — وقالبُ المطوّر (`isSystem`) يُنشأ في التأسيس **قبل** القالب العامّ
@@ -520,7 +519,6 @@ export class AuthService {
       // ق-١٣٦٨ — الدولةُ المعلَنة، وغيابُها يأخذ الإقليمَ الوحيد ما دام وحيداً.
       country,
       permissionTemplateId: template.id,
-      trialDays: parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10),
       // بوّابة مفتوحة بلا مصادقة — فرسالة تكرار الاسم لا تسمّي ولا تؤكّد.
       publicChannel: true,
     });

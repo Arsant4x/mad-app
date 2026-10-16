@@ -10,6 +10,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { MailService } from '../src/common/mail/mail.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantTestSubscription } from './test-subscription';
 
 jest.setTimeout(120000);
 
@@ -49,6 +50,7 @@ describe('Credential changes end earlier sessions (e2e)', () => {
     const email = `${username}@example.com`;
     const res = await http().post('/auth/register').send({ orgName: `منشأة ${username}`, username, password: OWNER_PASSWORD, email }).expect(201);
     companyIds.push(res.body.user.companyId);
+    await grantTestSubscription(prisma, res.body.user.companyId);
     return { username, email, companyId: res.body.user.companyId as string, token: res.body.accessToken as string, cookie: refreshCookieOf(res) };
   }
 
