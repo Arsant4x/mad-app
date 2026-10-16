@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DEFAULT_CHART } from '../accounts/default-chart';
 import { Prisma } from '@mad-app/db';
+import { companyToday } from '../common/company-day.util';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo, round2 } from '../common/money/rounding';
@@ -1573,7 +1574,7 @@ export async function postCashDepositVoidEntry(
   const entry = await createJournalEntry(tx, {
     companyId,
     branchId: p.branchId,
-    date: new Date(),
+    date: await companyToday(tx, companyId),
     memo: p.memo,
     auto: true,
     reversalOfId: p.reversalOfId ?? undefined,
@@ -1651,7 +1652,7 @@ export async function postNetworkSettlementVoidEntry(
   companyId: string,
   p: NetworkSettlementForPosting & { reversalOfId: string | null },
 ): Promise<{ id: string; no: string }> {
-  const date = new Date();
+  const date = await companyToday(tx, companyId);
   const entry = await createJournalEntry(tx, {
     companyId,
     branchId: p.branchId,

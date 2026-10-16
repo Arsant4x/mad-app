@@ -3,6 +3,7 @@ import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { Prisma } from '@mad-app/db';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
+import { companyToday } from '../common/company-day.util';
 import { resolveCurrencyWithin, resolveFollowingCurrency } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
@@ -543,14 +544,16 @@ export class PurchasesService {
       }
 
       const voidedAt = new Date();
+      // The row keeps the instant; the reversals are dated on the company's day of that instant.
+      const voidDate = await companyToday(tx, companyId, voidedAt);
       // ٢٥ استلاماتُه الحيّةُ كلُّها تُعكس بقيودها — ضمنيّةً كانت أو مسجَّلة — فلا يبقى رفٌّ لشراءٍ مُلغى.
-      await reverseAllReceipts(tx, { companyId, branchId: existing.branchId, date: voidedAt, documentNo: existing.no, reason: `إلغاءُ فاتورة شراء ${existing.no}`, purchaseId: id });
+      await reverseAllReceipts(tx, { companyId, branchId: existing.branchId, date: voidDate, documentNo: existing.no, reason: `إلغاءُ فاتورة شراء ${existing.no}`, purchaseId: id });
       if (existing.journalEntryId) {
-        await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: voidedAt, memo: `إلغاءُ فاتورة شراء ${existing.no}` });
+        await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: voidDate, memo: `إلغاءُ فاتورة شراء ${existing.no}` });
       }
       await tx.purchase.update({ where: { id }, data: { voidedAt } });
       // ⚖️ `ق-١٣٤٢` المُلغى جوابُه صفر: ما بقي في الوسيط وحساب الفئة يعود إلى `1250` (والطبقاتُ أُعيدت حصصُها قبل خروجها).
-      await reconcileNonDeductibleVat(tx, companyId, id, { date: voidedAt, trigger: 'PURCHASE_VOID' });
+      await reconcileNonDeductibleVat(tx, companyId, id, { date: voidDate, trigger: 'PURCHASE_VOID' });
     });
   }
 

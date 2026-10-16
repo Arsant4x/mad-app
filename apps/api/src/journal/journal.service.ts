@@ -3,7 +3,7 @@ import { branchFilter } from '../branches/branch-scope.util';
 import { Prisma } from '@mad-app/db';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { dayStartOf } from '../common/wall-clock.util';
+import { companyToday } from '../common/company-day.util';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { ListJournalQueryDto } from './dto/list-journal-query.dto';
 import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
@@ -150,8 +150,8 @@ export class JournalService {
         if (existing.reversalOfId) throw new ConflictException(formatMessage(MSG.journal_reversal_not_reversible, { no: existing.no }));
         if (existing.reversedBy) throw new ConflictException(formatMessage(MSG.journal_already_reversed, { no: existing.no, by: existing.reversedBy.no }));
 
-        // يومُ الطلب بالدالّة الواحدة (`ق-١١٩٠`) — بإزاحتها الافتراضية المعلَنة، لا بمنطقة العملية.
-        const date = dto.date ? new Date(dto.date) : dayStartOf(new Date());
+        // Without a requested date the reversal takes the company's own day, not the UTC day.
+        const date = dto.date ? new Date(dto.date) : await companyToday(tx, companyId);
         return createJournalEntry(tx, {
           companyId,
           branchId: existing.branchId,
