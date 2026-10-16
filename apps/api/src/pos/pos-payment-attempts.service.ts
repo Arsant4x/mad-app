@@ -8,6 +8,8 @@ import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ChargeOutcome, IntegrationsService } from '../integrations/integrations.service';
+import { assertPostingAccounts } from '../journal/auto-posting.util';
+import { CASH_ACCOUNT_CODE } from '../journal/pos-settlement.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePosPaymentAttemptDto, ResolvePaymentAttemptWithEvidenceDto } from './dto/pos.dto';
 import { PosService, PreparedSale, SoldSale } from './pos.service';
@@ -72,6 +74,8 @@ export class PosPaymentAttemptsService {
         const prepared = await this.pos.prepareSale(tx, tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin });
         if (prepared.cardAmount <= 0) throw new BadRequestException(MSG.pos_attempt_needs_card);
         if (prepared.cardParts > 1) throw new BadRequestException(MSG.pos_card_single_part);
+        // If the shift closes before the answer, the cash part is posted to 1000 at completion; check it before any charge.
+        if (prepared.parts.some((p) => p.method === 'CASH' && p.amount > 0)) await assertPostingAccounts(tx, [CASH_ACCOUNT_CODE]);
 
         // عملةُ المستند هي عملةُ أساس المنشأة (لا عملةَ صريحة في بيع الكاشير) — لا حرفَ عملةٍ في الشحن (`§3.8`).
         const company = await tx.company.findUniqueOrThrow({ where: { id: tenant.companyId }, select: { baseCurrency: true } });
