@@ -498,5 +498,5 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
       { code: '5100', debit: 0, credit: 80 },
     ]);
     expect(await costLines(`تكلفة مبيعات ${res.body.no}`)).toEqual(sold);
-  }, 120000);
+  });
 });
