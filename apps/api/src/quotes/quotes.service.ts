@@ -1,8 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@mad-app/db';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
-import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';
+import { resolveCurrencyWithin } from '../common/currency/base-amount.util';
+import { baseCurrencyTotals, computeDocumentTotals, type MoneyLine } from '../common/money/totals';
 import { resolveLineTaxes, type LineTax } from '../common/vat/line-tax.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -162,9 +162,7 @@ export class QuotesService {
             total,
             currency,
             exchangeRate,
-            baseSubtotal: toBaseAmount(subtotal, exchangeRate),
-            baseTaxTotal: toBaseAmount(taxTotal, exchangeRate),
-            baseTotal: toBaseAmount(total, exchangeRate),
+            ...baseCurrencyTotals({ taxTotal, total }, exchangeRate),
             // companyId على كل بند صراحةً — الكتابة المتداخلة لا يراها امتداد
             // العزل (نفس تعليل InvoicesService)، وRLS يسند خلفها.
             lines: { create: numberLines(lines.map((l) => quoteLineRow(companyId, unitCodes, l))) },
@@ -200,9 +198,7 @@ export class QuotesService {
                 subtotal: totals.subtotal,
                 taxTotal: totals.taxTotal,
                 total: totals.total,
-                baseSubtotal: toBaseAmount(totals.subtotal, Number(existing.exchangeRate)),
-                baseTaxTotal: toBaseAmount(totals.taxTotal, Number(existing.exchangeRate)),
-                baseTotal: toBaseAmount(totals.total, Number(existing.exchangeRate)),
+                ...baseCurrencyTotals(totals, Number(existing.exchangeRate)),
                 lines: {
                   deleteMany: {},
                   create: numberLines(priced!.map((l) => quoteLineRow(companyId, unitCodes, l))),

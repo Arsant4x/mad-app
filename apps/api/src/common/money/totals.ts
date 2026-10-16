@@ -1,3 +1,4 @@
+import { toBaseAmount } from '../currency/base-amount.util';
 import { roundTo } from './rounding';
 
 /**
@@ -128,4 +129,27 @@ export function computeDocumentTotals(lines: readonly MoneyLine[]): DocumentTota
   }));
   const taxTotal = byRate.reduce((sum, b) => roundTo(sum + b.tax, 'VAT_AMOUNT'), 0);
   return { subtotal, taxTotal, total: roundTo(subtotal + taxTotal, 'INVOICE_TOTAL'), byRate };
+}
+
+/** Totals of a document taxed on its net as a single amount, such as a purchase or a supplier note. */
+export function computeNetTotals(net: number, taxRate: number): DocumentTotals {
+  return computeDocumentTotals([{ quantity: 1, unitPrice: net, taxRate }]);
+}
+
+export interface BaseCurrencyTotals {
+  baseSubtotal: number;
+  baseTaxTotal: number;
+  baseTotal: number;
+}
+
+/**
+ * A document's totals in the company's base currency, so that baseSubtotal + baseTaxTotal === baseTotal.
+ * The total and the tax are converted; the net is their difference. The total stays total × rate because
+ * settlement and the receivables report convert allocations at the document rate, and the converted tax
+ * is the SAR tax the authority receives.
+ */
+export function baseCurrencyTotals(totals: Pick<DocumentTotals, 'taxTotal' | 'total'>, exchangeRate: number): BaseCurrencyTotals {
+  const baseTotal = toBaseAmount(totals.total, exchangeRate);
+  const baseTaxTotal = toBaseAmount(totals.taxTotal, exchangeRate);
+  return { baseSubtotal: roundTo(baseTotal - baseTaxTotal, 'INVOICE_TOTAL'), baseTaxTotal, baseTotal };
 }

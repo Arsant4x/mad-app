@@ -10,11 +10,10 @@ import {
   type NoteKinds,
   type NoteSide,
 } from '../common/adjustment/adjustment-note.util';
-import { toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
-import { round2, roundTo } from '../common/money/rounding';
+import { roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -25,7 +24,7 @@ import { recordCostShares } from './layer-cost-allocation.util';
 import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { recomputePurchaseStatus } from './purchase-settlement.util';
 import { assertPurchaseReferences } from './purchase-references.util';
-import { computePurchaseTax } from './purchases.service';
+import { computePurchaseTax, purchaseBaseTotals } from './purchases.service';
 
 /** أنواعُ مستند الشراء — الأساسُ وإشعاراه، كما للفاتورة `INVOICE`/`CREDIT_NOTE`/`DEBIT_NOTE`. */
 export const PURCHASE_NOTE_KINDS: NoteKinds<'PURCHASE' | 'SUPPLIER_CREDIT_NOTE' | 'SUPPLIER_DEBIT_NOTE'> = {
@@ -106,14 +105,14 @@ export class SupplierNotesService {
           { notOriginal: MSG.supplier_return_line_not_original, exceeds: MSG.supplier_return_exceeds_received },
         );
 
-        // مجاميعُ الشراء بطريقته: مجموعُ البنود ثم ضريبةٌ بعلَم الإعفاء الموروث من الأصل.
-        const subtotal = roundTo(
-          lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0),
-          'LINE_AMOUNT',
+        // Purchase totals: the lines summed, then the tax by the exemption inherited from the original.
+        const { subtotal, tax: taxAmount, total: noteTotal } = computePurchaseTax(
+          roundTo(
+            lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0),
+            'LINE_AMOUNT',
+          ),
+          original.exempt,
         );
-        const { tax, total } = computePurchaseTax(subtotal, original.exempt);
-        const taxAmount = round2(tax);
-        const noteTotal = round2(total);
 
         // ④ السقفُ من الأصل (`ق-١٠٠٦`/⑤): الدائنُ على الشراء، والمدينُ على دائنٍ زائد — لا يتجاوزان ما تبقّى.
         if (side === 'credit' || correctsOpposite) {
@@ -166,9 +165,7 @@ export class SupplierNotesService {
             total: noteTotal,
             currency: original.currency,
             exchangeRate: rate,
-            baseSubtotal: toBaseAmount(subtotal, rate),
-            baseTaxAmount: toBaseAmount(taxAmount, rate),
-            baseTotal: toBaseAmount(noteTotal, rate),
+            ...purchaseBaseTotals(taxAmount, noteTotal, rate),
             // الدائنُ لا يُسدَّد فلا يدخل المتبقّي؛ والمدينُ مستحقٌّ يُسدَّد بسند صرفٍ كالشراء.
             status: side === 'credit' ? 'PAID' : 'DUE',
             lines: {

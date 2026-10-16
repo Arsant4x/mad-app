@@ -1,10 +1,9 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
-import { toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
-import { computeDocumentTotals } from '../common/money/totals';
+import { baseCurrencyTotals, computeDocumentTotals } from '../common/money/totals';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import {
   adjustmentNotePostingCodes,
@@ -210,7 +209,7 @@ export async function assertPrepaymentIssuable(
   const doc = prepaymentDocumentAmounts(p.grossAmount, p.taxRate);
   await assertPostingAccounts(
     tx,
-    prepaymentInvoicePostingCodes({ baseTotal: toBaseAmount(doc.total, p.exchangeRate), baseTaxTotal: toBaseAmount(doc.taxTotal, p.exchangeRate) }),
+    prepaymentInvoicePostingCodes(baseCurrencyTotals(doc, p.exchangeRate)),
   );
   await assertCustomerPrepaymentsAccountUsable(tx, companyId);
 }

@@ -3,11 +3,12 @@ import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { Prisma } from '@mad-app/db';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
-import { resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, resolveFollowingCurrency } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMoney, round2, roundTo } from '../common/money/rounding';
+import { baseCurrencyTotals, computeNetTotals } from '../common/money/totals';
 import { money } from '../common/money/text';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
 import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/settlement/settlement.util';
@@ -24,8 +25,6 @@ import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.uti
 
 /** البنودُ الحيّة وحدَها — المتجاوَزُ بتعديلٍ قبل الاستهلاك (`supersededAt`) محفوظٌ للدفتر لا للعرض. */
 const PURCHASE_INCLUDE = { supplier: true, lines: { where: { supersededAt: null } } } as const;
-// ⑧ من المصدر الواحد (`ق-١٢١٢`) — جانبُ المدخلات نفسُه لم يُمسّ (موجزٌ مستقلّ)؛ الرقمُ وحدَه لم يعد مكتوباً هنا.
-const VAT_RATE = STANDARD_VAT_RATE / 100;
 
 /** Amortization is establishment-only and needs a real month count. Returns the
  * clean pair to store, or throws a localized error. `amortize=false` always
@@ -47,11 +46,17 @@ function resolveAmortization(amortize: boolean, categoryCode: string | null | un
 }
 
 /** Always derive tax/total server-side from subtotal + exempt — never trust
- * a client-submitted amount (same reasoning as invoices). يستعمله إشعارُ المورّد أيضاً
- * (`supplier-notes.service`) — فضريبةُ الشراء تُحسب بطريقةٍ واحدة في الجانبين. */
+ * a client-submitted amount (same reasoning as invoices). Supplier notes use it too, and both take
+ * their totals from the one document totals function, so the stored total is the net plus the tax. */
 export function computePurchaseTax(subtotal: number, exempt: boolean) {
-  const tax = exempt ? 0 : subtotal * VAT_RATE;
-  return { tax, total: subtotal + tax };
+  const t = computeNetTotals(subtotal, exempt ? 0 : STANDARD_VAT_RATE);
+  return { subtotal: t.subtotal, tax: t.taxTotal, total: t.total };
+}
+
+/** A purchase or supplier note's base currency columns, from the one base totals function. */
+export function purchaseBaseTotals(tax: number, total: number, exchangeRate: number) {
+  const base = baseCurrencyTotals({ taxTotal: tax, total }, exchangeRate);
+  return { baseSubtotal: base.baseSubtotal, baseTaxAmount: base.baseTaxTotal, baseTotal: base.baseTotal };
 }
 
 @Injectable()
@@ -107,7 +112,7 @@ export class PurchasesService {
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto) {
     const exempt = dto.exempt ?? false;
-    const { tax, total } = computePurchaseTax(dto.subtotal, exempt);
+    const { subtotal, tax, total } = computePurchaseTax(dto.subtotal, exempt);
     // الرمز يُشتقّ مرةً واحدة عند الكتابة — فلا يعود قارئٌ يطابق نصّاً عربياً.
     const categoryCode = toPurchaseCategoryCode(dto.categoryCode ?? dto.category);
     const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, categoryCode, dto.amortizeMonths);
@@ -138,7 +143,7 @@ export class PurchasesService {
             categoryCode,
             // رقمُ فاتورة المورّد — مرجعٌ خارجيٌّ يُسجَّل لا رقمٌ يُصدَر (`ق-١٠٠٦`/①).
             supplierRef: dto.supplierRef?.trim() || null,
-            subtotal: dto.subtotal,
+            subtotal,
             taxAmount: tax,
             exempt,
             excludeFromVat: dto.excludeFromVat ?? false,
@@ -157,9 +162,7 @@ export class PurchasesService {
             total,
             currency,
             exchangeRate,
-            baseSubtotal: toBaseAmount(dto.subtotal, exchangeRate),
-            baseTaxAmount: toBaseAmount(tax, exchangeRate),
-            baseTotal: toBaseAmount(total, exchangeRate),
+            ...purchaseBaseTotals(tax, total, exchangeRate),
             /**
              * البنود — تُكتب متداخلةً في نفس المعاملة، **و`companyId` مضبوطٌ
              * على كل بند صراحةً** لا اتّكالاً على امتداد المستأجر: الكتابة
@@ -320,7 +323,7 @@ export class PurchasesService {
       if (amountsGiven) {
         const subtotal = dto.subtotal ?? linesSubtotal ?? Number(existing.subtotal);
         const exempt = dto.exempt ?? existing.exempt;
-        const { tax, total } = computePurchaseTax(subtotal, exempt);
+        const { subtotal: net, tax, total } = computePurchaseTax(subtotal, exempt);
         // إجماليٌّ ينزل تحت ما سُدِّد عليه فعلاً يجعل الحالةَ تكذب (مسدَّدةٌ بأكثر من قيمتها)
         // — رفضٌ مسمّىً، والتصحيحُ بعكس السند أولاً.
         const paidSoFar = await allocatedFor(purchaseTarget(tx), id);
@@ -329,13 +332,11 @@ export class PurchasesService {
             formatMessage(MSG.purchase_total_below_allocated, { no: existing.no, total: formatMoney(total), allocated: formatMoney(paidSoFar) }),
           );
         }
-        data.subtotal = subtotal;
+        data.subtotal = net;
         data.exempt = exempt;
         data.taxAmount = tax;
         data.total = total;
-        data.baseSubtotal = toBaseAmount(subtotal, rate);
-        data.baseTaxAmount = toBaseAmount(tax, rate);
-        data.baseTotal = toBaseAmount(total, rate);
+        Object.assign(data, purchaseBaseTotals(tax, total, rate));
         if (dto.currency !== undefined || dto.exchangeRate !== undefined) {
           data.currency = priced.currency;
           data.exchangeRate = priced.exchangeRate;
