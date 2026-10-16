@@ -30,12 +30,15 @@ import { combineVerdicts, countListedTests, heapCapMb, nestedReports, PROBE_OWN_
  */
 
 /**
- * ⚠️ **ولا تُشرَّح حزمةٌ أصغر من شرائحها**: أربعُ شرائحَ على ملفَّين تترك
- * **شريحتين فارغتين**، **وجيست يُخرجهما `EMPTY`** — **فيصير الحكمُ `EMPTY`
- * والحزمةُ خضراء**. **حمرةٌ كاذبة سببُها التشريحُ لا الشيفرة.**
+ * Never more shards than half the files (an empty shard reads EMPTY), and never more than
+ * MAX_FILES_PER_SHARD files in one shard: one jest process keeps about 17.5 MB per e2e suite,
+ * so the CI heap cap is reached near 62 suites, and the requested count only sets a floor.
  */
-export function shardCountFor(requested, fileCount) {
-  return Math.max(1, Math.min(requested, Math.floor(fileCount / 2)));
+export const MAX_FILES_PER_SHARD = 50;
+
+export function shardCountFor(requested, fileCount, maxPerShard = MAX_FILES_PER_SHARD) {
+  const bySize = Math.ceil(fileCount / maxPerShard);
+  return Math.max(1, Math.min(Math.max(requested, bySize), Math.floor(fileCount / 2)));
 }
 
 /** عددُ ملفات الاختبار التي يطابقها الوسيط — يُسأل **قبل** التشريح. */
