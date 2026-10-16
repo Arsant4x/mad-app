@@ -93,6 +93,54 @@ export function roundTo(value: number, context: RoundingContext): number {
   return value < 0 ? -magnitude : magnitude;
 }
 
+/** A number as the decimal it is written as (its shortest round trip text): whole units and a count of places. */
+function exactDecimal(value: number): { units: bigint; places: number } {
+  const [mantissa, exponent = '0'] = String(value).split('e');
+  const negative = mantissa.startsWith('-');
+  const [whole, fraction = ''] = (negative ? mantissa.slice(1) : mantissa).split('.');
+  const places = fraction.length - Number(exponent);
+  const digits = BigInt(whole + fraction);
+  const units = places < 0 ? digits * 10n ** BigInt(-places) : digits;
+  return { units: negative ? -units : units, places: Math.max(places, 0) };
+}
+
+/** a × b ÷ 10^shift on the exact decimals, then rounded once by the policy: no binary product in between. */
+function roundExactProduct(a: number, b: number, shift: number, context: RoundingContext): number {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return roundTo(a * b, context);
+  const x = exactDecimal(a);
+  const y = exactDecimal(b);
+  const scale = SCALE[context];
+  const product = x.units * y.units;
+  const places = x.places + y.places + shift;
+  const magnitude = product < 0n ? -product : product;
+  let rounded: bigint;
+  if (places <= scale) {
+    rounded = magnitude * 10n ** BigInt(scale - places);
+  } else {
+    const divisor = 10n ** BigInt(places - scale);
+    rounded = magnitude / divisor;
+    if (2n * (magnitude % divisor) >= divisor) rounded += 1n;
+  }
+  if (rounded === 0n) return 0;
+  return Number(`${product < 0n ? '-' : ''}${rounded}e-${scale}`);
+}
+
+/**
+ * a × b rounded once by the policy, computed on the decimal values. The binary product can fall just under
+ * an exact half: 0.375 × 0.60 is 0.225 but multiplies to 0.22499999999999998, which rounded down to 0.22.
+ */
+export function roundProduct(a: number, b: number, context: RoundingContext): number {
+  return roundExactProduct(a, b, 0, context);
+}
+
+/**
+ * percent% of amount rounded once by the policy, on the decimal values: 100.30 at 15% is 15.045 exactly and
+ * gives 15.05, where 100.30 × 0.15 in binary is 15.0449999… and gave 15.04.
+ */
+export function roundPercentOf(amount: number, percent: number, context: RoundingContext): number {
+  return roundExactProduct(amount, percent, 2, context);
+}
+
 /**
  * اختصارٌ للمبالغ — يبقى لأن ستةً وستين موضعاً تناديه، ونقلُها دفعةً واحدة
  * تغييرٌ واسع بلا عائد. **والسلوك الآن واحد لأن التعريف واحد**، وهو الغرض.

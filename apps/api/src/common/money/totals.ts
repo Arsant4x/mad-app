@@ -1,5 +1,5 @@
 import { toBaseAmount } from '../currency/base-amount.util';
-import { roundTo } from './rounding';
+import { roundPercentOf, roundProduct, roundTo } from './rounding';
 
 /**
  * مجاميع المستند — **دالةٌ واحدة للدفتر وللمستند المختوم** (كنسة التدوير، قرار المالك 2026-09-03).
@@ -73,9 +73,9 @@ export interface DocumentTotals {
   byRate: RateBucket[];
 }
 
-/** إجماليُّ البند قبل الخصم: الكمية × السعر، مدوَّراً إلى مبلغ سطر. */
+/** The line amount before discount: quantity × price on the decimal values, rounded once to a line amount. */
 export function lineGross(line: MoneyLine): number {
-  return roundTo(line.quantity * line.unitPrice, 'LINE_AMOUNT');
+  return roundProduct(line.quantity, line.unitPrice, 'LINE_AMOUNT');
 }
 
 /** خصمُ البند مدوَّراً مبلغَ سطر — صفرٌ غياباً. */
@@ -88,9 +88,9 @@ export function lineNet(line: MoneyLine): number {
   return roundTo(lineGross(line) - lineDiscount(line), 'LINE_AMOUNT');
 }
 
-/** ضريبة البند للعرض على السطر — الهيئة تتحقّق من ضريبة **النسبة** لا البند، فلا تُجمَع هذه. */
+/** The tax shown on a line. The authority checks the tax per rate, not per line, so these are never summed. */
 export function lineTax(line: MoneyLine): number {
-  return roundTo(lineNet(line) * (line.taxRate / 100), 'VAT_AMOUNT');
+  return roundPercentOf(lineNet(line), line.taxRate, 'VAT_AMOUNT');
 }
 
 /** فئةُ الوعاء لبندٍ — من فئته المعلَنة، أو من نسبته لمُستدعٍ لا يعلنها. */
@@ -125,7 +125,7 @@ export function computeDocumentTotals(lines: readonly MoneyLine[]): DocumentTota
   }
   const byRate: RateBucket[] = [...buckets.values()].map((b) => ({
     ...b,
-    tax: roundTo(b.taxable * (b.rate / 100), 'VAT_AMOUNT'),
+    tax: roundPercentOf(b.taxable, b.rate, 'VAT_AMOUNT'),
   }));
   const taxTotal = byRate.reduce((sum, b) => roundTo(sum + b.tax, 'VAT_AMOUNT'), 0);
   return { subtotal, taxTotal, total: roundTo(subtotal + taxTotal, 'INVOICE_TOTAL'), byRate };
