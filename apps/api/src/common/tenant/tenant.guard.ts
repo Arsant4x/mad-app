@@ -21,6 +21,9 @@ import { COMPANY_WIDE_FIGURES_KEY } from './company-wide-figures.decorator';
 import { OWNER_ONLY_KEY } from './owner-only.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { clipToCompany, grantsOf } from '../../templates/template-clip.util';
+import { chainsFor, readDelegationRows } from '../../delegations/chain-source';
+import type { DelegationLink } from '../../delegations/intersection';
+import { delegatedTemplate } from '../../delegations/root-grants';
 import { MSG } from '../i18n/messages';
 import { IntegrationUsageService, USAGE_API_KEY } from '../../api-keys/integration-usage.service';
 
@@ -170,6 +173,7 @@ export class TenantGuard implements CanActivate {
     // view (CLAUDE.md 6.8) — only employees can be narrowed.
     let allowedBranchIds: string[] | 'all' = 'all';
     let canEditMasterData = false;
+    let delegationChains: DelegationLink[][] = [];
 
     if (payload.actorType === 'INTEGRATION') {
       /**
@@ -209,12 +213,16 @@ export class TenantGuard implements CanActivate {
        * `'all'`: **أسوأُ كسورِ العائق المقيسة**. السياقُ هنا لا يغيّر شيئاً اليوم
        * (لا سياسةَ بعد) — ويجعل الإغلاقَ ممكناً غداً.
        */
-      const companyUser = await this.tenantPrisma.runInTenantContext(payload.companyId, (tx) =>
-        tx.companyUser.findUniqueOrThrow({
+      // The delegation log is read in the same transaction, live on every request and never
+      // cached, so a revoked delegation stops on the next call.
+      const [companyUser, delegationRows] = await this.tenantPrisma.runInTenantContext(payload.companyId, async (tx) => [
+        await tx.companyUser.findUniqueOrThrow({
           where: { id: payload.profileId },
           include: { permissionTemplate: true, branches: { select: { branchId: true } } },
         }),
-      );
+        await readDelegationRows(tx),
+      ] as const);
+      delegationChains = chainsFor(delegationRows, payload.profileId);
       if (companyUser.status !== 'ACTIVE') {
         throw new AccountFrozenException();
       }
@@ -232,9 +240,12 @@ export class TenantGuard implements CanActivate {
     //    منشأتُه. والتقاطعُ من الدالّة الواحدة التي يقرؤها `/me/permissions` أيضاً.
     if (payload.actorType === 'COMPANY_USER' || payload.actorType === 'INTEGRATION') {
       const clipped = clipToCompany({ isAllScreens, allowedScreens: allowedScreens === 'all' ? [] : allowedScreens, screenActions }, grantsOf(company.permissionTemplate));
-      isAllScreens = clipped.isAllScreens;
-      allowedScreens = clipped.isAllScreens ? 'all' : clipped.allowedScreens;
-      screenActions = clipped.screenActions;
+      // An employee holds what the delegation chains still grant within that template,
+      // by the same rule /me/permissions applies.
+      const effective = delegatedTemplate(clipped, delegationChains);
+      isAllScreens = effective.isAllScreens;
+      allowedScreens = effective.isAllScreens ? 'all' : effective.allowedScreens;
+      screenActions = effective.screenActions;
     }
 
     // getAllAndOverride, not get(..., context.getHandler()) alone — every

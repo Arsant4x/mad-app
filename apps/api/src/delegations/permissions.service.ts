@@ -5,11 +5,11 @@ import { ScreenActionMap } from '../templates/screens';
 import { clipToCompany, grantsOf } from '../templates/template-clip.util';
 import { TenantContext } from '../auth/types';
 import { Grant, TreeNode, buildTree } from './permission-tree';
-import { DelegationLink, RootGrants, effectiveGrants } from './intersection';
+import { RootGrants, actorGrants } from './intersection';
 import { rootGrantsFrom } from './root-grants';
 import { SECTORS, Sector, screensFor } from '../activities/sectors';
 import { ExtinguishedGrant, splitLastLink } from './extinguished';
-import { DelegationRow, chainsFor } from './chain-source';
+import { DelegationRow, chainsFor, readDelegationRows } from './chain-source';
 
 /**
  * ما يُرسَل إلى الواجهة — **الحكم محسوباً، لا موادّه**.
@@ -76,17 +76,15 @@ export class PermissionsService {
     const rows = tenant.actorType === 'COMPANY' ? [] : await this.rowsFor(tenant.companyId);
     const chains = chainsFor(rows, tenant.profileId);
 
+    // The same rule the tenant guard enforces: the template when nobody delegated to the
+    // actor, otherwise the union of the chains, each narrowed within itself.
+    const effective = actorGrants(root, chains);
+
     // بلا تفويض: صلاحياته قالبُه كاملاً — وهي الحالة الشائعة.
     if (chains.length === 0) {
-      const all = [...root].sort();
-      return { grants: all, extinguished: [], grantable: all, chains: [], tree: treeFor(root) };
+      const all = [...effective].sort();
+      return { grants: all, extinguished: [], grantable: all, chains: [], tree: treeFor(effective) };
     }
-
-    // ⚠️ اتحادٌ بين المسارات وتقاطعٌ داخل كلٍّ منها: مسارٌ يمنح صلاحيةً
-    // يكفي — تماماً كما لو فوّضه مديرٌ واحد بها. وتقاطعُ المسارات يُسقط
-    // ما فُوّض فعلاً من أحدهما.
-    const effective = new Set<Grant>();
-    for (const chain of chains) for (const g of effectiveGrants(root, chain)) effective.add(g);
 
     // ما انطفأ في مسارٍ وسرى في آخر **ليس منطفئاً**: العرض يتبع النفاذ.
     const extinguished: ExtinguishedGrant[] = [];
@@ -189,13 +187,7 @@ export class PermissionsService {
    * «لم أرَ شيئاً» — والاثنان يبدوان سواء.
    */
   private rowsFor(companyId: string): Promise<DelegationRow[]> {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.$queryRaw<DelegationRow[]>`
-        SELECT "grantorId", "granteeId", "grants", "state"
-        FROM "delegation_logs"
-        ORDER BY "seq" ASC
-      `,
-    );
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => readDelegationRows(tx));
   }
 }
 

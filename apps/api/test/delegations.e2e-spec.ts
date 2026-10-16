@@ -93,6 +93,14 @@ describe('التفويض — المنح والسحب والسجل (e2e)', () => 
       .expect(201);
     expect(res.body.state).toBe('ACTIVE');
     expect(res.body.seq).toBeGreaterThan(0);
+
+    // A delegated employee holds only what was delegated, so the manager also needs the
+    // employees node to manage delegations; the guard enforces this like /me/permissions.
+    await request(app.getHttpServer())
+      .post('/delegations')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ granteeId: mgrId, nodeKey: 'employees', grants: ['employees:view', 'employees:edit'] })
+      .expect(201);
   });
 
   it('⭐③ المدير لا يفوّض ما لا يملكه — والرفض من الخادم لا من الواجهة', async () => {
@@ -111,6 +119,11 @@ describe('التفويض — المنح والسحب والسجل (e2e)', () => 
       .post('/delegations')
       .set('Authorization', `Bearer ${mgrToken}`)
       .send({ granteeId: empId, nodeKey: 'contracts', grants: ['contracts:view', 'contracts:edit'] })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/delegations')
+      .set('Authorization', `Bearer ${mgrToken}`)
+      .send({ granteeId: empId, nodeKey: 'employees', grants: ['employees:view', 'employees:edit'] })
       .expect(201);
 
     const me = await request(app.getHttpServer()).get('/me/permissions').set('Authorization', `Bearer ${empToken}`).expect(200);
@@ -185,7 +198,8 @@ describe('التفويض — المنح والسحب والسجل (e2e)', () => 
 
     // يُسحب تفويض **المالك للمدير** — لا تفويض المدير للموظف.
     const view = await request(app.getHttpServer()).get(`/delegations/${mgrId}`).set('Authorization', `Bearer ${ownerToken}`).expect(200);
-    const link = view.body.links.find((l: { state: string }) => l.state === 'ACTIVE');
+    // Revoke the contracts delegation; the employees one keeps the manager able to manage delegations.
+    const link = view.body.links.find((l: { state: string; nodeKey: string }) => l.state === 'ACTIVE' && l.nodeKey === 'contracts');
     const revoked = await request(app.getHttpServer()).patch(`/delegations/${link.id}/revoke`).set('Authorization', `Bearer ${ownerToken}`).expect(200);
     expect(revoked.body.state).toBe('REVOKED');
     expect(revoked.body.revokedAt).not.toBeNull();

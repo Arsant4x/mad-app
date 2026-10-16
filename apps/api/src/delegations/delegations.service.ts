@@ -10,7 +10,7 @@ import { Grant } from './permission-tree';
 import { DelegationLogEntry, DelegationEvent, LogNode, append, buildLogTree, findSequenceBreak } from './delegation-log';
 import { assertNoCycle } from './cycles';
 import { DelegationRow, chainsFor, liveEdges } from './chain-source';
-import { effectiveGrants } from './intersection';
+import { actorGrants, effectiveGrants } from './intersection';
 import { rootGrantsFrom } from './root-grants';
 import { ExtinguishedGrant, splitLastLink } from './extinguished';
 
@@ -265,11 +265,7 @@ export class DelegationsService {
     const root = await this.rootFor(tenant);
     // صاحب المنشأة جذرٌ بطبعه — لا أحد يفوّضه.
     if (tenant.actorType === 'COMPANY') return new Set(root);
-    const chains = chainsFor(this.asChainRows(rows), actorId);
-    if (!chains.length) return new Set(root);
-    const out = new Set<Grant>();
-    for (const c of chains) for (const g of effectiveGrants(root, c)) out.add(g);
-    return out;
+    return actorGrants(root, chainsFor(this.asChainRows(rows), actorId));
   }
 
   private asChainRows(rows: readonly RawRow[]): DelegationRow[] {
