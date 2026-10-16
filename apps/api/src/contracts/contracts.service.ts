@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@mad-app/db';
 import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { companyToday } from '../common/company-day.util';
@@ -41,6 +41,10 @@ import { ContractFeeDto, EndContractFeeDto } from './dto/contract-fee.dto';
 import { ContractFeeResponse, CreatedContractFeeResponse } from './dto/contract-fee-responses.dto';
 import { raiseDueFeesWithinTx } from './contract-fees.util';
 import { applyTenantCreditOnRenewalWithinTx, tenantCreditBalanceWithinTx } from './tenant-credit.util';
+import { cutContractForEarlyRenewalWithinTx } from './early-renewal-cut.util';
+import { TenantContext } from '../auth/types';
+import { PermissionsService } from '../delegations/permissions.service';
+import { grant } from '../delegations/permission-tree';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, HandoverItemDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
 import { RecordKeyMoneyDto } from './dto/key-money.dto';
@@ -371,6 +375,7 @@ export class ContractsService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly files: FilesService,
+    private readonly permissions: PermissionsService,
   ) {}
 
   list(companyId: string, query: ListContractsQueryDto = {}) {
@@ -1129,7 +1134,7 @@ export class ContractsService {
     );
   }
 
-  private async validateContract(tx: Prisma.TransactionClient, unit: Unit, property: Property, start: Date, end: Date, tenantName: string, excludeContractId?: string): Promise<void> {
+  private async validateContract(tx: Prisma.TransactionClient, unit: Unit, property: Property, start: Date, end: Date, tenantName: string): Promise<void> {
     if (start > end) throw new BadRequestException(MSG.contract_start_after_end);
 
     if (property.activityType === 'residential' && property.activitySubtype && unit.subtype && unit.subtype !== property.activitySubtype) {
@@ -1145,7 +1150,6 @@ export class ContractsService {
       where: {
         unitId: unit.id,
         status: { not: 'CANCELLED' },
-        ...(excludeContractId ? { id: { not: excludeContractId } } : {}),
         start: { lte: end },
         end: { gte: start },
       },
@@ -1184,13 +1188,23 @@ export class ContractsService {
    * and payment history — that record is what a dispute is settled against, and
    * stretching its dates would erase it.
    *
+   * An early renewal, one that starts on or before the original's last day, ends
+   * the original on the day before it starts, in the same transaction, and undoes
+   * what the original billed after that day (`cutContractForEarlyRenewalWithinTx`).
+   *
    * The renewal is created as UPCOMING when its term hasn't started yet: signed
    * and certain, unlike a DRAFT which may never happen. It becomes DUE by the
    * same date-driven refresh that already moves DUE to LATE.
    */
-  renew(companyId: string, id: string, dto: RenewContractDto) {
+  async renew(tenant: TenantContext, id: string, dto: RenewContractDto) {
+    const { companyId } = tenant;
+    // Ending a contract early is what a cancellation does, so an early renewal needs the same permission.
+    // Read outside the transaction because forActor opens its own.
+    const canEndEarly = (await this.permissions.forActor(tenant)).grants.includes(grant('contracts', 'delete'));
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // Locked before it is read, as in a cancellation: two renewals, or a renewal and a cancellation, cannot both cut it.
+        await lockDocumentRow(tx, 'contracts', id);
         const source = await tx.contract.findUnique({ where: { id }, include: { unit: { include: { property: true } }, renewedTo: true } });
         if (!source) throw new NotFoundException(MSG.contract_not_found);
         if (source.status === 'CANCELLED') throw new ConflictException(MSG.contract_cancelled_cannot_renew);
@@ -1201,14 +1215,23 @@ export class ContractsService {
         const end = new Date(dto.end);
         if (start <= source.start) throw new BadRequestException(MSG.renewal_must_start_after_source);
 
+        let creditDate = await companyToday(tx, companyId);
+        if (start <= source.end) {
+          if (!canEndEarly) throw new ForbiddenException(MSG.early_renewal_needs_cancel_permission);
+          const cut = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() - 1));
+          // A cut in the past is undone on the day it is recorded: a reduction of output VAT belongs to the period of the
+          // event or of the credit note, whichever is later, and a past period may already be filed or closed.
+          creditDate = cut > creditDate ? cut : creditDate;
+          await cutContractForEarlyRenewalWithinTx(tx, companyId, source.id, cut, creditDate);
+        }
+
         // The renewal is a real tenancy on the same unit, so it goes through
-        // the same overlap and activity checks as any other contract. The
-        // source itself is excluded: a renewal starting the day after it ends
-        // is precisely the point, and an early renewal signed while the old
-        // lease still runs must not collide with it either.
-        // الطرفُ يُقرأ من بطاقة العميل لحظةَ التجديد — لا من نصّ العقد الأصل (`ق-١٠٢٨`/①⑥).
+        // the same overlap and activity checks as any other contract — the
+        // original included: it ends before the renewal starts, cut above when
+        // the renewal is early.
+        // The party is read from the customer card at renewal time, not from the original's text.
         const party = source.customerId ? await this.linkableCustomer(tx, source.customerId) : null;
-        await this.validateContract(tx, source.unit, source.unit.property, start, end, party?.name ?? source.tenant, source.id);
+        await this.validateContract(tx, source.unit, source.unit.property, start, end, party?.name ?? source.tenant);
 
         const value = dto.value ?? Number(source.value);
         const cycle = dto.cycle ?? source.cycle;
@@ -1285,9 +1308,10 @@ export class ContractsService {
           });
         }
 
-        // ⚖️ رصيدُ المستأجر في الأصل يُخصم آلياً من أوّل قسطٍ في التجديد (توجيه ٢٧٨ · `ق-١٦٢٩`) — قبل استحقاق ما حلّ، فالقسطُ يقرأ ما
-        //    خُصم منه نقطةً مضت ضريبتُها ولا يُستحقّ عليها ثانيةً.
-        await applyTenantCreditOnRenewalWithinTx(tx, companyId, source, created, await companyToday(tx, companyId));
+        // The tenant's credit on the original is deducted from the renewal's installments before what is due is accrued,
+        // so an installment reads what was deducted as a tax point already passed. After an early renewal the credit
+        // includes rent received for days after the cut, and it moves on the same day as the cut's postings.
+        await applyTenantCreditOnRenewalWithinTx(tx, companyId, source, created, creditDate);
 
         // كسابقتها في `create`: ما حلّ من جدول التجديد يُستحقّ في اللحظة نفسِها.
         await accrueDueWithinTx(tx, companyId, new Date(), created.id);

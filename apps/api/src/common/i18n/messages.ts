@@ -404,6 +404,7 @@ export const MSG = {
   contract_no_taken: 'contracts.no_taken',
   contract_party_locked_after_posting: 'contracts.party_locked_after_posting',
   renewal_must_start_after_source: 'contracts.renewal_start_before_source',
+  early_renewal_needs_cancel_permission: 'contracts.early_renewal_needs_cancel_permission',
   warranty_not_found: 'warranties.not_found',
   warranty_end_before_start: 'warranties.end_before_start',
   warranty_has_claims: 'warranties.has_claims',
@@ -1672,6 +1673,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.renewal_must_start_after_source]: {
     ar: 'تاريخ بداية التجديد يجب أن يكون بعد بداية العقد الأصلي',
     en: 'The renewal must start after the original contract began',
+  },
+  [MSG.early_renewal_needs_cancel_permission]: {
+    ar: 'تجديدٌ يبدأ قبل نهاية العقد الحاليّ يُنهيه قبل موعده كالإلغاء، فيحتاج صلاحيةَ «حذف» على شاشة العقود، ولم يُكتب شيء. اطلبها من صاحب المنشأة أو ممّن يملكها.',
+    en: 'A renewal that starts before the current contract ends closes it early, like a cancellation, so it needs the delete permission on the contracts screen; nothing was written. Ask the company owner or someone who holds that permission.',
   },
   [MSG.warranty_not_found]: { ar: 'الضمان غير موجود', en: 'Warranty not found' },
   [MSG.warranty_end_before_start]: { ar: 'تاريخ انتهاء الضمان قبل تاريخ بدايته', en: 'The warranty ends before it starts' },

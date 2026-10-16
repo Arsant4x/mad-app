@@ -45,3 +45,30 @@ describe('⚖️ رصيدُ المستأجر في نافذة التجديد (ق-
     expect(screen.queryByRole('note')).toBeNull();
   });
 });
+
+describe('Early renewal notice in the renewal form', () => {
+  const contract = {
+    ...base,
+    no: 'EJ-2026-0007',
+    installments: [
+      { id: 'i1', dueDate: '2026-07-01T00:00:00.000Z', status: 'PAID' },
+      { id: 'i2', dueDate: '2026-08-01T00:00:00.000Z', status: 'DUE' },
+      { id: 'i3', dueDate: '2026-09-01T00:00:00.000Z', status: 'CANCELLED' },
+      { id: 'i4', dueDate: '2026-10-01T00:00:00.000Z', status: 'PARTIAL' },
+    ],
+  } as unknown as Contract;
+  const startInput = (container: HTMLElement) => container.querySelector('input[type="date"]') as HTMLInputElement;
+
+  it('says the current contract ends the day before an early start and counts the installments after that day', () => {
+    const { container } = render(<RenewForm contract={contract} onCancel={() => {}} onSubmit={noop} />);
+    fireEvent.change(startInput(container), { target: { value: '2026-07-15' } });
+    const note = screen.getByRole('note').textContent ?? '';
+    // The cut is 14 July; the August and October installments are after it, the cancelled one is not counted.
+    expect([note.includes('EJ-2026-0007'), note.includes('14/07/2026'), note.includes('(2)')]).toEqual([true, true, true]);
+  });
+
+  it('says nothing when the renewal starts after the current contract ends', () => {
+    render(<RenewForm contract={contract} onCancel={() => {}} onSubmit={noop} />);
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+});

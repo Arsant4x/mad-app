@@ -443,6 +443,7 @@
       "credit_kept_classification": "The tenant has a credit of {{amount}} that was not deducted because the classification changed; it stays on the current contract.",
       "credit_kept_lessor": "The tenant has a credit of {{amount}} that was not deducted because the lessor changed; it stays on the current contract.",
       "credit_deducted": "The tenant credit of {{amount}} is deducted from the new contract's installments in order until used up.",
+      "early_cut": "Early renewal: contract {{no}} ends on {{cut}}, the day before the new one starts. Its installments after that day ({{n}}) are cancelled and what they billed is reversed, rent already received for them becomes tenant credit deducted from the new contract, an installment running past that day keeps only its days up to it, and its fee lines end. End the registered lease by mutual consent on the same date before registering the new one.",
       "confirm": "Confirm renewal"
     },
     "legacy": {
