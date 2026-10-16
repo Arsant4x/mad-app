@@ -1,4 +1,4 @@
-import { branchFilter, resolveWarehouseBranch } from '../branches/branch-scope.util';
+import { assertWarehouseAllowed, branchFilter, resolveWarehouseBranch } from '../branches/branch-scope.util';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
@@ -403,6 +403,9 @@ export class InventoryService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const original = await tx.stockMovement.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { reversedBy: { select: { id: true } } } });
       if (!original) throw new NotFoundException(MSG.movement_not_found);
+      // The reversal moves stock in the original's warehouses, so the caller must hold them whatever branch the row carries.
+      await assertWarehouseAllowed(tx, allowedBranchIds, original.warehouseId);
+      if (original.toWarehouseId) await assertWarehouseAllowed(tx, allowedBranchIds, original.toWarehouseId);
       if (original.reversalOfId) throw new ConflictException(MSG.movement_is_reversal);
       if (original.reversedBy) throw new ConflictException(MSG.movement_already_reversed);
       if (original.origin !== 'MANUAL') throw new ConflictException(MSG.movement_has_document);
