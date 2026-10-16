@@ -190,6 +190,16 @@ async function resolveParty(tx: Prisma.TransactionClient, input: CreateJournalEn
   return { customerId: customer?.id ?? null, supplierId: supplier?.id ?? null };
 }
 
+/**
+ * A manual entry needs at least two lines, each with exactly one side above zero; balanced totals alone
+ * accept a single line debiting and crediting one account. Automatic postings build their own lines and
+ * are not held to this, since a computed line can round to zero.
+ */
+export function assertManualEntryLines(lines: readonly PostingLine[]): void {
+  if (lines.length < 2) throw new BadRequestException(MSG.journal_manual_entry_min_lines);
+  if (lines.some((l) => (l.debit > 0) === (l.credit > 0))) throw new BadRequestException(MSG.journal_manual_line_one_side);
+}
+
 /** Creates a balanced journal entry and immediately posts it to account
  * balances — journal entries are always posted on creation in this system
  * (there's no separate draft/unposted state), matching the mockup where
