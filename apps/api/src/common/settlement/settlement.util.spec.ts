@@ -25,6 +25,13 @@ describe('settlement.util — المشتركُ بين سندَي القبض وا
     it('تخصيصٌ سالب (بعد عكسٍ أعاد أكثر مما خُصِّص) يُقرأ DUE لا PARTIAL', () => {
       expect(deriveSettlementStatus(-50, 1000)).toBe('DUE');
     });
+
+    it('compares what was allocated with the total less credit notes', () => {
+      expect(deriveSettlementStatus(0, 1000, 1000)).toBe('PAID');
+      expect(deriveSettlementStatus(600, 1000, 400)).toBe('PAID');
+      expect(deriveSettlementStatus(300, 1000, 400)).toBe('PARTIAL');
+      expect(deriveSettlementStatus(0, 1000, 400)).toBe('DUE');
+    });
   });
 
   describe('baseSettledOf — الذمّةُ بسعر المستند وما لم يُخصَّص بسعر السند', () => {
@@ -53,17 +60,32 @@ describe('settlement.util — المشتركُ بين سندَي القبض وا
   describe('withRemaining — المفتوحُ وحدَه بمتبقّيه', () => {
     it('يُسقط المسدَّدَ كاملاً ويُبقي الجزئيَّ والمفتوح بمتبقٍّ محسوب', () => {
       const docs = [
-        { id: 'a', total: '1000' },
-        { id: 'b', total: '400' },
-        { id: 'c', total: '250' },
+        { id: 'a', docType: 'INVOICE', total: '1000' },
+        { id: 'b', docType: 'INVOICE', total: '400' },
+        { id: 'c', docType: 'INVOICE', total: '250' },
       ];
       const allocated = new Map([
         ['a', 400],
         ['b', 400],
       ]);
-      expect(withRemaining(docs, allocated)).toEqual([
-        { id: 'a', total: '1000', allocated: 400, remaining: 600 },
-        { id: 'c', total: '250', allocated: 0, remaining: 250 },
+      expect(withRemaining(docs, allocated, new Map(), 'CREDIT_NOTE')).toEqual([
+        { id: 'a', docType: 'INVOICE', total: '1000', allocated: 400, credited: 0, remaining: 600 },
+        { id: 'c', docType: 'INVOICE', total: '250', allocated: 0, credited: 0, remaining: 250 },
+      ]);
+    });
+
+    it('subtracts credit notes and drops a document they settle in full', () => {
+      const docs = [
+        { id: 'a', docType: 'INVOICE', total: '1000' },
+        { id: 'b', docType: 'INVOICE', total: '300' },
+        { id: 'n', docType: 'CREDIT_NOTE', total: '300' },
+      ];
+      const credited = new Map([
+        ['a', 400],
+        ['b', 300],
+      ]);
+      expect(withRemaining(docs, new Map([['a', 100]]), credited, 'CREDIT_NOTE')).toEqual([
+        { id: 'a', docType: 'INVOICE', total: '1000', allocated: 100, credited: 400, remaining: 500 },
       ]);
     });
   });

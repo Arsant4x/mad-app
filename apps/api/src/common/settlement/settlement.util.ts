@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
+import { outstandingAfterNotes } from '../adjustment/adjustment-note.util';
 import { toBaseAmount } from '../currency/base-amount.util';
 import { formatMessage, MessageKey, MSG } from '../i18n/messages';
 import { formatMoney, round2 } from '../money/rounding';
@@ -36,10 +37,11 @@ export type SettlementStatus = 'DUE' | 'PARTIAL' | 'PAID';
 /**
  * المدفوعُ يتقدّم على كلِّ شيء: مستندٌ سُدِّد بعضُه `PARTIAL` وإن تأخّر، والمسدَّدُ كاملاً `PAID`.
  * والحسابُ بخانتين: `total - EPS` كي لا تُبقي هللةُ تقريبٍ مستنداً مفتوحاً إلى الأبد.
+ * What is due is the total less the credit notes issued on the document, so a fully credited one reads PAID.
  */
-export function deriveSettlementStatus(allocated: number, total: number): SettlementStatus {
+export function deriveSettlementStatus(allocated: number, total: number, credited = 0): SettlementStatus {
   const paid = round2(allocated);
-  const due = round2(total);
+  const due = round2(total - credited);
   if (paid >= due - SETTLEMENT_EPS) return 'PAID';
   if (paid > SETTLEMENT_EPS) return 'PARTIAL';
   return 'DUE';
@@ -73,9 +75,19 @@ export interface SettlementTarget {
   /** مفتاحُ المستند في جدول التخصيصات. */
   documentKey: 'invoiceId' | 'purchaseId';
   allocations: AllocationDelegate;
+  /** Document kinds a payment may settle; any other kind (a credit note, a prepayment document) carries no balance. */
+  payableKinds: readonly string[];
+  /** The credit note kind on this side: it lowers what its related document still owes. */
+  creditKind: string;
+  /** The credit notes issued on the document, summed in its own currency. */
+  creditedOn: (documentId: string) => Promise<number>;
+  /** Whether the document was closed without a balance (a voided purchase, a rejected invoice that was replaced). */
+  isClosed: (documentId: string) => Promise<boolean>;
   /** رسالتا الرفض المسمّاتان — مستندٌ لا يوجد، ومستندٌ لطرفٍ آخر. */
   documentNotFound: MessageKey;
   wrongParty: MessageKey;
+  notPayable: MessageKey;
+  closedDocument: MessageKey;
 }
 
 /** مجموعُ المخصَّص لكل مستند — **مصدرُ الحقيقة الوحيد لـ«المسدَّد»**، في استعلامٍ واحد. */
@@ -100,17 +112,28 @@ export async function allocatedFor(target: SettlementTarget, documentId: string)
 
 /**
  * يُلحق بكل مستندٍ مخصَّصَه ومتبقّيَه محسوبَين، **ويُبقي المفتوحَ وحدَه** — شاشةُ توزيع السند.
+ * The remaining is the one definition the allocation check uses: total less credit notes less allocations.
  */
-export function withRemaining<T extends { id: string; total: Prisma.Decimal | number | string }>(
+export function withRemaining<T extends { id: string; docType: string; total: Prisma.Decimal | number | string }>(
   documents: T[],
   allocated: Map<string, number>,
-): Array<T & { allocated: number; remaining: number }> {
+  credited: Map<string, number>,
+  creditKind: string,
+): Array<T & { allocated: number; credited: number; remaining: number }> {
   return documents
     .map((doc) => {
       const paid = allocated.get(doc.id) ?? 0;
-      return { ...doc, allocated: paid, remaining: round2(Number(doc.total) - paid) };
+      const credit = credited.get(doc.id) ?? 0;
+      return { ...doc, allocated: paid, credited: credit, remaining: outstandingAfterNotes(doc, credit, paid, creditKind) };
     })
     .filter((doc) => doc.remaining > SETTLEMENT_EPS);
+}
+
+/** The settlement status of one document from its allocations and the credit notes issued on it. */
+export async function settlementStatusOf(target: SettlementTarget, doc: { id: string; docType: string; total: Prisma.Decimal | number | string }): Promise<SettlementStatus> {
+  // A credit note owes nothing: it is the reduction itself.
+  if (doc.docType === target.creditKind) return 'PAID';
+  return deriveSettlementStatus(await allocatedFor(target, doc.id), Number(doc.total), await target.creditedOn(doc.id));
 }
 
 /**
@@ -128,6 +151,7 @@ export function withAllocatedTotals<T extends { amount: Prisma.Decimal | number 
 interface LockedDocument {
   id: string;
   no: string;
+  docType: string;
   total: string;
   currency: string;
   partyId: string;
@@ -184,12 +208,15 @@ export async function lockAndAssertAllocationsFit(
   const partyColumn = Prisma.raw(`"${target.partyColumn}"`);
   for (const a of settlement.allocations) {
     const locked = await tx.$queryRaw<LockedDocument[]>`
-      SELECT id, no, total::text, currency, ${partyColumn} AS "partyId", "exchangeRate"::text
+      SELECT id, no, "docType"::text AS "docType", total::text, currency, ${partyColumn} AS "partyId", "exchangeRate"::text
       FROM ${table} WHERE id = ${a.documentId} FOR UPDATE`;
     if (!locked.length) throw new NotFoundException(target.documentNotFound);
     const doc = locked[0];
 
     if (doc.partyId !== settlement.partyId) throw new BadRequestException(formatMessage(target.wrongParty, { no: doc.no }));
+    // A credit note or a prepayment document carries no balance, and a closed document has none left.
+    if (!target.payableKinds.includes(doc.docType)) throw new BadRequestException(formatMessage(target.notPayable, { no: doc.no }));
+    if (await target.isClosed(doc.id)) throw new BadRequestException(formatMessage(target.closedDocument, { no: doc.no }));
     // عملتان مختلفتان تجعلان «المتبقّي» و«المخصَّص» بمقياسين — رفضٌ صريح خيرٌ من تخصيصٍ صامتٍ خاطئ.
     if (doc.currency !== settlement.currency) {
       throw new BadRequestException(
@@ -197,7 +224,8 @@ export async function lockAndAssertAllocationsFit(
       );
     }
 
-    const remaining = round2(Number(doc.total) - (await allocatedFor(target, a.documentId)));
+    // Read under the lock: a credit note on this document locks the same row before it is written.
+    const remaining = outstandingAfterNotes(doc, await target.creditedOn(doc.id), await allocatedFor(target, a.documentId), target.creditKind);
     if (a.amount > remaining + SETTLEMENT_EPS) {
       throw new BadRequestException(
         formatMessage(MSG.allocation_exceeds_remaining, { no: doc.no, remaining: formatMoney(remaining), amount: formatMoney(a.amount) }),

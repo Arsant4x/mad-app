@@ -7,7 +7,7 @@ import { grant } from '../delegations/permission-tree';
 import { TenantContext } from '../auth/types';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { buildZatcaQr, ZatcaQrValueTooLongError } from '../zatca/qr.util';
-import { dayStartOf, issuedWallClock } from '../common/wall-clock.util';
+import { issuedWallClock } from '../common/wall-clock.util';
 import { Prisma } from '@mad-app/db';
 import {
   assertAdjustableTarget,
@@ -50,7 +50,8 @@ import { invoiceTypeFor } from '../zatca/hash-chain.util';
 import { readClearedDelivery, withClearedCopyState } from '../zatca/cleared-invoice.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { localDateOf } from '../common/wall-clock.util';
-import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
+import { lockDocumentRow } from '../common/settlement/settlement.util';
+import { recomputeInvoiceStatus } from './invoice-settlement.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
@@ -440,8 +441,8 @@ export class InvoicesService {
         if (allocations.length > 0) await tx.paymentAllocation.updateMany({ where: { invoiceId: rejected.id }, data: { invoiceId: replacement.id } });
         // ④A1: صفوفُ الدفعات المقدَّمة المطبَّقة تتبع تخصيصاتها إلى البدل — فيحمل مرجعَها (BT-113) كما حملته المردودة.
         await tx.invoicePrepayment.updateMany({ where: { invoiceId: rejected.id }, data: { invoiceId: replacement.id } });
-        await this.syncSettlementStatus(tx, rejected.id, now);
-        await this.syncSettlementStatus(tx, replacement.id, now);
+        await recomputeInvoiceStatus(tx, rejected.id, now);
+        await recomputeInvoiceStatus(tx, replacement.id, now);
         await this.audit.recordWithinTx(tx, {
           companyId,
           actorType: tenant.actorType,
@@ -475,23 +476,6 @@ export class InvoicesService {
     );
   }
 
-  /**
-   * حالةُ السداد المشتقّة — كما تكتبها `PaymentsService.recomputeInvoiceStatus` حرفاً: من
-   * التخصيصات لا من حقل، و`OVERDUE` على المستحقّ الذي فات موعدُه. تُستدعى بعد نقل التخصيصات
-   * للطرفين معاً كي لا يفترق المخزَّنُ عن المحسوب (حارسُ الانحراف في `invoice-outstanding`).
-   */
-  private async syncSettlementStatus(tx: Prisma.TransactionClient, invoiceId: string, now: Date): Promise<void> {
-    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { total: true, status: true, dueDate: true, docType: true } });
-    if (!invoice) return;
-    // ④A1: مستندُ الدفعة المقدَّمة مسدَّدٌ بالبناء — سندُ قبضه أصدره، وتخصيصُه ينتقل إلى فاتورة التوريد عند التطبيق.
-    if (invoice.docType === 'PREPAYMENT') return;
-    const allocated = await tx.paymentAllocation.aggregate({ where: { invoiceId }, _sum: { amount: true } });
-    const derived = deriveSettlementStatus(Number(allocated._sum.amount ?? 0), Number(invoice.total));
-    // يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فحكمُ «متأخّرة» يقرؤه التاجر.
-    const today = dayStartOf(now);
-    const status = derived === 'DUE' && invoice.dueDate < today ? 'OVERDUE' : derived;
-    if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
-  }
 
   /**
    * ⭐ **بوّابةُ حدّ الائتمان — على `createWithinTx` وحدها** (`ق-٣٣٦` … `ق-٣٤٠`).
@@ -994,7 +978,7 @@ export class InvoicesService {
       });
       assertWithinRemaining(totals.total, Number(original.total), Number(already._sum.total ?? 0), MSG.credit_note_exceeds_remaining);
 
-      return this.createAdjustmentNote(tx, companyId, original, {
+      const note = await this.createAdjustmentNote(tx, companyId, original, {
         docType: 'CREDIT_NOTE',
         numberKind: 'CN',
         reason: dto.reason,
@@ -1007,6 +991,9 @@ export class InvoicesService {
         status: 'PAID',
         post: postCreditNoteEntry,
       });
+      // The note lowers what the original still owes, so its status is derived again in the same transaction.
+      await recomputeInvoiceStatus(tx, invoiceId);
+      return note;
     }));
   }
 
@@ -1395,7 +1382,7 @@ export class InvoicesService {
         prepaymentsAccountId,
       });
     }
-    await this.syncSettlementStatus(tx, invoice.id, new Date());
+    await recomputeInvoiceStatus(tx, invoice.id, new Date());
   }
 
   private async nextDocumentNumber(

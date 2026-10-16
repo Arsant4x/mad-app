@@ -22,8 +22,7 @@ import { mirrorBankMovement, postSupplierPaymentEntry } from '../journal/auto-po
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListSupplierPaymentsQueryDto } from './dto/list-supplier-payments-query.dto';
 import { AllocateSupplierPaymentDto, CreateSupplierPaymentDto, SupplierAllocationDto } from './dto/supplier-payment.dto';
-import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
-import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
+import { creditedByPurchase, PAYABLE_PURCHASE_KINDS, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 import { stockedBaseOf } from './goods-receipts.service';
 import { purchaseCostLines, reallocationCostShifts } from './reallocation-cost.util';
 
@@ -131,23 +130,15 @@ export class SupplierPaymentsService {
       // الإشعارُ الدائن من المورّد `PAID` بطبيعته فلا يدخل؛ والمدينُ مستحقٌّ يُسدَّد كالشراء (`ق-١٠٠٦`/②).
       const purchases = await tx.purchase.findMany({
         // والمُلغى بقيد عكسٍ لا ذمّةَ عليه (`ق-٩٩٧`/②).
-        where: { supplierId, status: { not: 'PAID' }, voidedAt: null, ...branchFilter(allowedBranchIds) },
+        where: { supplierId, docType: { in: [...PAYABLE_PURCHASE_KINDS] }, status: { not: 'PAID' }, voidedAt: null, ...branchFilter(allowedBranchIds) },
         select: { id: true, no: true, date: true, dueDate: true, total: true, currency: true, status: true, docType: true },
         orderBy: { date: 'asc' },
       });
       const ids = purchases.map((p) => p.id);
-      // المتبقّي بعد ما ائتمن به المورّد — المصدرُ الواحد ⑥ مع الفاتورة (`ق-١٠٠٨`/١).
-      const credited = await creditedByPurchase(tx, ids);
+      // The same remaining the allocation check reads: total less supplier credit notes less allocations.
+      const open = withRemaining(purchases, await allocatedByDocument(purchaseTarget(tx), ids), await creditedByPurchase(tx, ids), 'SUPPLIER_CREDIT_NOTE');
       // ② المسدَّدُ والمُئتمَنُ والمتبقّي نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والحسابُ قبلها رقم.
-      return withRemaining(purchases, await allocatedByDocument(purchaseTarget(tx), ids)).map((p) => {
-        const creditedTotal = credited.get(p.id) ?? 0;
-        return {
-          ...p,
-          allocated: money(p.allocated),
-          credited: money(creditedTotal),
-          remaining: money(outstandingAfterNotes(p, creditedTotal, p.allocated, 'SUPPLIER_CREDIT_NOTE')),
-        };
-      });
+      return open.map((p) => ({ ...p, allocated: money(p.allocated), credited: money(p.credited), remaining: money(p.remaining) }));
     });
   }
 
