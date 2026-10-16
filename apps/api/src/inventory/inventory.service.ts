@@ -1,4 +1,4 @@
-import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { branchFilter, resolveWarehouseBranch } from '../branches/branch-scope.util';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -73,8 +73,9 @@ export class InventoryService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const product = await tx.product.findUnique({ where: { id: dto.productId } });
       if (!product) throw new NotFoundException(MSG.product_not_found);
-      const warehouse = await tx.warehouse.findUnique({ where: { id: dto.warehouseId } });
-      if (!warehouse) throw new NotFoundException(MSG.warehouse_not_found);
+      // The source warehouse must be one of the caller's and gives the movement its branch. A transfer destination
+      // may belong to another branch: restricted users see those warehouses by name in order to transfer to them.
+      const branchId = await resolveWarehouseBranch(tx, dto.warehouseId, dto.branchId, allowedBranchIds);
 
       if (dto.type === 'TRANSFER') {
         if (!dto.toWarehouseId) throw new BadRequestException(MSG.destination_warehouse_required);
@@ -107,7 +108,7 @@ export class InventoryService {
 
       const movement = await tx.stockMovement.create({
         data: {
-          branchId: await resolveBranchId(tx, dto.branchId, allowedBranchIds),
+          branchId,
           productId: dto.productId,
           warehouseId: dto.warehouseId,
           toWarehouseId: dto.type === 'TRANSFER' ? dto.toWarehouseId : undefined,

@@ -45,6 +45,38 @@ export function warehouseFilter(allowedBranchIds: string[] | 'all'): Prisma.Ware
 }
 
 /**
+ * Refuses a write on a warehouse outside the caller's branches (`warehouseFilter`). 403 rather than 404: the caller
+ * sees every warehouse by name in the warehouse list, so there is no existence to hide.
+ */
+export async function assertWarehouseAllowed(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', warehouseId: string): Promise<void> {
+  if (allowedBranchIds === 'all') return;
+  const own = await tx.warehouse.count({ where: { id: warehouseId, ...warehouseFilter(allowedBranchIds) } });
+  if (own === 0) throw new ForbiddenException(MSG.branch_forbidden);
+}
+
+/**
+ * The branch of a stock document on a warehouse, read from the warehouse rather than trusted from the request.
+ * A warehouse serving one branch gives that branch; one serving several takes the requested branch when it serves the
+ * warehouse, else the only one the caller may use; a company-wide warehouse keeps the requested branch.
+ */
+export async function resolveWarehouseBranch(
+  tx: Prisma.TransactionClient,
+  warehouseId: string,
+  requestedBranchId: string | null | undefined,
+  allowedBranchIds: string[] | 'all',
+): Promise<string | null> {
+  const warehouse = await tx.warehouse.findUnique({ where: { id: warehouseId }, select: { branches: { select: { id: true } } } });
+  if (!warehouse) throw new NotFoundException(MSG.warehouse_not_found);
+  await assertWarehouseAllowed(tx, allowedBranchIds, warehouseId);
+
+  const served = warehouse.branches.map((b) => b.id);
+  if (served.length === 0) return resolveBranchId(tx, requestedBranchId, allowedBranchIds);
+  const usable = allowedBranchIds === 'all' ? served : served.filter((id) => allowedBranchIds.includes(id));
+  const chosen = requestedBranchId && usable.includes(requestedBranchId) ? requestedBranchId : usable.length === 1 ? usable[0] : null;
+  return resolveBranchId(tx, chosen, allowedBranchIds);
+}
+
+/**
  * **مستندُ فرعٍ آخر في تخصيص سندٍ يراه القارئ** (`ق-١٥٨١`): يبقى مبلغُ التخصيص (من السند نفسِه) ومعرّفُ المستند، ويسقط رقمُه
  * ومبلغُه وعملتُه وفرعُه. ومستندُ فرعه أو المنشأة كلِّها يبقى كما هو.
  */

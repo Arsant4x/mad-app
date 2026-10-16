@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { AuditService } from '../audit/audit.service';
-import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBranchAllowed, assertWarehouseAllowed, branchFilter, resolveWarehouseBranch } from '../branches/branch-scope.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -122,13 +122,9 @@ export class WriteOffsService {
 
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-        const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
-        assertBranchAllowed(allowedBranchIds, branchId);
-
         const product = await tx.product.findUnique({ where: { id: dto.productId }, select: { id: true } });
         if (!product) throw new NotFoundException(MSG.product_not_found);
-        const warehouse = await tx.warehouse.findUnique({ where: { id: dto.warehouseId }, select: { id: true } });
-        if (!warehouse) throw new NotFoundException(MSG.warehouse_not_found);
+        const branchId = await resolveWarehouseBranch(tx, dto.warehouseId, dto.branchId, allowedBranchIds);
 
         const occurredAt = new Date(dto.occurredAt);
         return tx.inventoryWriteOff.create({
@@ -306,6 +302,7 @@ export class WriteOffsService {
     const row = await tx.inventoryWriteOff.findUnique({ where: { id } });
     if (!row) throw new NotFoundException(MSG.writeoff_not_found);
     assertBranchAllowed(allowedBranchIds, row.branchId);
+    await assertWarehouseAllowed(tx, allowedBranchIds, row.warehouseId);
     // ⚠️ حالةٌ محسومة لا تُحسم مرّتين: اعتمادٌ ثانٍ كان سيُخرج البضاعة مرّتين.
     if (row.status !== 'PENDING_REVIEW') throw new ConflictException(MSG.writeoff_already_decided);
     return row;
