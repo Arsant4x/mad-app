@@ -20,7 +20,7 @@ import {
 import { toBaseAmount, resolveCurrencyWithin } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
-import { computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
+import { baseCurrencyTotals, computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
 import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
 import { assertSaleNotBlockedByExpiry, fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -588,6 +588,7 @@ export class InvoicesService {
     const { subtotal, taxTotal, total } = computeTotals(lines);
     // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
     const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
+    const base = baseCurrencyTotals({ taxTotal, total }, exchangeRate);
       /**
        * ⚖️ **الحدُّ يُفحص قبل أي كتابة** (`ق-٣٣٦`) — قبل الترقيم نفسِه:
        * **رفضٌ بعد `nextDocumentNumber` يحرق رقماً في كل محاولة**، والعدّادُ
@@ -598,7 +599,7 @@ export class InvoicesService {
       const override = await this.gateCreditLimit(
         tx,
         companyId,
-        { customerId: dto.customerId, issueDate: new Date(dto.issueDate), addingBase: toBaseAmount(total, exchangeRate), allowedBranchIds },
+        { customerId: dto.customerId, issueDate: new Date(dto.issueDate), addingBase: base.baseTotal, allowedBranchIds },
         credit,
       );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
@@ -617,7 +618,7 @@ export class InvoicesService {
         lines: dto.lines,
         currency,
         total,
-        base: { baseTotal: toBaseAmount(total, exchangeRate), baseSubtotal: toBaseAmount(subtotal, exchangeRate), baseTaxTotal: toBaseAmount(taxTotal, exchangeRate) },
+        base,
         prepaymentInvoiceIds: dto.prepaymentInvoiceIds,
       });
       // ⚖️ (`ق-١٤٩٠` · `INV-①`) والبيعُ من دفعةٍ منتهية يُفحص قبل الترقيم كذلك — بقراءة التسليم نفسِها (مستودعُ الفرع ·
@@ -663,9 +664,7 @@ export class InvoicesService {
           total,
           currency,
           exchangeRate,
-          baseSubtotal: toBaseAmount(subtotal, exchangeRate),
-          baseTaxTotal: toBaseAmount(taxTotal, exchangeRate),
-          baseTotal: toBaseAmount(total, exchangeRate),
+          ...base,
           lines: {
             // رقمُ السطر من ترتيب الإدخال (`ق-١٤١٢`).
             create: numberLines(
@@ -863,9 +862,7 @@ export class InvoicesService {
         data.subtotal = totals.subtotal;
         data.taxTotal = totals.taxTotal;
         data.total = totals.total;
-        data.baseSubtotal = toBaseAmount(totals.subtotal, rate);
-        data.baseTaxTotal = toBaseAmount(totals.taxTotal, rate);
-        data.baseTotal = toBaseAmount(totals.total, rate);
+        Object.assign(data, baseCurrencyTotals(totals, rate));
         if (dto.currency) data.currency = dto.currency;
         if (dto.exchangeRate !== undefined) data.exchangeRate = dto.exchangeRate;
         // Replace-all rather than diffing line-by-line — simplest correct
@@ -1108,13 +1105,14 @@ export class InvoicesService {
     // التاريخ يسبق الرقم — فالبادئة تُشتقّ منه.
     const issueDate = note.issueDate ? new Date(note.issueDate) : new Date();
     const { subtotal, taxTotal, total } = note.totals;
+    const base = baseCurrencyTotals(note.totals, rate);
     // ⚖️ (`ق-١٤٩٠`) الإشعارُ مستندٌ ضريبيّ يصل الهيئةَ برقمه — فما يُرفض بعد الترقيم يُفحص قبله: الإرجاعُ فوق المبيع
     // تراكمياً، وحساباتُ قيده وقيدِ عكس تكلفته، والفترةُ. والرفوضُ بعده باقيةٌ طبقةً ثانية.
     await assertAdjustmentNoteIssuable(tx, companyId, {
       docType: note.docType,
       issueDate,
       lines: note.lines,
-      base: { baseTotal: toBaseAmount(total, rate), baseTaxTotal: toBaseAmount(taxTotal, rate) },
+      base,
     });
     const no = await this.nextDocumentNumber(tx, companyId, note.numberKind, issueDate);
 
@@ -1138,9 +1136,7 @@ export class InvoicesService {
         total,
         currency: original.currency,
         exchangeRate: rate,
-        baseSubtotal: toBaseAmount(subtotal, rate),
-        baseTaxTotal: toBaseAmount(taxTotal, rate),
-        baseTotal: toBaseAmount(total, rate),
+        ...base,
         lines: {
           create: numberLines(
             note.lines.map((l) => ({
@@ -1308,9 +1304,7 @@ export class InvoicesService {
         total,
         currency: p.currency,
         exchangeRate: p.exchangeRate,
-        baseSubtotal: toBaseAmount(subtotal, p.exchangeRate),
-        baseTaxTotal: toBaseAmount(taxTotal, p.exchangeRate),
-        baseTotal: toBaseAmount(total, p.exchangeRate),
+        ...baseCurrencyTotals({ taxTotal, total }, p.exchangeRate),
         lines: { create: numberLines(lines.map((l) => ({ companyId, description: l.description, productId: null, unitCode: null, quantity: l.quantity, unitPrice: l.unitPrice, discount: 0, ...taxColumns(l) }))) },
       } as unknown as Prisma.InvoiceUncheckedCreateInput,
       include: INVOICE_INCLUDE,
