@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
+import { KSA_UTC_OFFSET_MIN, localDateOf } from '../src/common/wall-clock.util';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (38.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(120000);
@@ -32,6 +33,8 @@ describe('§30 المرتجعات — موجة أ (e2e)', () => {
   const UNIT_COST = 40;
   const created: string[] = [];
   const today = () => new Date().toISOString().slice(0, 10);
+  // Credit notes sent without a date are issued on the company's day (UTC+3), ahead of the UTC day late in the evening.
+  const companyDay = () => localDateOf(new Date(), KSA_UTC_OFFSET_MIN);
 
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
 
@@ -207,7 +210,7 @@ describe('§30 المرتجعات — موجة أ (e2e)', () => {
   });
 
   it('[SPEC 30.9] تقرير المرتجعات: كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ · ومن سجّله', async () => {
-    const res = await auth(request(app.getHttpServer()).get('/reports/returns')).query({ from: today(), to: today(), branchId }).expect(200);
+    const res = await auth(request(app.getHttpServer()).get('/reports/returns')).query({ from: companyDay(), to: companyDay(), branchId }).expect(200);
     // ② الكمّياتُ نصٌّ بثلاث خانات والمبالغُ بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً، والمجموعُ يُقرأ رقماً.
     const rows = res.body.rows as { no: string; restockedQty: string; restockedCost: string; refunded: string; recordedBy: string | null; damagedLines: number }[];
     expect(rows.length).toBeGreaterThanOrEqual(5);

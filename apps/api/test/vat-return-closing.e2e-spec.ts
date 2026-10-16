@@ -7,6 +7,7 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { inventoryLedgerReconciliation } from '../src/inventory/inventory-ledger-reconciliation.util';
 import { inventoryDistributionCheck } from '../src/inventory/inventory-distribution.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
+import { KSA_UTC_OFFSET_MIN, localDateOf } from '../src/common/wall-clock.util';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): منشأةٌ معزولة وفاتورتا بيعٍ وشراءٌ مخزنيّ وسبعُ مراحل تقرأ الدفترَ والطبقة.
 jest.setTimeout(180000);
@@ -27,6 +28,8 @@ describe('⚖️ ق-١٣٦٠ — «إقفالُ الإقرار» حدثٌ مست
   const http = () => request(app.getHttpServer());
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${company.token}`);
   const today = () => new Date().toISOString().slice(0, 10);
+  // The server dates a closing on the company's day (UTC+3), which runs ahead of the UTC day late in the evening.
+  const companyDay = () => localDateOf(new Date(), KSA_UTC_OFFSET_MIN);
   const Q4 = { year: 2025, quarter: 4 };
   let productId = '';
   let warehouseId = '';
@@ -108,14 +111,14 @@ describe('⚖️ ق-١٣٦٠ — «إقفالُ الإقرار» حدثٌ مست
       body = (await auth(http().post('/obligations/vat-declaration/closings')).send(Q4).expect(201)).body;
     });
     expect(body).toEqual(expect.objectContaining({ kind: 'CLOSING', ratio: 0.5, documentsCount: 1, baseAmount: '7.50' }));
-    expect(String(body!.date).slice(0, 10)).toBe(today());
+    expect(String(body!.date).slice(0, 10)).toBe(companyDay());
     closingId = body!.id;
     expect({ '1250': delta('1250'), '1300': delta('1300'), '5100': delta('5100') }).toEqual({ '1250': -7.5, '1300': 7.5, '5100': 0 });
     expect(await layer()).toEqual({ remaining: 10, unitCost: 10.75 });
 
     // الحدثُ يُختم على حدث الضريبة الذي أطلقه — بتاريخه لا بتاريخ المستند.
     const event = await tenantPrisma.runInTenantContext(company.companyId, (tx) => tx.nonDeductibleVatEvent.findFirstOrThrow({ where: { vatReturnClosingId: closingId } }));
-    expect({ trigger: event.trigger, date: event.date.toISOString().slice(0, 10) }).toEqual({ trigger: 'VAT_RETURN_CLOSING', date: today() });
+    expect({ trigger: event.trigger, date: event.date.toISOString().slice(0, 10) }).toEqual({ trigger: 'VAT_RETURN_CLOSING', date: companyDay() });
 
     const d = await declaration();
     expect(d.proportional.closing).toEqual(expect.objectContaining({ id: closingId, ratio: 0.5 }));

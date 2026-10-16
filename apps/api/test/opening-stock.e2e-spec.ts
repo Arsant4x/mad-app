@@ -7,6 +7,7 @@ import request from 'supertest';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
+import { KSA_UTC_OFFSET_MIN, localDateOf } from '../src/common/wall-clock.util';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (34.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(105000);
@@ -48,6 +49,8 @@ describe('الأرصدةُ الافتتاحية بالطبقات — إعلان�
   const today = () => new Date().toISOString().slice(0, 10);
   const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
   const daysAhead = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  // What the server dates by itself takes the company's day (UTC+3), ahead of the UTC day late in the evening.
+  const companyDay = () => localDateOf(new Date(), KSA_UTC_OFFSET_MIN);
 
   const auth = (r: request.Test, t = token) => r.set('Authorization', `Bearer ${t}`);
   const get = (path: string, t?: string) => auth(request(app.getHttpServer()).get(path), t);
@@ -221,7 +224,7 @@ describe('الأرصدةُ الافتتاحية بالطبقات — إعلان�
 
     const settlement = await entriesNamed(`حركةُ مخزونٍ يدوية — تسوية مؤقّتٍ يدويّ — رصيدٌ افتتاحيّ ${res.body.no}`);
     expect(settlement).toHaveLength(1);
-    expect(settlement[0].date.toISOString().slice(0, 10)).toBe(today());
+    expect(settlement[0].date.toISOString().slice(0, 10)).toBe(companyDay());
     const after = await ledger();
     // الإعلانُ 72 على 1300 ناقص فرقُ التسوية 6 إلى 5810 — وتكلفةُ المبيعات لا تتحرّك.
     expect(delta(after, before, '1300')).toBe(66);
