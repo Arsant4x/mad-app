@@ -68,7 +68,8 @@
     "reason_placeholder": "Periodic count, entry correction, transfer between warehouses...",
     "close": "Close",
     "cancel": "Cancel",
-    "save": "Save movement"
+    "save": "Save movement",
+    "needs_review": "An issue or a downward adjustment reduces inventory value and needs the review permission on the inventory screen. Ask the company owner."
   },
   "movements": {
     "type_in": "📥 Receipt",

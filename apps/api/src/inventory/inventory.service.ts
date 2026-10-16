@@ -1,7 +1,11 @@
 import { branchFilter, resolveWarehouseBranch } from '../branches/branch-scope.util';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
+import { TenantContext } from '../auth/types';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { grant } from '../delegations/permission-tree';
+import { PermissionsService } from '../delegations/permissions.service';
+import { reducesInventoryValue } from './stock-movement-value';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
@@ -24,7 +28,10 @@ export type StockStatus = 'out' | 'low' | 'available';
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly permissions: PermissionsService,
+  ) {}
 
   listMovements(companyId: string, allowedBranchIds: string[] | 'all', query: ListMovementsQueryDto = {}) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -66,10 +73,16 @@ export class InventoryService {
     });
   }
 
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateStockMovementDto) {
+  async create(tenant: TenantContext, dto: CreateStockMovementDto) {
+    const { companyId, allowedBranchIds } = tenant;
     // ⭐ ق-١٣٧٧ — **السببُ إلزاميّ**: والمسافاتُ وحدَها ليست سبباً (الـ`DTO` يرفض الفارغ، وهذا يرفض المُفرَغ) — ويُكتب مشذَّباً.
     const reason = dto.reason?.trim();
     if (!reason) throw new BadRequestException(MSG.stock_movement_reason_required);
+    // The route needs record; a movement that reduces value also needs review, read from the same grants the screen
+    // reads. Outside the transaction because forActor opens its own.
+    if (reducesInventoryValue(dto) && !(await this.permissions.forActor(tenant)).grants.includes(grant('inventory', 'review'))) {
+      throw new ForbiddenException(MSG.stock_out_needs_review);
+    }
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const product = await tx.product.findUnique({ where: { id: dto.productId } });
       if (!product) throw new NotFoundException(MSG.product_not_found);

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { StockMovementInput, StockMovementType } from '../../api/inventory';
 import type { Product } from '../../api/products';
 import type { Warehouse } from '../../api/warehouses';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { today } from '../../lib/format';
 import { BATCH_FEFO_DECLARED_LIMITS } from '../../lib/batchLimits';
 import i18n from '../../i18n';
@@ -43,6 +44,10 @@ export function StockMovementModal({
   const [saved, setSaved] = useState(false);
   // An item with declared tracking needs batch and expiry on receipt; the server rejects it without them.
   const selectedTracked = products.find((p) => p.id === productId)?.expiryTracked === true;
+  // Same rule as the server: a stock out or a negative adjustment reduces inventory value and needs review too.
+  const { can } = usePermissions();
+  const reducesValue = type === 'OUT' || (type === 'ADJUSTMENT' && parseFloat(qty) < 0);
+  const missingReview = reducesValue && !can('inventory', 'review');
 
   async function handleSubmit() {
     setError(null);
@@ -201,6 +206,7 @@ export function StockMovementModal({
             {warning}
           </p>
         )}
+        {missingReview && !saved && <p className="hint">{t('inventory.movement_modal.needs_review')}</p>}
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           {saved ? (
@@ -212,7 +218,7 @@ export function StockMovementModal({
               <button className="btn btn-ghost" onClick={onCancel}>
                 {t('inventory.movement_modal.cancel')}
               </button>
-              <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+              <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || missingReview}>
                 {t('inventory.movement_modal.save')}
               </button>
             </>
