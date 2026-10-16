@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@mad-app/db';
 import { assertBranchAllowed } from '../branches/branch-scope.util';
+import { companyToday } from '../common/company-day.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -552,7 +553,7 @@ export class ContractsService {
           if (!contract) throw new NotFoundException(MSG.contract_not_found);
           if (contract.status === 'CANCELLED') throw new ConflictException(MSG.contract_fee_on_cancelled);
           const fee = await tx.contractFee.create({
-            data: { contractId, label: dto.label.trim(), amount: dto.amount, effectiveFrom: new Date(dto.effectiveFrom ?? new Date().toISOString().slice(0, 10)) } as unknown as Prisma.ContractFeeUncheckedCreateInput,
+            data: { contractId, label: dto.label.trim(), amount: dto.amount, effectiveFrom: dto.effectiveFrom ? new Date(dto.effectiveFrom) : await companyToday(tx, companyId) } as unknown as Prisma.ContractFeeUncheckedCreateInput,
           });
           const raised = contract.status !== 'DRAFT' ? (await raiseDueFeesWithinTx(tx, companyId, new Date(), contractId)).raised : 0;
           return { ...presentFee(fee), raisedClaims: raised };
@@ -1286,7 +1287,7 @@ export class ContractsService {
 
         // ⚖️ رصيدُ المستأجر في الأصل يُخصم آلياً من أوّل قسطٍ في التجديد (توجيه ٢٧٨ · `ق-١٦٢٩`) — قبل استحقاق ما حلّ، فالقسطُ يقرأ ما
         //    خُصم منه نقطةً مضت ضريبتُها ولا يُستحقّ عليها ثانيةً.
-        await applyTenantCreditOnRenewalWithinTx(tx, companyId, source, created, new Date());
+        await applyTenantCreditOnRenewalWithinTx(tx, companyId, source, created, await companyToday(tx, companyId));
 
         // كسابقتها في `create`: ما حلّ من جدول التجديد يُستحقّ في اللحظة نفسِها.
         await accrueDueWithinTx(tx, companyId, new Date(), created.id);

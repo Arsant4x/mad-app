@@ -104,9 +104,8 @@ export class AllocateDto {
   allocations!: AllocationDto[];
 
   /**
-   * **يومُ إعادة التوزيع بتقويم التاجر** (`YYYY-MM-DD`) — به يُؤرَّخ قيدُ فرق الذمّة حين يختلف سعرُ الفواتير
-   * الجديدة عن القديمة (`ق-١٤٨٩`/B1)، ويخضع لقفل الفترات كأيِّ قيد. والغيابُ يؤرّخه بساعة الخادم كالعكس بلا
-   * تاريخ (`ReversePaymentDto.date` · `ق-٧٣٦`) — **حدٌّ معلَنٌ لا تخمين**.
+   * The merchant's day of the reallocation (`YYYY-MM-DD`), which dates the receivable difference entry when the new
+   * invoices carry another rate. Without it the company's own day applies.
    */
   @IsOptional()
   @IsDateString()
@@ -118,13 +117,7 @@ export class ReversePaymentDto {
   @IsString()
   reason?: string;
 
-  /**
-   * **يومُ العكس بتقويم التاجر** (`YYYY-MM-DD`) — كما يُؤرَّخ كلُّ مستندٍ من العميل (`ق-٧٣٦`).
-   *
-   * كان العكسُ يُؤرَّخ بـ`new Date()` على الخادم (`UTC`)، فبين منتصف الليل والثالثة فجراً بتوقيت
-   * المملكة يقع في **اليوم السابق** — وإن كان شهرُه مقفلاً رُفض العكسُ («الفترةُ مقفلة») على فعلٍ في
-   * أوّل يومٍ من الشهر التالي. الغيابُ يُبقي السلوكَ القديم (عميلٌ أقدم) — **حدٌّ معلَنٌ لا تخمين**.
-   */
+  /** The merchant's day of the reversal (`YYYY-MM-DD`). Without it the company's own day applies, never the UTC day. */
   @IsOptional()
   @IsDateString()
   date?: string;

@@ -2,6 +2,7 @@ import { assertWarehouseAllowed, branchFilter, resolveWarehouseBranch } from '..
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
+import { companyToday } from '../common/company-day.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { grant } from '../delegations/permission-tree';
 import { PermissionsService } from '../delegations/permissions.service';
@@ -414,7 +415,7 @@ export class InventoryService {
       const qty = Math.abs(signedQty);
       const entering = original.type === 'IN' || (original.type === 'ADJUSTMENT' && signedQty > 0);
       const reason = `عكسُ الحركة ${original.id.slice(0, 8)}${original.reason ? ` — ${original.reason}` : ''}`;
-      const base = { companyId, branchId: original.branchId, productId: original.productId, date: new Date(), reason, origin: 'MANUAL' as const, reversalOfId: original.id };
+      const base = { companyId, branchId: original.branchId, productId: original.productId, date: await companyToday(tx, companyId), reason, origin: 'MANUAL' as const, reversalOfId: original.id };
 
       /**
        * ⚖️ ق-١٣٦٣ — **العكسُ يُقيَّد إن قُيّد أصلُه**: مرآةُ قيده بما تحرّك فعلاً (الطبقةُ تُقفل بتكلفتها اليوم · والمستعادُ بتكلفة ما خرج).

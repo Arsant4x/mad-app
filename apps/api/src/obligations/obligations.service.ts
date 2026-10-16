@@ -24,7 +24,7 @@ import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/pag
 const OBLIGATION_SEARCH_FIELDS = ['title', 'body'] as const;
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 import { reconcileNonDeductibleVat } from '../purchases/non-deductible-vat.util';
-import { dayStartOf } from '../common/wall-clock.util';
+import { companyToday } from '../common/company-day.util';
 import { LINE_ORDER } from '../common/document-lines.util';
 
 /**
@@ -291,7 +291,7 @@ export class ObligationsService {
       const declared = await tx.vatProportionalRatio.findFirst({ where: { year } });
       if (!declared) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
       const { from, to } = calendarYear(year);
-      const today = dayStartOf(new Date());
+      const today = await companyToday(tx, companyId);
       if (to.getTime() >= today.getTime()) throw new ConflictException(formatMessage(MSG.vat_adjustment_year_open, { year: String(year) }));
       const settlement = await this.annualSettlementWithinTx(tx, year, Number(declared.ratio), declared);
       if (settlement === null) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
@@ -326,7 +326,7 @@ export class ObligationsService {
   closeVatReturn(companyId: string, dto: VatDeclarationQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const period = resolveVatPeriod(dto);
-      const today = dayStartOf(new Date());
+      const today = await companyToday(tx, companyId);
       if (period.to.getTime() >= today.getTime()) throw new ConflictException(formatMessage(MSG.vat_closing_period_open, { period: period.label }));
 
       await this.lockVatClosings(tx, companyId);
@@ -385,7 +385,7 @@ export class ObligationsService {
         });
         if (adjustment) throw new ConflictException(formatMessage(MSG.vat_closing_adjustment_first, { year: String(adjustment.year) }));
       }
-      const today = dayStartOf(new Date());
+      const today = await companyToday(tx, companyId);
       const event = await tx.vatReturnClosing.create({
         data: {
           companyId,

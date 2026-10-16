@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
+import { KSA_UTC_OFFSET_MIN, localDateOf } from '../src/common/wall-clock.util';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (20.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(65000);
@@ -23,6 +24,8 @@ describe('مهلة إصدار الإشعار (e2e)', () => {
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const today = () => iso(new Date());
+  // A note sent without a date is issued on the company's day (UTC+3), ahead of the UTC day late in the evening.
+  const companyDay = () => localDateOf(new Date(), KSA_UTC_OFFSET_MIN);
 
   async function makeNote(eventDate?: string) {
     const inv = await auth(request(app.getHttpServer()).post('/invoices'))
@@ -65,7 +68,7 @@ describe('مهلة إصدار الإشعار (e2e)', () => {
     old.setUTCDate(old.getUTCDate() - 90);
     const note = await makeNote(iso(old));
 
-    const res = await auth(request(app.getHttpServer()).get('/reports/note-deadlines')).query({ from: today(), to: today() }).expect(200);
+    const res = await auth(request(app.getHttpServer()).get('/reports/note-deadlines')).query({ from: companyDay(), to: companyDay() }).expect(200);
     const row = (res.body.rows as { no: string; status: string; daysLeft: number; deadline: string; eventDateKnown: boolean }[]).find((r) => r.no === note.no);
     expect(row).toBeDefined();
     expect(row!.status).toBe('LATE');
@@ -90,14 +93,14 @@ describe('مهلة إصدار الإشعار (e2e)', () => {
 
   it('وواقعةُ اليوم في الموعد — فلا وسمٌ ولا جرس', async () => {
     const note = await makeNote(today());
-    const res = await auth(request(app.getHttpServer()).get('/reports/note-deadlines')).query({ from: today(), to: today() }).expect(200);
+    const res = await auth(request(app.getHttpServer()).get('/reports/note-deadlines')).query({ from: companyDay(), to: companyDay() }).expect(200);
     const row = (res.body.rows as { no: string; status: string }[]).find((r) => r.no === note.no);
     expect(row?.status).not.toBe('LATE');
   });
 
   it('وإشعارٌ بلا تاريخ واقعة يُعلَن مجهولاً — لا يُخمَّن له تاريخ', async () => {
     const note = await makeNote();
-    const res = await auth(request(app.getHttpServer()).get('/reports/note-deadlines')).query({ from: today(), to: today() }).expect(200);
+    const res = await auth(request(app.getHttpServer()).get('/reports/note-deadlines')).query({ from: companyDay(), to: companyDay() }).expect(200);
     const row = (res.body.rows as { no: string; eventDateKnown: boolean }[]).find((r) => r.no === note.no);
     // يُملأ عند الإنشاء بيوم الإصدار، فالمجهول هو الصفوف السابقة للحقل وحدها.
     expect(row).toBeDefined();

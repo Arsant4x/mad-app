@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@mad-app/db';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { companyToday } from '../common/company-day.util';
 import { resolveCurrencyWithin } from '../common/currency/base-amount.util';
 import { baseCurrencyTotals, computeDocumentTotals, type MoneyLine } from '../common/money/totals';
 import { resolveLineTaxes, type LineTax } from '../common/vat/line-tax.util';
@@ -266,7 +267,7 @@ export class QuotesService {
           // أسعار الفاتورة = أسعار العرض المتفق عليها (قاعدة الموجز 2) —
           // البنود تُنقل نصاً ورقماً؛ تغيّر سعر الصنف بعد العرض لا أثر له.
           // الفرع والعميل يُورَثان من العرض لا من الجلسة (قاعدة 5).
-          const today = new Date().toISOString().slice(0, 10);
+          const today = (await companyToday(tx, companyId)).toISOString().slice(0, 10);
           const invoiceDto = {
             customerId: quote.customerId,
             branchId: quote.branchId ?? undefined,
