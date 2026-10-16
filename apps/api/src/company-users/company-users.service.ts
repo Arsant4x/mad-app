@@ -168,7 +168,13 @@ export class CompanyUsersService {
       if (dto.password) changes.push('password');
       if (changes.length) {
         const passwordHash = dto.password ? await argon2.hash(dto.password) : undefined;
-        await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username, passwordHash } });
+        try {
+          await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username, passwordHash } });
+        } catch (e) {
+          // A concurrent rename to the same username can pass the check above; the unique index refuses the second.
+          if (username && e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException(formatMessage(MSG.username_taken, { username }));
+          throw e;
+        }
         notice = await this.credentials.record(tx, existing.loginIdentityId, changes);
       }
 

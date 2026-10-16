@@ -29,12 +29,20 @@ readsDeclaredStrings();
  * استعلامٌ يكذب صامتاً. **ولا تُقاس على «القصد» — فالقصدُ ما لا تحمله البيانات** (`ق-٥٠٠`).
  *
  * ⚠️ **وتمنع الغفلةَ لا الخطأ المتعمَّد**: من أعلن «الفارغُ غيرُ مقصود» وهو مقصودٌ يمرّ.
+ *
+ * English marker: code comments are written in English, so a new declaration uses the fixed English marker
+ * `null excluded on purpose` (any letter case) with its reason. The Arabic marker stays valid for existing code.
  */
 const API = join(__dirname, '..', '..');
 const SCHEMA = readFileSync(join(API, 'prisma', 'schema.prisma'), 'utf8');
 
 /** علامةُ الإعلان — تُكتب في السطر نفسِه أو في السطر الذي قبله. */
 export const DECLARATION = 'الفارغُ غيرُ مقصود';
+
+/** The same marker in English, for new code whose comments are in English; matched in any letter case. */
+export const DECLARATION_EN = 'null excluded on purpose';
+
+const declares = (line: string): boolean => line.includes(DECLARATION) || line.toLowerCase().includes(DECLARATION_EN);
 
 /** الحقولُ القابلةُ للفراغ — **مشتقّةٌ من المخطّط**: `name Type?` داخل كتلة نموذج. */
 export function nullableFields(schema: string): Map<string, string[]> {
@@ -68,7 +76,7 @@ export function negations(text: string, file: string): Negation[] {
   const lines = text.split(/\r?\n/);
   lines.forEach((raw, i) => {
     const clean = raw.replace(/\/\/.*$/, '');
-    const declared = raw.includes(DECLARATION) || (lines[i - 1] ?? '').includes(DECLARATION);
+    const declared = declares(raw) || declares(lines[i - 1] ?? '');
     // ⭐ **والدواءُ يُقرأ كما يُقرأ الداء**: جمعُ الفارغ صراحةً في السطر نفسِه أو جارَيه
     //    (`{ f: null }`) هو التصحيحُ القانونيّ — **فلو لم يُعرَف لَوجب إعلانٌ على كلِّ
     //    إصلاحٍ صحيح**، فيتعوّد الكاتبُ الإعلانَ بدل الإصلاح.
@@ -129,6 +137,14 @@ describe('نفيٌ في مرشِّحٍ يستثني المجهولَ معه (ق-
     //    أيّ استعلامٍ يمرّ بهذا الاسم يستحقّ قراءةً لا عبوراً. ومعهما قالبُ النموذج وبنودُه
     //    (القالبُ العامُّ بلا منشأة — توجيه ٢٧٨ · `ق-١٦٣٤`).
     expect(nullable.get('companyId')).toEqual(['LoginIdentity', 'PermissionTemplate', 'FormTemplate', 'FormTemplateItem']);
+  });
+
+  it('accepts the English declaration marker on the line or the line before, and nothing else', () => {
+    // Must be declared: the English marker on the same line or on the line before.
+    expect(negations('where: { gone: { not: v } } // null excluded on purpose: only cancelled rows are wanted', 'x')[0].declared).toBe(true);
+    expect(negations('// Null excluded on purpose: only cancelled rows are wanted\nwhere: { gone: { not: v } }', 'x')[0].declared).toBe(true);
+    // Must not be declared: an English comment without the marker.
+    expect(negations('where: { gone: { not: v } } // only cancelled rows are wanted', 'x')[0].declared).toBe(false);
   });
 
   /**
