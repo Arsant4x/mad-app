@@ -107,6 +107,8 @@ describe('Bank transactions tied to the reconciliation are locked (e2e)', () => 
     expect(edited.body.message).toContain('2026-06-30');
     const deleted = await auth(http().delete(`/transactions/${depositRowId}`)).expect(409);
     expect(deleted.body.message).toContain('2026-06-30');
+    const movedOut = await auth(http().patch(`/transactions/${depositRowId}`)).send({ date: '2026-07-10' }).expect(409);
+    expect(movedOut.body.message).toContain('2026-06-30');
 
     // A later unmatched line stays editable, but cannot be moved into the closed range.
     const laterId = (await auth(http().post('/transactions')).send({ bankId, date: '2026-07-05', description: 'July transfer', amount: 80 }).expect(201)).body.id;
