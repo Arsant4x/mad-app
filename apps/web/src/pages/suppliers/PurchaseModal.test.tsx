@@ -2,7 +2,7 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PurchaseModal } from './PurchaseModal';
 
-// File budget: one render and a few thousand input changes, about two seconds alone; three times that.
+// File budget: two hundred input changes, measured below two seconds under the full suite; three times that.
 vi.setConfig({ testTimeout: 6_000 });
 
 /**
@@ -41,11 +41,12 @@ describe('PurchaseModal tax preview', () => {
     expect(enter('100.20')).toEqual({ tax: 15.03, total: 115.23 });
   });
 
-  it('shows the server tax on every half halala tie from 0.10 to 400.00', () => {
+  // Every tie up to 10,000.00 is checked on netTotals in lib/money.test.ts; this sweep proves the form shows it.
+  it('shows the server tax on every half halala tie from 0.10 to 40.00', () => {
     const { enter } = renderForm();
     const misses: { input: string; expected: { tax: number; total: number }; got: { tax: number; total: number } }[] = [];
     let checked = 0;
-    for (let halalas = 10; halalas <= 40_000; halalas += 20) {
+    for (let halalas = 10; halalas <= 4_000; halalas += 20) {
       checked++;
       const tax = divideHalfAway(halalas * RATE, 100);
       const expected = { tax: tax / 100, total: (halalas + tax) / 100 };
@@ -53,6 +54,6 @@ describe('PurchaseModal tax preview', () => {
       const got = enter(input);
       if (got.tax !== expected.tax || got.total !== expected.total) misses.push({ input, expected, got });
     }
-    expect({ checked, misses: misses.length, first: misses.slice(0, 3) }).toEqual({ checked: 2_000, misses: 0, first: [] });
+    expect({ checked, misses: misses.length, first: misses.slice(0, 3) }).toEqual({ checked: 200, misses: 0, first: [] });
   });
 });
