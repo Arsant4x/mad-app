@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { MSG, translate } from '../src/common/i18n/messages';
 import { MailService } from '../src/common/mail/mail.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
@@ -176,7 +177,7 @@ describe('Platform admin and the owner sign-in details (e2e)', () => {
     await prisma.company.update({ where: { id: owner.companyId }, data: { email: null } });
     const res = await bearer(tokens.OPERATIONS!)(http().post(`/companies/${owner.companyId}/password-reset`));
     expect(res.status).toBe(409);
-    expect(String(res.body.message)).toContain('بريد');
+    expect(res.body.message).toBe(translate(MSG.owner_email_missing, 'ar'));
     expect(await prisma.passwordResetToken.count({ where: { loginIdentityId: owner.identityId } })).toBe(0);
   });
 
