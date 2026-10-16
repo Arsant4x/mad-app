@@ -1015,6 +1015,61 @@ export class PosService {
     }
     const salesCount = new Map(counts.map((c) => [c.posShiftId!, c._count._all]));
 
+    /**
+     * Movement of the drawer account since the shift opened, in base currency. Two shifts can be open on one
+     * drawer, so what another shift on the same drawer posted is left out: its sales receipts, the cash refunds
+     * of its sales, and the count variance it posted when it closed.
+     */
+    const drawerMovementSince = async (shift: ShiftForTotals, drawerAccountId: string): Promise<number> => {
+      const lines = await tx.journalLine.findMany({
+        where: { accountId: drawerAccountId, journalEntry: { createdAt: { gte: shift.openedAt } } },
+        select: { debit: true, credit: true, journalEntryId: true },
+      });
+      if (lines.length === 0) return 0;
+      const sameDrawerOtherShift: Prisma.InvoiceWhereInput = { posShift: { is: { drawerId: shift.drawerId, id: { not: shift.id } } } };
+      const otherShiftEntries = await tx.payment.findMany({
+        where: {
+          journalEntryId: { in: [...new Set(lines.map((l) => l.journalEntryId))] },
+          OR: [{ allocations: { some: { invoice: sameDrawerOtherShift } } }, { refundsInvoice: { is: { relatedInvoice: { is: sameDrawerOtherShift } } } }],
+        },
+        select: { journalEntryId: true },
+      });
+      const skip = new Set(otherShiftEntries.map((p) => p.journalEntryId));
+      const otherVariances = await tx.posShift.aggregate({
+        where: { drawerId: shift.drawerId, id: { not: shift.id }, status: 'CLOSED', closedAt: { gte: shift.openedAt } },
+        _sum: { variance: true },
+      });
+      let halalas = -toHalalas(Number(otherVariances._sum.variance ?? 0));
+      for (const l of lines) if (!skip.has(l.journalEntryId)) halalas += toHalalas(Number(l.debit)) - toHalalas(Number(l.credit));
+      return halalas / 100;
+    };
+
+    /** A shift without a drawer pays cash refunds of its own sales from 1000, yet the cash still leaves its till. */
+    const cashRefundsWithoutDrawer = async (shift: ShiftForTotals): Promise<number> => {
+      const refunds = await tx.payment.aggregate({
+        where: { kind: 'REFUND', method: 'CASH', bankId: null, createdAt: { gte: shift.openedAt }, refundsInvoice: { is: { relatedInvoice: { is: { posShiftId: shift.id } } } } },
+        _sum: { baseAmount: true },
+      });
+      return Number(refunds._sum.baseAmount ?? 0);
+    };
+
+    /**
+     * The opening float plus every posting on the drawer account since the shift opened, so cash refunds,
+     * deposits and manual entries count without a list of cash paths to keep up to date. A closed shift keeps
+     * the figure it was closed against (the declared count minus the stored variance), and shifts closed before
+     * the variance column existed keep the old sum, so only open shifts read the ledger.
+     */
+    const expectedCashOf = async (shift: ShiftForTotals, cashTotal: number): Promise<number> => {
+      const float = Number(shift.openingFloat);
+      if (shift.status === 'CLOSED') {
+        if (shift.declaredClosing !== null && shift.variance !== null) return round2(Number(shift.declaredClosing) - Number(shift.variance));
+        return round2(float + cashTotal);
+      }
+      const drawerAccountId = await this.shiftDrawerAccountId(tx, shift.drawerId);
+      if (!drawerAccountId) return round2(float + cashTotal + (await cashRefundsWithoutDrawer(shift)));
+      return round2(float + (await drawerMovementSince(shift, drawerAccountId)));
+    };
+
     const totals = new Map<string, ShiftTotalsNumeric>();
     for (const s of shifts) {
       const cashTotal = round2(cash.get(s.id) ?? 0);
@@ -1022,66 +1077,10 @@ export class PosService {
         salesCount: salesCount.get(s.id) ?? 0,
         cashTotal,
         cardTotal: round2(card.get(s.id) ?? 0),
-        expectedCash: await this.expectedCashOf(tx, s, cashTotal),
+        expectedCash: await expectedCashOf(s, cashTotal),
       });
     }
     return totals;
-  }
-
-  /**
-   * The opening float plus every posting on the drawer account since the shift opened, so cash refunds,
-   * deposits and manual entries count without a list of cash paths to keep up to date. A closed shift
-   * keeps the figure it was closed against (the declared count minus the stored variance); shifts closed
-   * before the variance column existed keep the old sum. Only open shifts read the ledger, so a long
-   * shift history costs no extra queries.
-   */
-  private async expectedCashOf(tx: Prisma.TransactionClient, shift: ShiftForTotals, cashTotal: number): Promise<number> {
-    const float = Number(shift.openingFloat);
-    if (shift.status === 'CLOSED') {
-      if (shift.declaredClosing !== null && shift.variance !== null) return round2(Number(shift.declaredClosing) - Number(shift.variance));
-      return round2(float + cashTotal);
-    }
-    const drawerAccountId = await this.shiftDrawerAccountId(tx, shift.drawerId);
-    if (!drawerAccountId) return round2(float + cashTotal + (await this.cashRefundsWithoutDrawer(tx, shift)));
-    return round2(float + (await this.drawerMovementSince(tx, shift, drawerAccountId)));
-  }
-
-  /**
-   * Movement of the drawer account since the shift opened, in base currency. Two shifts can be open on one
-   * drawer, so what belongs to another shift is left out: its sales receipts, the cash refunds of its sales,
-   * and the count variance it posted when it closed.
-   */
-  private async drawerMovementSince(tx: Prisma.TransactionClient, shift: ShiftForTotals, drawerAccountId: string): Promise<number> {
-    const lines = await tx.journalLine.findMany({
-      where: { accountId: drawerAccountId, journalEntry: { createdAt: { gte: shift.openedAt } } },
-      select: { debit: true, credit: true, journalEntryId: true },
-    });
-    if (lines.length === 0) return 0;
-    const otherShiftSale: Prisma.InvoiceWhereInput = { posShiftId: { not: null }, NOT: { posShiftId: shift.id } };
-    const otherShiftEntries = await tx.payment.findMany({
-      where: {
-        journalEntryId: { in: [...new Set(lines.map((l) => l.journalEntryId))] },
-        OR: [{ allocations: { some: { invoice: otherShiftSale } } }, { refundsInvoice: { relatedInvoice: otherShiftSale } }],
-      },
-      select: { journalEntryId: true },
-    });
-    const skip = new Set(otherShiftEntries.map((p) => p.journalEntryId));
-    const otherVariances = await tx.posShift.aggregate({
-      where: { drawerId: shift.drawerId, id: { not: shift.id }, status: 'CLOSED', closedAt: { gte: shift.openedAt } },
-      _sum: { variance: true },
-    });
-    let halalas = -toHalalas(Number(otherVariances._sum.variance ?? 0));
-    for (const l of lines) if (!skip.has(l.journalEntryId)) halalas += toHalalas(Number(l.debit)) - toHalalas(Number(l.credit));
-    return halalas / 100;
-  }
-
-  /** A shift without a drawer pays cash refunds of its own sales from 1000, yet the cash still leaves its till. */
-  private async cashRefundsWithoutDrawer(tx: Prisma.TransactionClient, shift: ShiftForTotals): Promise<number> {
-    const refunds = await tx.payment.aggregate({
-      where: { kind: 'REFUND', method: 'CASH', bankId: null, createdAt: { gte: shift.openedAt }, refundsInvoice: { relatedInvoice: { posShiftId: shift.id } } },
-      _sum: { baseAmount: true },
-    });
-    return Number(refunds._sum.baseAmount ?? 0);
   }
 
   /**
