@@ -107,7 +107,7 @@ describe('Client fingerprint: flags what is missing, leaves what is extra', () =
        * widely even idle (9 to 53 over 200 runs); two samples agree within half of the larger
        * one, and a paused sample, several times off, still does not count. Under heavy load
        * one measurement takes seconds, hence the long deadline. A slowdown that does not
-       * really slow settles near two and still fails.
+       * really slow settles below six and still fails.
        */
       const SLOWDOWN_REPEATS = 20;
       const slowed = () => {
