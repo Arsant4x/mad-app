@@ -21,8 +21,9 @@ const MAX_PER_RUN = 50;
  * issue, and again once the 24 hour reporting deadline has passed. The outbox keeps retrying such a
  * document; this is what tells a person before the deadline is missed.
  *
- * Only companies connected to the authority are checked, and only documents created after the
- * connection: what was issued before it is sent on connection and was never on this clock here.
+ * Only companies connected to the authority are checked, whatever their subscription status, and only
+ * documents created after the connection: what was issued before it is sent on connection and was
+ * never on this clock here.
  */
 @Injectable()
 export class ReportingDeadlineService {
@@ -36,7 +37,8 @@ export class ReportingDeadlineService {
   @Cron('*/15 * * * *', { timeZone: SCHEDULE_TIME_ZONE })
   async runForAllCompanies(now: Date = new Date()): Promise<{ companies: number; raised: number }> {
     // The unscoped client on purpose: companies has no row level security, and each company is then entered in its own context.
-    const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+    // Every status: a document issued while active stays on the clock after the company turns read only or stops.
+    const companies = await this.prisma.company.findMany({ select: { id: true } });
     let raised = 0;
     for (const c of companies) {
       try {

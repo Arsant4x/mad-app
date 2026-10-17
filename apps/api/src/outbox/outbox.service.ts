@@ -95,11 +95,10 @@ const EMPTY: DispatchResult = { claimed: 0, sent: 0, retried: 0, failed: 0 };
  *
  * ## ⚠️ ولماذا يمرّ الموزّع بكل منشأة على حدة
  *
- * `outbox_events` عليه `FORCE ROW LEVEL SECURITY`. فقراءةٌ بالعميل غير المنطاق
- * **تعيد صفر صفوفٍ بلا خطأ ولا تحذير** — وهو الفخّ الذي عُضّ به المشروع أربع
- * مرات، وأخطر ما فيه أن الموزّع يبدو عاملاً وهو لا يرى شيئاً. فالكنسة تقرأ
- * المنشآت النشطة بالعميل غير المنطاق (وجدول `companies` بلا RLS)، **ثم تدخل
- * سياق كل منشأة** — نفس نمط كنسة التنبيهات اليومية.
+ * `outbox_events` has FORCE row level security, so a read with the unscoped client returns no rows and no
+ * error, and the dispatcher would look alive while seeing nothing. The sweep therefore lists every company
+ * with the unscoped client (companies has no row level security), whatever its subscription status, and then
+ * enters each company's own context.
  *
  * 📌 **وحدّه معلَن**: استعلامٌ لكل منشأة في كل دورة. مقبولٌ بعشرات المنشآت،
  * ويحتاج عند الآلاف موزّعاً في عمليةٍ مستقلة وفهرساً جزئياً — **وهي العلامة
@@ -129,9 +128,12 @@ export class OutboxService {
     });
   }
 
-  /** دورةٌ واحدة عبر المنشآت النشطة. */
+  /**
+   * One cycle across every company. Delivering a document already issued is an obligation on the document, not a
+   * write by the merchant, so a company that turned read only or stopped still has its due events sent.
+   */
   async dispatchDue(batchSize = 20, now = new Date()): Promise<DispatchResult> {
-    const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+    const companies = await this.prisma.company.findMany({ select: { id: true } });
     let total = { ...EMPTY };
     for (const c of companies) {
       try {
