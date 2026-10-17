@@ -27,6 +27,7 @@ import {
   accrueDueWithinTx,
   accrueForPaymentWithinTx,
   discountAccrualWithinTx,
+  lockContractInstallmentsWithinTx,
   refundCollectedUnearnedWithinTx,
   reverseVoidedInstallmentsWithinTx,
   settleUnpaidUnearnedWithinTx,
@@ -57,7 +58,7 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
+import { deriveSettlementStatus } from '../common/settlement/settlement.util';
 import {
   ownerCollectionSplit,
   rentAmountsOf,
@@ -428,6 +429,15 @@ function changesTaxTreatment(
   return !next || next.classification !== declared.classification || next.inclusive !== declared.inclusive || next.exemptShare !== declared.exemptShare;
 }
 
+/**
+ * Locks the contract row before its state is read, so a receipt, a cancellation and a renewal of the same contract run one
+ * after another. NO KEY UPDATE, not UPDATE: the rent sweep holds installment locks while it inserts accrual rows that
+ * reference the contract, and a FOR UPDATE here would make the two wait on each other.
+ */
+async function lockContractRow(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  await tx.$queryRaw`SELECT "id" FROM "contracts" WHERE "id" = ${id} FOR NO KEY UPDATE`;
+}
+
 /** Rent accrual rows and collections on a contract; once there is one, what it was posted under stays. */
 async function postedRentRows(tx: Prisma.TransactionClient, contractId: string): Promise<number> {
   const [accrued, paid] = await Promise.all([tx.rentAccrual.count({ where: { contractId } }), tx.rentPayment.count({ where: { contractId } })]);
@@ -752,9 +762,8 @@ export class ContractsService {
       this.tenantPrisma.runInTenantContext(
         companyId,
         async (tx) => {
-        // الصفُّ يُقفل قبل قراءة حاله (توجيه ٢٧٤ · نظائرُ البندين 18 و27): إلغاءان متزامنان كانا يقرآن العقدَ قائماً معاً فيُرحَّل
-        // ما يتبعه مرّتين، وفيه ردُّ المقبوض نقداً. والثاني ينتظر هنا الآن ثم يقرأ «ملغى».
-        await lockDocumentRow(tx, 'contracts', id);
+        // Locked before it is read: two cancellations, or a cancellation and a receipt, wait here and the later one reads it cancelled.
+        await lockContractRow(tx, id);
         const existing = await tx.contract.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException(MSG.contract_not_found);
         if (existing.status === 'CANCELLED') throw new ConflictException(MSG.contract_already_cancelled);
@@ -955,6 +964,10 @@ export class ContractsService {
     // Retries on a journal-entry "no" collision from a concurrent payment.
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // Locked before anything is read: a cancellation or another receipt on the same contract finishes first, then this one
+        // reads what it left. Its installments are locked too, in the sweep's order, before any of them is billed.
+        await lockContractRow(tx, contractId);
+        await lockContractInstallmentsWithinTx(tx, contractId);
         // قبضٌ موازٍ بالمفتاح نفسِه سبق فكتب — لا يُكتب ثانٍ، ويُقرأ ما كُتب (`onceForKey`).
         if (idempotencyKey && (await tx.rentPayment.findFirst({ where: { clientRequestId: idempotencyKey }, select: { id: true } }))) throw new IdempotentReplay();
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
@@ -1307,8 +1320,8 @@ export class ContractsService {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         // Locked before it is read, as in a cancellation: two renewals, or a renewal and a cancellation, cannot both cut it.
-        await lockDocumentRow(tx, 'contracts', id);
-        const source = await tx.contract.findUnique({ where: { id }, include: { unit: { include: { property: true } }, renewedTo: true } });
+        await lockContractRow(tx, id);
+        const source =await tx.contract.findUnique({ where: { id }, include: { unit: { include: { property: true } }, renewedTo: true } });
         if (!source) throw new NotFoundException(MSG.contract_not_found);
         if (source.status === 'CANCELLED') throw new ConflictException(MSG.contract_cancelled_cannot_renew);
         // The unique constraint would catch this too, but as an opaque 500.
