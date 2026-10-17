@@ -6,6 +6,7 @@ import xpath from 'xpath';
 import { canonicalBytes, parseXml } from './canonicalize.util';
 import { formatMoney } from '../../common/money/rounding';
 import { qrTimestamp, type WallClock } from '../../common/wall-clock.util';
+import { tlvBytes } from '../qr.util';
 
 /**
  * The XAdES enveloped signature ZATCA requires inside `ext:UBLExtensions`.
@@ -117,11 +118,8 @@ export interface SignedInvoice {
   signatureBase64: string;
 }
 
-/** TLV with a **byte** length — an Arabic seller name is multi-byte, and using
- * the character count here produces a QR no scanner can parse. */
-function tlv(tag: number, value: Buffer): Buffer {
-  return Buffer.concat([Buffer.from([tag, value.length]), value]);
-}
+/** TLV with a byte length (an Arabic seller name is multi-byte), refusing a value over 255 bytes like the phase 1 builder. */
+const tlv = tlvBytes;
 
 function buildPhase2Qr(input: {
   sellerName: string;
