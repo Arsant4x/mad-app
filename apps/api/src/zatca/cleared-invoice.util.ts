@@ -4,7 +4,7 @@ import xpath from 'xpath';
 import { branchFilter } from '../branches/branch-scope.util';
 import { LINE_ORDER } from '../common/document-lines.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { type BuyerForInvoiceType, invoiceTypeFor, type LineForInvoiceType } from './hash-chain.util';
+import { type DocumentForInvoiceType, documentInvoiceType } from './hash-chain.util';
 import { parseXml } from './ubl/canonicalize.util';
 
 /**
@@ -77,18 +77,16 @@ export function zatcaFileName(xml: string): string | null {
  */
 export type ClearedCopyState = 'available' | 'missing' | null;
 
-interface ClearedCopyRow {
+interface ClearedCopyRow extends DocumentForInvoiceType {
   zatcaStatus: string;
   zatcaClearedXml: string | null;
-  customer: BuyerForInvoiceType;
-  lines: ReadonlyArray<LineForInvoiceType>;
 }
 
 /** صفُّ القائمة بلا المستند (نصٌّ كاملٌ لكلّ صفّ) وبحالِه مكانه — فالمستندُ يُنزَّل من طريقه وحدَه. */
 export function withClearedCopyState<T extends ClearedCopyRow>(row: T): Omit<T, 'zatcaClearedXml'> & { clearedCopy: ClearedCopyState } {
   const { zatcaClearedXml, ...rest } = row;
   const clearedCopy: ClearedCopyState =
-    zatcaClearedXml !== null ? 'available' : row.zatcaStatus === 'CLEARED' && invoiceTypeFor(row.customer, row.lines) === 'standard' ? 'missing' : null;
+    zatcaClearedXml !== null ? 'available' : row.zatcaStatus === 'CLEARED' && documentInvoiceType(row) === 'standard' ? 'missing' : null;
   return { ...rest, clearedCopy };
 }
 
@@ -110,6 +108,7 @@ export async function readClearedDelivery(
       no: true,
       zatcaStatus: true,
       zatcaClearedXml: true,
+      zatcaInvoiceType: true,
       customer: { select: { kind: true, vatNumber: true, country: true } },
       lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } },
     },
@@ -119,7 +118,7 @@ export async function readClearedDelivery(
     // والاسمُ من المستند نفسِه؛ وإن غابت إحدى قيمه الأربع سُمّي برقمه وحدَه (حدٌّ معلَن).
     return { fileName: zatcaFileName(invoice.zatcaClearedXml) ?? `${invoice.no.replace(/[^A-Za-z0-9]/g, '-')}.xml`, xml: invoice.zatcaClearedXml };
   }
-  if (invoiceTypeFor(invoice.customer, invoice.lines) === 'simplified') throw new ConflictException(MSG.invoice_xml_simplified_out_of_scope);
+  if (documentInvoiceType(invoice) === 'simplified') throw new ConflictException(MSG.invoice_xml_simplified_out_of_scope);
   if (invoice.zatcaStatus !== 'CLEARED') throw new ConflictException(formatMessage(MSG.invoice_xml_not_cleared, { no: invoice.no }));
   throw new ConflictException(formatMessage(MSG.invoice_xml_cleared_copy_missing, { no: invoice.no }));
 }

@@ -47,7 +47,7 @@ import {
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { IssueReplacementDto } from './dto/issue-replacement.dto';
 import { isReplacedRejected } from './active-documents.util';
-import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { documentInvoiceType, invoiceTypeFor } from '../zatca/hash-chain.util';
 import { readClearedDelivery, withClearedCopyState } from '../zatca/cleared-invoice.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { localDateOf } from '../common/wall-clock.util';
@@ -244,8 +244,8 @@ export class InvoicesService {
         // ⚖️ ذمّةُ العميل المحفوظةُ على فاتورة التجاوز رقمُ المنشأة كلِّها، فتسقط لمن لا يرى الفروعَ كلَّها (`ق-١٥٨١`)؛ والحدُّ يبقى.
         return withoutCompanyFigures(allowedBranchIds, {
           ...inv,
-          /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
-          invoiceType: invoiceTypeFor(inv.customer, inv.lines),
+          /** The document's type at the authority: the type it was signed as, or for one not yet signed its buyer's. The screen reads it and does not compute it. */
+          invoiceType: documentInvoiceType(inv),
           /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
           outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
           /** How much of this invoice has been credited back, so a screen can

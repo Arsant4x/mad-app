@@ -75,6 +75,12 @@ enum ZatcaStatus {
   REJECTED
 }
 
+/// The ZATCA type a document was signed as: standard documents are cleared, simplified ones reported.
+enum ZatcaInvoiceType {
+  STANDARD
+  SIMPLIFIED
+}
+
 /// Which ZATCA document kind an `invoices` row is. Credit/debit notes share
 /// the invoice table deliberately: the authority's hash chain and ICV counter
 /// run across ALL document types, so the chain queries in hash-chain.util.ts
@@ -1633,6 +1639,11 @@ model Invoice {
   /// الوسمَين ٧ و٩). وقبل الإرسال تُعاد تجزئةُ المخزون وتُقارَن بـ`zatcaHash` —
   /// حارسُ التعديل يحمي من نيّة، وهذا من عطل.
   zatcaSignedXml    String?   @db.Text
+  /// The type the document was signed as and the seven digit transaction code (KSA-2) its signed XML carries, written
+  /// with the signed document. The send, every retry, the list, the cleared copy and a note on this document read
+  /// these, never the buyer's current card. CHECK "invoices_zatca_type_matches_code" keeps the two in step.
+  zatcaInvoiceType     ZatcaInvoiceType?
+  zatcaTransactionCode String?
   /// ⚖️ **النسخةُ المجازة من الهيئة للفاتورة القياسية — وهي ما يُسلَّم للمشتري** (`ق-١٥٠٦` · R24): ما
   /// تعيده نقطةُ الإجازة في `clearedInvoice` بعد أن تضع ختمَها وتُحدّث رمزَها (الدليلُ الفنيّ التفصيليّ،
   /// الإصدار 2، ص50–51). لا `zatcaSignedXml` — تلك نسختُنا قبل الإجازة. **فارغةٌ** للمبسّطة (الإبلاغُ لا
