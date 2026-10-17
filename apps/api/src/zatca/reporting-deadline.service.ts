@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { NotificationKind, ZatcaStatus } from '@mad-app/db';
 import { secretIsSet } from '../common/crypto/secret.util';
+import { LINE_ORDER } from '../common/document-lines.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -48,6 +49,10 @@ export class ReportingDeadlineService {
     return { companies: companies.length, raised };
   }
 
+  /**
+   * One company in its own context. Company wide by design: the reporting duty is the company's under its
+   * tax number, so a document from any branch counts and the notice goes to the owner.
+   */
   async runForCompany(companyId: string, now: Date = new Date()): Promise<number> {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const credential = await tx.zatcaCredential.findUnique({ where: { companyId }, select: { productionCsidEnc: true, onboardedAt: true } });
@@ -67,7 +72,7 @@ export class ReportingDeadlineService {
           createdAt: true,
           issuedAt: true,
           customer: { select: { kind: true, vatNumber: true, country: true } },
-          lines: { select: { taxExemptionReasonCode: true } },
+          lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } },
         },
       });
 

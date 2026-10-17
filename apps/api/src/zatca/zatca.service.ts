@@ -100,7 +100,7 @@ export class ZatcaNoAnswerException extends ZatcaAttemptFailedException implemen
   readonly unanswered = true as const;
 
   constructor(reason: string) {
-    super(reason, MSG.zatca_no_answer);
+    super(reason, MSG.invoice_authority_no_answer);
   }
 }
 

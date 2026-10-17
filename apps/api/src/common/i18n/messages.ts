@@ -589,7 +589,7 @@ export const MSG = {
   /** ⚖️ سقوطُ المحاولة ليس جواباً من الهيئة (`ق-٩٧١`): يُرمى فيعود الطابور، ولا يُكتب `REJECTED`. */
   zatca_attempt_failed: 'zatca.attempt_failed',
   /** The authority gave no answer on the document; the outbox keeps resending it with no attempt limit. */
-  zatca_no_answer: 'zatca.no_answer',
+  invoice_authority_no_answer: 'invoices.authority_no_answer',
   // chain integrity. Deletion is refused for any document that took a place
   // in the sequence; editing is refused only once the authority has accepted
   // it (or may be about to) — see InvoicesService.
@@ -2144,7 +2144,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'تعذّرت المحاولة ولم تُجب الهيئة على المستند ({reason}) — المستند كما هو، وسيُعاد الإرسال آلياً بتراجع؛ وإن استُنفدت المحاولات بقي مُعلَناً في «صادرٌ لم يصل» ويُعاد يدوياً',
     en: 'The attempt failed without an answer from the authority ({reason}) — the document is unchanged and will be resent automatically with backoff; if the attempts run out it stays declared under "issued, not delivered" and can be resent manually',
   },
-  [MSG.zatca_no_answer]: {
+  [MSG.invoice_authority_no_answer]: {
     ar: 'لم تُجب الهيئة على المستند ({reason}) — المستند كما هو، وسيُعاد الإرسال آلياً مرةً كل ساعة على الأقل حتى تُجيب الهيئة',
     en: 'The authority gave no answer on the document ({reason}) — the document is unchanged and will be resent automatically, at least once an hour, until the authority answers',
   },
