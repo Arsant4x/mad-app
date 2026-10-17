@@ -157,5 +157,5 @@ export function raceHarness(companyId: () => string, holdClient: PrismaClient, p
     return { locked, heldWhenFired, blocked, responses };
   }
 
-  return { holdRow, releaseHolder, waitersBehind, rowLockState, raceBehindLock };
+  return { holdRow, releaseHolder, waitersBehind, waitUntilBlocked, rowLockState, raceBehindLock };
 }
