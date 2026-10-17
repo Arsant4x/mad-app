@@ -12,25 +12,11 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO } from './repo.mjs';
+import { REQUIRED_HEADINGS } from './research-headings.mjs';
+
+export { REQUIRED_HEADINGS };
 
 export const FIRST_UNDER_RULE = 1705;
-
-export const REQUIRED_HEADINGS = [
-  '## الموضوع',
-  '## الحال المقيس في الشيفرة',
-  '## ١. الأنظمة السعودية بنصوصها ومصادرها من الجهة نفسها',
-  '## ٢. المحاسبة والضريبة',
-  '## ٣. الأمن والخصوصية',
-  '## ٤. الجانب التقني',
-  '## ٥. السوق والمنافسون',
-  '## ٦. الفرق بين الأنشطة',
-  '## ٧. تجربة المستخدم',
-  '## ٨. التشغيل والتكلفة',
-  '## ٩. التوسع لدولة أو نشاط أو شركة كبيرة',
-  '## جوانبُ ظهر أنها غابت',
-  '## حدّ البحث',
-  '## الخلاصة',
-];
 
 const toLatin = (s) => s.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const RESEARCH_LINK = /`(docs\/research\/[^`\s]+\.md)`/g;
