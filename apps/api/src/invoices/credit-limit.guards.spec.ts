@@ -141,7 +141,7 @@ describe('حدُّ الائتمان — صفرٌ يعني بلا حدّ', () => 
     //    **وكلُّ عميلٍ في المنصّة اليوم عليه** — فقراءةُ الصفر حدّاً **تمنع كل
     //    بيعٍ آجلٍ لحظةَ التفعيل**، وهو انحدارٌ شاملٌ يبدو ميزة.
     const { tx, reads } = fakeTx(NO_CREDIT_LIMIT);
-    const check = await checkCreditLimit(tx as never, { customerId: 'c1', asOf: new Date(), addingBase: 999_999 });
+    const check = await checkCreditLimit(tx as never, { companyId: 'co1', customerId: 'c1', issueDate: new Date(), addingBase: 999_999 });
 
     expect({ exceeded: check.exceeded, limit: check.limit }).toEqual({ exceeded: false, limit: NO_CREDIT_LIMIT });
     // **والكلفةُ مقيسةٌ لا مرجَّحة**: استعلامُ الأعمار **لم يقع**.

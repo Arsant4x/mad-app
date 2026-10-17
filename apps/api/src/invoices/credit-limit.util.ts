@@ -1,5 +1,7 @@
 import { Prisma } from '@mad-app/db';
+import { companyToday } from '../common/company-day.util';
 import { round2 } from '../common/money/rounding';
+import { dayEndOf } from '../common/wall-clock.util';
 import { exposureOf } from '../reports/receivables-exposure.util';
 
 /**
@@ -63,7 +65,7 @@ export interface CreditCheck {
  */
 export async function checkCreditLimit(
   tx: Prisma.TransactionClient,
-  args: { customerId: string; asOf: Date; addingBase: number },
+  args: { companyId: string; customerId: string; issueDate: Date; addingBase: number },
 ): Promise<CreditCheck> {
   const customer = await tx.customer.findUnique({
     where: { id: args.customerId },
@@ -80,7 +82,10 @@ export async function checkCreditLimit(
     return { customerName, limit: NO_CREDIT_LIMIT, exposure: 0, adding, after: adding, exceeded: false };
   }
 
-  const exposure = await exposureOf(tx, args.customerId, args.asOf);
+  // Measured at the end of the later of the invoice day and the company's today, so a back-dated
+  // invoice still sees what the customer owes now, the same figure the aging report shows.
+  const today = await companyToday(tx, args.companyId);
+  const exposure = await exposureOf(tx, args.customerId, dayEndOf(args.issueDate > today ? args.issueDate : today));
   const after = round2(exposure + adding);
   return { customerName, limit, exposure, adding, after, exceeded: after > limit };
 }

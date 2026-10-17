@@ -512,8 +512,9 @@ export class InvoicesService {
     if (credit.settlement === 'REPLACEMENT') return null;
 
     const check = await checkCreditLimit(tx, {
+      companyId,
       customerId: args.customerId,
-      asOf: args.issueDate,
+      issueDate: args.issueDate,
       addingBase: args.addingBase,
     });
     if (!check.exceeded) return null;
