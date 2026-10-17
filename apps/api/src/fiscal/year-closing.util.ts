@@ -146,6 +146,19 @@ export async function closeFiscalYearWithinTx(
 
   if (await activeClosingEntry(tx, year.id)) throw new ConflictException(MSG.fiscal_year_already_closed);
 
+  // A closed later year already carried this year's cumulative result into retained earnings, so closing this one now
+  // would transfer it twice. Later rows are locked in start order, so a concurrent close of a later year waits or is seen.
+  const laterYears = await tx.$queryRaw<{ id: string; name: string }[]>`
+    SELECT "id", "name" FROM "fiscal_years"
+    WHERE "companyId" = ${companyId} AND "start" > ${year.end.toISOString().slice(0, 10)}::date
+    ORDER BY "start"
+    FOR UPDATE`;
+  for (const later of laterYears) {
+    if (await activeClosingEntry(tx, later.id)) {
+      throw new ConflictException(formatMessage(MSG.fiscal_year_later_year_closed, { year: later.name }));
+    }
+  }
+
   const balances = await resultBalancesAsOf(tx, year.end);
   if (balances.length === 0) throw new ConflictException(MSG.fiscal_year_nothing_to_close);
 
