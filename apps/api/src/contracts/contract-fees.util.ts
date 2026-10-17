@@ -1,6 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
+import { PeriodClosedException } from '../fiscal/period-lock.util';
 import { postClaimIssueEntry } from '../journal/auto-posting.util';
 import { chargeTaxOn } from '../journal/charge-tax.util';
 
@@ -69,8 +69,8 @@ export async function raiseDueFeesWithinTx(tx: Prisma.TransactionClient, company
         });
         journalEntryId = entry?.id ?? null;
       } catch (e) {
-        // قفلُ الفترة يُرمى قبل أي كتابة (`assertPeriodOpen`) — فالمعاملةُ صالحةٌ ويُعدّ القسط، كاستحقاق الإيجار.
-        if (e instanceof BadRequestException) {
+        // The period lock throws before anything is written, so the transaction stays usable and the instalment is counted.
+        if (e instanceof PeriodClosedException) {
           result.blockedByPeriodLock += 1;
           continue;
         }

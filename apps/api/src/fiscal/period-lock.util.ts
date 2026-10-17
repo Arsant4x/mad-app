@@ -61,6 +61,12 @@ export async function assertPeriodOpen(tx: Prisma.TransactionClient, date: Date)
   if (!period) throw new ConflictException(MSG.fiscal_no_period_for_date);
 
   if (period.status === 'CLOSED') {
-    throw new ConflictException(formatMessage(MSG.fiscal_period_closed, { period: periodLabel(month, year) }));
+    throw new PeriodClosedException(formatMessage(MSG.fiscal_period_closed, { period: periodLabel(month, year) }));
   }
 }
+
+/**
+ * The refusal of a posting dated in a closed period. A 409 like any conflict; its own class lets the rent and fee sweeps
+ * count the instalment it holds back while every other error still fails them.
+ */
+export class PeriodClosedException extends ConflictException {}
