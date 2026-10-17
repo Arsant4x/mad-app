@@ -34,6 +34,10 @@ const CASH_FLOW_ACCOUNTS = [
   { code: '2200', name: 'ضريبة القيمة المضافة المستحقة' },
 ];
 
+/** Year closing entries and their reversals move the result to retained earnings; they are not
+ * revenue or expense of the period, so period result reports leave them out. Cash flow keeps them. */
+const PERIOD_RESULT_ENTRIES = { closingForFiscalYearId: null } satisfies Prisma.JournalEntryWhereInput;
+
 // الإيرادُ المؤجَّل ومقدَّمُ العملاء وبقيّةُ الحسابات تُقرأ في `cash-flow.util.ts` من كلِّ حسابٍ لا من قائمةٍ مسرودة (توجيه ٢٧٨).
 
 /**
@@ -464,7 +468,7 @@ export class ReportsService {
       // تُسقَط في الحلقة — والنتيجةُ واحدة، لكن المرشِّحَ في الاستعلام هو ما
       // يقرؤه الحارس، والصفوفُ المقروءةُ أقلّ.
       const lines = await tx.journalLine.findMany({
-        where: { journalEntry: { ...branchFilter(allowedBranchIds), ...(date ? { date } : {}) } },
+        where: { journalEntry: { ...branchFilter(allowedBranchIds), ...PERIOD_RESULT_ENTRIES, ...(date ? { date } : {}) } },
         select: { accountId: true, debit: true, credit: true, journalEntry: { select: { branchId: true } } },
       });
 
@@ -594,7 +598,7 @@ export class ReportsService {
     assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
-      const movements = await this.movementsByAccount(tx, range);
+      const movements = await this.movementsByAccount(tx, range, PERIOD_RESULT_ENTRIES);
 
       const revenue = accounts
         .filter((a) => a.type === 'revenue')
@@ -757,7 +761,7 @@ export class ReportsService {
       const ledger = cards.has('revenue') || cards.has('expenses') || cards.has('netProfit') || cards.has('monthly');
       const ownBranches = ownBranchesFilter(allowedBranchIds);
       const accounts = ledger ? await tx.account.findMany({ select: { id: true, type: true } }) : [];
-      const movements = ledger ? await this.movementsByAccount(tx, range, ownBranches) : new Map<string, Movement>();
+      const movements = ledger ? await this.movementsByAccount(tx, range, { ...ownBranches, ...PERIOD_RESULT_ENTRIES }) : new Map<string, Movement>();
       const revenueIds = accounts.filter((a) => a.type === 'revenue').map((a) => a.id);
       const expenseIds = accounts.filter((a) => a.type === 'expense').map((a) => a.id);
       const totalRevenue = revenueIds.reduce((s, id) => s + this.periodAmount(movements, id, 'credit'), 0);
@@ -774,7 +778,7 @@ export class ReportsService {
       const seriesEnd = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
       const lines = cards.has('monthly') && revenueIds.length
         ? await tx.journalLine.findMany({
-            where: { accountId: { in: revenueIds }, journalEntry: { ...ownBranches, date: { gte: firstMonth, lte: seriesEnd } } },
+            where: { accountId: { in: revenueIds }, journalEntry: { ...ownBranches, ...PERIOD_RESULT_ENTRIES, date: { gte: firstMonth, lte: seriesEnd } } },
             select: { debit: true, credit: true, journalEntry: { select: { date: true } } },
           })
         : [];

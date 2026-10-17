@@ -54,6 +54,43 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
   const periodResultLine = (sheet: Sheet) => sheet.equity.find((l) => l.name.includes('نتيجة الفترة'));
   const retainedLine = (sheet: Sheet) => sheet.equity.find((l) => l.code === RETAINED_EARNINGS_CODE);
 
+  // The closing entry is a bookkeeping transfer, so the year's 1000 revenue, 400 expense
+  // and 600 result must survive it in every period report that shows revenue and expense.
+  const expectYearResultShown = async () => {
+    const range = 'from=2024-01-01&to=2024-12-31';
+    const income = (await auth(http().get(`/reports/income-statement?${range}`)).expect(200)).body as {
+      totalRevenue: string;
+      totalExpenses: string;
+      netProfit: string;
+    };
+    expect({ totalRevenue: income.totalRevenue, totalExpenses: income.totalExpenses, netProfit: income.netProfit }).toEqual({
+      totalRevenue: '1000.00',
+      totalExpenses: '400.00',
+      netProfit: '600.00',
+    });
+
+    const dashboard = (await auth(http().get(`/reports/dashboard?${range}`)).expect(200)).body as {
+      revenue: string;
+      expenses: string;
+      netProfit: string;
+      monthly: { month: string; revenue: string }[];
+    };
+    expect({ revenue: dashboard.revenue, expenses: dashboard.expenses, netProfit: dashboard.netProfit }).toEqual({
+      revenue: '1000.00',
+      expenses: '400.00',
+      netProfit: '600.00',
+    });
+    expect(dashboard.monthly.find((m) => m.month === '2024-03')?.revenue).toBe('1000.00');
+    expect(dashboard.monthly.find((m) => m.month === '2024-12')?.revenue).toBe('0.00');
+
+    const branches = (await auth(http().get(`/reports/branch-summary?${range}`)).expect(200)).body as {
+      unassigned: { revenue: string; expenses: string; netIncome: string };
+      consolidated: { revenue: string; expenses: string; netIncome: string };
+    };
+    expect(branches.consolidated).toMatchObject({ revenue: '1000.00', expenses: '400.00', netIncome: '600.00' });
+    expect(branches.unassigned).toMatchObject({ revenue: '1000.00', expenses: '400.00', netIncome: '600.00' });
+  };
+
   const closeAllPeriods = async (skip = 0) => {
     for (const id of periodIds.slice(skip)) await auth(http().patch(`/fiscal-years/periods/${id}/close`)).expect(200);
   };
@@ -129,6 +166,10 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     expect(entry.lines).toHaveLength(3);
   });
 
+  it('income statement, dashboard and branch summary of a closed year still show its result', async () => {
+    await expectYearResultShown();
+  });
+
   it('⭐ ③ والمركزُ المالي بتاريخ النهاية: لا سطرَ «نتيجة الفترة»، والمبقاةُ ٦٠٠، ومتوازن', async () => {
     const sheet = await sheetAt('2024-12-31');
     expect(sheet.asOf).toBe('2024-12-31');
@@ -160,5 +201,9 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     const sheet = await sheetAt('2024-12-31');
     expect(periodResultLine(sheet)).toBeUndefined();
     expect(retainedLine(sheet)?.amount).toBe('600.00');
+  });
+
+  it('after a reversal and a second closing the period reports still show the year result', async () => {
+    await expectYearResultShown();
   });
 });
