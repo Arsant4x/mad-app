@@ -88,12 +88,23 @@ export class PosCardVerificationsService {
   async raiseOverdue(companyId: string, now = new Date()): Promise<number> {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const { days, rows } = await this.rows(tx, companyId, 'all', now);
+      const overdue = rows.filter((x) => x.overdue).map((r) => ({ r, key: `pos-card-unmatched:${r.posPaymentId}` }));
+      if (overdue.length === 0) return 0;
+      // Asked once up front so a duplicate never reaches the unique index, which would abort this transaction.
+      const already = new Set(
+        (
+          await tx.notification.findMany({
+            where: { kind: 'POS_CARD_UNMATCHED', dedupeKey: { in: overdue.map((o) => o.key) } },
+            select: { dedupeKey: true },
+          })
+        ).map((n) => n.dedupeKey),
+      );
       let raised = 0;
-      for (const r of rows.filter((x) => x.overdue)) {
+      for (const { r, key } of overdue.filter((o) => !already.has(o.key))) {
         const how = r.verification === 'MANUAL_EVIDENCE' ? `حسمٌ يدويٌّ بدليل${r.resolvedByName ? ` (${r.resolvedByName})` : ''}` : 'بيعٌ دون اتصالٍ برقم مرجع الجهاز';
         const created = await NotificationsService.raise(tx, companyId, {
           kind: 'POS_CARD_UNMATCHED',
-          dedupeKey: `pos-card-unmatched:${r.posPaymentId}`,
+          dedupeKey: key,
           title: `دفعةُ بطاقةٍ لم تطابقها التسوية — الكاشير ${r.cashierName ?? '—'}`,
           body: `الفاتورة ${r.invoiceNo} (${r.issueDate}) · ${r.amount} · ${how} · مرجعُ الجهاز ${r.deviceReference ?? '—'} — لم تطالب بها تسويةُ الشبكة بعد ${days} أيام من البيع. راجعها مع كشف المستحوذ.`,
           linkScreen: 'pos',
