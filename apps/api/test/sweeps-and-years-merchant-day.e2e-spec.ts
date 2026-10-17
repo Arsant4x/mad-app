@@ -164,6 +164,14 @@ describe('Sweeps, statuses and fiscal years take the merchant day (e2e)', () => 
       expect(await instalmentStatus(monthEndId, '2026-10-31')).toBe('LATE');
     });
 
+    // Before the sweep below, which would accrue this instalment too.
+    it('accrues the instalment a receipt dated the merchant day pays', async () => {
+      const body = (await auth(http().get(`/contracts/${paidId}`)).expect(is(200))).body as { installments: { id: string; dueDate: string }[] };
+      const november = body.installments.find((i) => i.dueDate.slice(0, 10) === NOVEMBER_FIRST)!;
+      await auth(http().post(`/contracts/${paidId}/payments`)).send({ installmentId: november.id, date: NOVEMBER_FIRST, amount: 1150, method: 'CASH' }).expect(is(201));
+      expect(await accruedDueDays(paidId)).toEqual(['2026-10-01', NOVEMBER_FIRST]);
+    });
+
     it('accrues the instalment due on the merchant day in the nightly sweep', async () => {
       await app.get(RentAccrualService).runForCompany(company.companyId);
       expect(await accruedDueDays(sweptId)).toEqual(['2026-10-01', NOVEMBER_FIRST]);
@@ -184,13 +192,6 @@ describe('Sweeps, statuses and fiscal years take the merchant day (e2e)', () => 
       const fee = (await auth(http().post(`/contracts/${addFeeId}/fees`)).send({ label: 'storage', amount: 40 }).expect(is(201))).body as { raisedClaims: number };
       expect(fee.raisedClaims).toBe(1);
       expect(await feeClaimDueDays(addFeeId)).toEqual([NOVEMBER_FIRST]);
-    });
-
-    it('accrues the instalment a receipt dated the merchant day pays', async () => {
-      const body = (await auth(http().get(`/contracts/${paidId}`)).expect(is(200))).body as { installments: { id: string; dueDate: string }[] };
-      const november = body.installments.find((i) => i.dueDate.slice(0, 10) === NOVEMBER_FIRST)!;
-      await auth(http().post(`/contracts/${paidId}/payments`)).send({ installmentId: november.id, date: NOVEMBER_FIRST, amount: 1150, method: 'CASH' }).expect(is(201));
-      expect(await accruedDueDays(paidId)).toEqual(['2026-10-01', NOVEMBER_FIRST]);
     });
 
     it('creates a renewal starting on the merchant day as live and accrues its first instalment', async () => {
