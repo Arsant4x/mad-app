@@ -1,12 +1,13 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Prisma } from '@mad-app/db';
+import { Prisma, PrismaClient } from '@mad-app/db';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { DEFAULT_LANGUAGE, formatMessage, MSG, resolveMessage } from '../src/common/i18n/messages';
-import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { raceHarness } from './forced-race';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): معلَنةٌ لا مقيسة — لم يُشغَّل `jest` في بناء هذه الحزمة؛ تُعايَر بثلاثة أضعاف المقيس بعد أوّل تشغيل.
@@ -35,7 +36,9 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
   let app: INestApplication;
   let token: string;
   let company: IsolatedCompany;
-  let tenantPrisma: TenantPrismaService;
+  let holdClient: PrismaClient;
+  let probe: PrismaClient;
+  let race: ReturnType<typeof raceHarness>;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
@@ -107,10 +110,14 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'paid-purchase-rate');
     token = company.token;
-    tenantPrisma = app.get(TenantPrismaService);
+    holdClient = new PrismaClient();
+    probe = new PrismaClient();
+    race = raceHarness(() => company.companyId, holdClient, probe);
   });
 
   afterAll(async () => {
+    await holdClient?.$disconnect();
+    await probe?.$disconnect();
     await removeIsolatedCompany(app, company);
     await app.close();
   });
@@ -243,18 +250,20 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
     const supplierId = await newSupplier('متزامن');
     const purchase = await makeUsdPurchase(supplierId);
 
-    // «السندُ في الطريق» بخطوتَي السند نفسِها (`lockAndAssertAllocationsFit` ثم إنشاءُ السند بتخصيصه): يقفل صفَّ الشراء
-    // ويكتب تخصيصاً بـ100، **ولا يلتزم حتى يرى التعديلَ محجوزاً خلف قفله** (`pg_blocking_pids`) — فالتداخلُ مفروضٌ لا
-    // متروكٌ للتوقيت (`§8.8` الوجه الثالث): بالقفل يُحجز التعديلُ **قبل** قراءة المخصَّص، وبلا قفلٍ يُحجز عند كتابة الصفّ
-    // **بعد** أن قرأ صفراً. وسقفُ الانتظار ١٠ ث (١٠٠ × ٠٫١) كي لا يعلق الاختبار إن لم يُحجز شيء.
-    // ولا قيدَ هنا ولا إعادةَ حساب حالة: الحارسُ يقرأ التخصيصَ وحدَه.
-    let written: () => void = () => undefined;
-    const allocationWritten = new Promise<void>((resolve) => {
-      written = () => resolve();
+    // A payment in flight, in the payment's own two steps: it locks the purchase row, writes a 100 allocation, and commits
+    // only once the edit is seen waiting behind its lock. With the lock the edit waits before it reads the allocation;
+    // without it the edit reads zero and waits only at the row write. No journal entry here: the guard reads allocations.
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((done) => {
+      release = () => done();
     });
-    const inFlight = tenantPrisma.runInTenantContext(
-      company.companyId,
+    let held: (pid: number) => void = () => undefined;
+    const holderPid = new Promise<number>((done) => {
+      held = done;
+    });
+    const inFlight = holdClient.$transaction(
       async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${company.companyId}, true)`;
         await tx.$executeRaw`SELECT "id" FROM "purchases" WHERE "id" = ${purchase.id} FOR UPDATE`;
         await tx.supplierPayment.create({
           data: {
@@ -270,22 +279,33 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
             allocations: { create: [{ companyId: company.companyId, purchaseId: purchase.id, amount: 100 }] },
           } as unknown as Prisma.SupplierPaymentUncheckedCreateInput,
         });
-        written();
-        for (let i = 0; i < 100; i += 1) {
-          const [blocked] = await tx.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE pg_backend_pid() = ANY(pg_blocking_pids(pid))`;
-          if (blocked.n > 0) break;
-          await tx.$executeRaw`SELECT pg_sleep(0.1)`;
-        }
+        const [{ pid }] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        held(pid);
+        await released;
       },
-      { timeout: 20000 },
+      { timeout: 60000, maxWait: 60000 },
     );
-    // سقوطُ السند قبل الإشارة يُسقط الاختبارَ بسببه — لا بانتظار مهلة الحزمة.
-    await Promise.race([allocationWritten, inFlight.then(() => undefined)]);
 
-    // بالقفل: التعديلُ ينتظر حتى يلتزم السند، ثم يقرأ المخصَّصَ 100 ⟵ 409 بـ'100.00'.
-    // وبلا قفل: يقرأ صافياً صفراً (التخصيصُ لم يلتزم بعد) ثم ينتظر عند كتابة الصفّ ويكتب السعرَ الجديد بعد التزامه ⟵ 200.
-    const res = await auth(http().patch(`/purchases/${purchase.id}`)).send({ exchangeRate: 3.6 });
+    // The wait is read from the probe, one statement per poll: inside the held transaction pg_stat_activity keeps the
+    // snapshot of its first read and never shows a backend that connected later. Closing the app pool first makes the
+    // edit always arrive on such a late connection, as it did on CI.
+    let pending: Promise<request.Response> | undefined;
+    let blocked = 0;
+    try {
+      const pid = await Promise.race([holderPid, inFlight.then((): number => { throw new Error('the payment ended before holding the lock'); })]);
+      await app.get(PrismaService).$disconnect();
+      pending = auth(http().patch(`/purchases/${purchase.id}`)).send({ exchangeRate: 3.6 }).then((r) => r);
+      blocked = await race.waitUntilBlocked(pid, 1);
+    } finally {
+      release();
+      await Promise.allSettled([inFlight]);
+    }
     await inFlight;
+    expect(blocked).toBe(1);
+
+    // With the lock the edit waits until the payment commits, then reads 100 allocated: 409 with '100.00'.
+    // Without it the edit reads zero (the allocation is not committed yet), waits at the row write and writes the new rate: 200.
+    const res = await pending!;
     expect(res.status).toBe(409);
     expect(res.body.message).toBe(frozenMessage(purchase.no, '100.00'));
 
