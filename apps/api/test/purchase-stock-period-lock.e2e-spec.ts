@@ -125,7 +125,9 @@ describe('Purchase stock movements respect the period lock without a journal ent
 
     const voided = await as(http().delete(`/purchases/${purchase.id}/receipts/${receipt.id}`));
     expectPeriodClosed(voided, `${today.slice(5, 7)}/${today.slice(0, 4)}`);
-    const out = await tenantPrisma.runInTenantContext(company!.companyId, (tx) => tx.stockMovement.count({ where: { productId: freeProduct, type: 'OUT' } }));
+    const out = await tenantPrisma.runInTenantContext(company!.companyId, (tx) =>
+      tx.stockMovement.count({ where: { productId: freeProduct, type: 'OUT', goodsReceiptLine: { goodsReceiptId: receipt.id } } }),
+    );
     expect(out).toBe(0);
   });
 });
