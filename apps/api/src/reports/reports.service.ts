@@ -11,6 +11,7 @@ import { LINE_ORDER } from '../common/document-lines.util';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
+import { CASH_IN_TRANSIT_CODE } from '../journal/pos-settlement.util';
 import { CASH_CODE, cashFlowStatement } from './cash-flow.util';
 import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } from './dto/report-range.dto';
 import { readLedger, sideOfAccountType } from './ledger.util';
@@ -693,11 +694,12 @@ export class ReportsService {
       //    وافتتاحيُّ البنك والصندوق وافتتاحيُّ المخزون — وإلا قُرئ رصيدُ يوم الدخول نقداً دخل في الفترة.
       const opening = accounts.find((a) => a.code === OPENING_EQUITY_CODE);
       const movements = await this.movementsByAccount(tx, range, opening ? { lines: { none: { accountId: opening.id } } } : {});
-      // حساباتُ النقد: `1000` وكلُّ بنكٍ وصندوقٍ ودرجٍ بحسابه — يُقاس تغيّرُها مباشرةً ويُطابَق بمجموع الأقسام.
+      // Cash accounts: 1000, cash in transit 1190 (a drawer deposit not yet confirmed by the bank is still cash),
+      // and every bank, cash box and drawer account; their change is measured directly and matched to the sections.
       const banks = await tx.bank.findMany({ select: { accountId: true } });
       const drawers = await tx.cashDrawer.findMany({ select: { accountId: true } });
       const cashIds = new Set<string>([
-        ...accounts.filter((a) => a.code === CASH_CODE).map((a) => a.id),
+        ...accounts.filter((a) => a.code === CASH_CODE || a.code === CASH_IN_TRANSIT_CODE).map((a) => a.id),
         ...banks.map((b) => b.accountId),
         ...drawers.map((d) => d.accountId),
       ]);
