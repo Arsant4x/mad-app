@@ -229,7 +229,7 @@ export class ObligationsService {
       const [invoices, rent, firstInvoice] = await Promise.all([
         tx.invoice.findMany({
           where: { issueDate: { gte: previous.from, lte: previous.to }, ...NOT_REPLACED_REJECTED },
-          select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+          select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
         }),
         this.rentSection(tx, previous.from, previous.to),
         tx.invoice.findFirst({ orderBy: { issueDate: 'asc' }, select: { issueDate: true } }),
@@ -536,7 +536,7 @@ export class ObligationsService {
     const [invoices, purchases, rent] = await Promise.all([
       tx.invoice.findMany({
         where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED },
-        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
       }),
       tx.purchase.findMany({
         where: { date: { gte: from, lte: to }, excludeFromVat: false, exempt: false, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] } },
@@ -601,7 +601,7 @@ export class ObligationsService {
     const [invoices, rentRows] = await Promise.all([
       tx.invoice.findMany({
         where: { issueDate: { gte: window.from, lte: window.to }, ...NOT_REPLACED_REJECTED },
-        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
       }),
       tx.rentAccrual.findMany({ where: { date: { gte: window.from, lte: window.to }, managed: false, taxable: true }, select: { amountNet: true, exchangeRate: true } }),
     ]);
@@ -634,7 +634,7 @@ export class ObligationsService {
           select: {
             docType: true,
             exchangeRate: true,
-            lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
+            lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
           },
         }),
         tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: purchaseSelect }),
@@ -649,7 +649,7 @@ export class ObligationsService {
             net: true,
             vat: true,
             prepaymentInvoice: {
-              select: { exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+              select: { exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
             },
           },
         }),
@@ -1130,6 +1130,8 @@ export class ObligationsService {
 interface DeclarationLine {
   quantity: Prisma.Decimal | number;
   unitPrice: Prisma.Decimal | number;
+  /** Line discount as an amount; the line net is quantity x price minus it, as in the ledger. */
+  discount: Prisma.Decimal | number;
   taxRate: Prisma.Decimal | number;
   taxCategory: string;
   taxExemptionReasonCode: string | null;
@@ -1170,6 +1172,7 @@ export function salesBoxesFromLines(invoices: readonly { sign: number; exchangeR
     const lines = inv.lines.map((l) => ({
       quantity: Number(l.quantity),
       unitPrice: Number(l.unitPrice),
+      discount: Number(l.discount),
       taxRate: Number(l.taxRate),
       taxCategory: l.taxCategory,
       taxExemptionReasonCode: l.taxExemptionReasonCode,
