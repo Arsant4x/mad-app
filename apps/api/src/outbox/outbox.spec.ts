@@ -1,4 +1,4 @@
-import { MAX_ATTEMPTS, nextDelayMs, OutboxService } from './outbox.service';
+import { isUnansweredDelivery, MAX_ATTEMPTS, nextDelayMs, OutboxService } from './outbox.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 
@@ -130,5 +130,64 @@ describe('طابور الإرسال (Outbox)', () => {
     expect(nextDelayMs(3)).toBe(240_000);
     expect(nextDelayMs(20)).toBe(3_600_000);
     expect(nextDelayMs(0)).toBe(60_000);
+  });
+
+  it('the backoff stays a finite hour however many attempts a row has made', () => {
+    for (const attempts of [7, 100, 1025, 100_000]) expect(nextDelayMs(attempts)).toBe(3_600_000);
+  });
+
+  it('an unanswered delivery past the attempt limit stays pending and is due again within the hour', async () => {
+    const rows = [row({ attempts: MAX_ATTEMPTS + 10 })];
+    const svc = serviceOn(rows);
+    svc.register('invoice.issued', async () => {
+      throw Object.assign(new Error('fetch failed'), { unanswered: true });
+    });
+
+    expect(await svc.dispatchForCompany('c1', 20, NOW)).toEqual({ claimed: 1, sent: 0, retried: 1, failed: 0 });
+    expect(rows[0].status).toBe('PENDING');
+    expect(rows[0].attempts).toBe(MAX_ATTEMPTS + 11);
+    expect(rows[0].lastError).toBe('fetch failed');
+    expect(rows[0].availableAt.getTime()).toBe(NOW.getTime() + 3_600_000);
+  });
+
+  it('an unanswered delivery is retried through the whole 24 hour reporting window, never more than an hour apart', async () => {
+    const rows = [row({ availableAt: NOW })];
+    const svc = serviceOn(rows);
+    svc.register('invoice.issued', async () => {
+      throw Object.assign(new Error('fetch failed'), { unanswered: true });
+    });
+
+    const tried: number[] = [];
+    let now = NOW;
+    while (now.getTime() - NOW.getTime() <= 24 * 3_600_000) {
+      expect((await svc.dispatchForCompany('c1', 20, now)).retried).toBe(1);
+      tried.push(now.getTime());
+      expect(rows[0].status).toBe('PENDING');
+      now = rows[0].availableAt;
+    }
+    const gaps = tried.slice(1).map((t, i) => (t - tried[i]) / 60_000);
+    // 1, 2, 4, 8, 16 and 32 minutes, then the hourly cap until the window is over.
+    expect(gaps.slice(0, 7)).toEqual([1, 2, 4, 8, 16, 32, 60]);
+    expect(Math.max(...gaps)).toBe(60);
+    expect(tried.length).toBeGreaterThan(MAX_ATTEMPTS * 4);
+  });
+
+  it('a failure that is not marked unanswered still ends FAILED at the attempt limit', async () => {
+    const rows = [row({ attempts: MAX_ATTEMPTS - 1 })];
+    const svc = serviceOn(rows);
+    svc.register('invoice.issued', async () => {
+      throw Object.assign(new Error('signing failed'), { unanswered: false });
+    });
+
+    expect((await svc.dispatchForCompany('c1', 20, NOW)).failed).toBe(1);
+    expect(rows[0].status).toBe('FAILED');
+  });
+
+  it('only an object that says it is unanswered is treated as one', () => {
+    expect(isUnansweredDelivery(Object.assign(new Error('x'), { unanswered: true }))).toBe(true);
+    expect(isUnansweredDelivery(new Error('x'))).toBe(false);
+    expect(isUnansweredDelivery({ unanswered: 'yes' })).toBe(false);
+    expect(isUnansweredDelivery(null)).toBe(false);
+    expect(isUnansweredDelivery('fetch failed')).toBe(false);
   });
 });

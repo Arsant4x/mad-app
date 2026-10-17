@@ -6,8 +6,21 @@ import { events, type DomainEvent } from '../shared/events/event-bus';
 // ⚖️ سببٌ يُخزَّن ويُقرأ (`ق-٩٧١`) — كان هنا، وصار المصدرَ الواحدَ لكلّ نصٍّ خارجيٍّ يُكتب (`ق-٩٨٢`).
 import { storableError, storableText } from '../common/i18n/storable-text';
 
-/** كم محاولة قبل أن يُعلَن الصفّ فاشلاً ويبقى ليُرى. */
+/** Attempts before a row is declared FAILED and left to be seen. An unanswered delivery never reaches this limit. */
 export const MAX_ATTEMPTS = 6;
+
+/**
+ * A dispatch failure in which the receiving side gave no answer on the event (no connection, a timeout,
+ * or a reply that is not a verdict). Such a row is retried on the capped backoff with no terminal state,
+ * because waiting is what heals it; every other failure still ends FAILED after MAX_ATTEMPTS.
+ */
+export interface UnansweredDelivery {
+  readonly unanswered: true;
+}
+
+export function isUnansweredDelivery(e: unknown): e is UnansweredDelivery {
+  return typeof e === 'object' && e !== null && (e as Partial<UnansweredDelivery>).unanswered === true;
+}
 
 /**
  * ⭐ **`FAILED` لا يعني انتهاءً** (`ق-١٨٢`/٣): صفوفٌ استُنفدت محاولاتها تعود إلى
@@ -197,7 +210,7 @@ export class OutboxService {
         result = { ...result, sent: result.sent + 1 };
         continue;
       }
-      const exhausted = row.attempts + 1 >= MAX_ATTEMPTS;
+      const exhausted = !isUnansweredDelivery(failure) && row.attempts + 1 >= MAX_ATTEMPTS;
       // النداءُ في موضع الكتابة نفسِه — فحارسُ الأعمدة المعلَنة يقرأ الشكلَ لا المتغيّر.
       await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
         tx.outboxEvent.update({ where: { id: row.id }, data: { status: exhausted ? 'FAILED' : 'PENDING', lastError: storableError(failure) } }),
