@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createCashDeposit, listCashDeposits, voidCashDeposit, type Bank, type CashDeposit, type CashDepositList } from '../../api/banks';
 import { listCashDrawers, type CashDrawer } from '../../api/cashDrawers';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { fmt, today } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -19,6 +20,8 @@ const STATUS_LABEL: Record<CashDeposit['status'], { key: string; cls: string }> 
 
 export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: () => void }) {
   const { t } = useTranslation();
+  // A deposit and its void both need record on banks; without it the panel only reads.
+  const canRecord = usePermissions().can('banks', 'record');
   const [data, setData] = useState<CashDepositList | null>(null);
   const [drawers, setDrawers] = useState<CashDrawer[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +98,7 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
         {error && <div className="error-text">{error}</div>}
         {notice && <div className="muted" data-testid="deposit-notice">{notice}</div>}
 
+        {canRecord && (
         <div className="card">
           <strong>{t('banks.deposits.new')}</strong>
           <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
@@ -141,6 +145,7 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
             </button>
           </div>
         </div>
+        )}
 
         {data && (
           <>
@@ -192,7 +197,7 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
                         <span className={STATUS_LABEL[d.status].cls}>{t(STATUS_LABEL[d.status].key)}</span>
                       </td>
                       <td>
-                        {d.status === 'IN_TRANSIT' && (
+                        {canRecord && d.status === 'IN_TRANSIT' && (
                           <button className="btn link" onClick={() => voidOne(d)}>
                             {t('banks.void_reverse')}
                           </button>

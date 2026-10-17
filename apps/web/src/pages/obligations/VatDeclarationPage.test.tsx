@@ -3,12 +3,19 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VatDeclarationPage } from './VatDeclarationPage';
 import * as api from '../../api/obligations';
+import i18n from '../../i18n';
+import { grants, resetGrants } from '../../test/grants';
+import { hasButton } from '../../test/rowMenu';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (3.7 ث).
 //    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
 vi.setConfig({ testTimeout: 12_000 });
 
 vi.mock('../../api/obligations');
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).permissionsModule());
+
+// Every action held unless a test says otherwise: the limits below are not about the grant.
+beforeEach(() => resetGrants('*'));
 
 const declaration = (limits: api.VatDeclaration['limits']): api.VatDeclaration => ({
   year: 2026,
@@ -115,5 +122,56 @@ describe('حدودُ الإقرار المعلَنة', () => {
     );
     await screen.findByText(/عن الفترة من/);
     expect(screen.queryByTestId('vat-limit')).toBeNull();
+  });
+});
+
+/** Declaring the ratio and marking the return filed record; settling the ratio reviews. */
+describe('VAT return controls follow the actions', () => {
+  const proportional = (): api.VatDeclaration => {
+    const d = declaration([]);
+    return { ...d, proportional: { ...d.proportional, applies: true, settlement: { settledAt: null } as never } };
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.getVatDeclaration).mockResolvedValue(proportional());
+    vi.mocked(api.getVatRatio).mockResolvedValue({
+      year: 2026,
+      declared: null,
+      suggestion: { basedOnYear: 2025, ratio: 0.8, taxableSupplies: '80.00', exemptSupplies: '20.00', coversPreviousYear: true, note: 'Suggested' },
+    });
+  });
+
+  async function shown() {
+    render(
+      <MemoryRouter>
+        <VatDeclarationPage />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('vat-ratio-card');
+  }
+
+  it('a view only employee reads the return and the ratio with no control', async () => {
+    resetGrants('obligations:view');
+    await shown();
+    expect(screen.queryByTestId('vat-ratio-save')).toBeNull();
+    expect(screen.queryByTestId('vat-ratio-settle')).toBeNull();
+    expect(hasButton(i18n.t('obligations.vat.mark_filed'))).toBe(false);
+  });
+
+  it('record declares and marks filed; review settles', async () => {
+    resetGrants('obligations:view');
+    grants.add('obligations:record');
+    await shown();
+    expect(screen.getByTestId('vat-ratio-save')).toBeTruthy();
+    expect(screen.queryByTestId('vat-ratio-settle')).toBeNull();
+    expect(hasButton(i18n.t('obligations.vat.mark_filed'))).toBe(true);
+  });
+
+  it('review alone settles the ratio', async () => {
+    resetGrants('obligations:view', 'obligations:review');
+    await shown();
+    expect(screen.getByTestId('vat-ratio-settle')).toBeTruthy();
+    expect(screen.queryByTestId('vat-ratio-save')).toBeNull();
   });
 });

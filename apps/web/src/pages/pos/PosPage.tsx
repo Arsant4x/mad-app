@@ -116,6 +116,8 @@ export function PosPage() {
 
   // ───── Card payment attempts ─────
   const { can } = usePermissions();
+  // Opening a shift, selling and querying an attempt record; closing the shift and resolving with evidence review.
+  const canRecord = can('pos', 'record');
   const canReview = can('pos', 'review');
   /** Whether the gateway link is active: it picks the path, an attempt through the provider or a direct sale. */
   const [paymentMode, setPaymentMode] = useState<PosPaymentMode | null>(null);
@@ -577,6 +579,7 @@ export function PosPage() {
             <div className="page-sub">{t('pos.open.sub')}</div>
           </div>
         </div>
+        {canRecord && (
         <div className="card" style={{ maxWidth: 420 }}>
           <div className="card-title" style={{ marginBottom: 10 }}>
             {t('pos.open.card_title')}
@@ -591,6 +594,7 @@ export function PosPage() {
             {t('pos.open.button')}
           </button>
         </div>
+        )}
 
         {closed && (
           <div className="card" style={{ maxWidth: 420, marginTop: 14 }}>
@@ -668,9 +672,11 @@ export function PosPage() {
               {t('pos.shift.unverified_cards')}
             </button>
           )}
-          <button className="btn btn-ghost" onClick={() => setClosing(true)}>
-            {t('pos.shift.close_button')}
-          </button>
+          {canReview && (
+            <button className="btn btn-ghost" onClick={() => setClosing(true)}>
+              {t('pos.shift.close_button')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -775,9 +781,11 @@ export function PosPage() {
               {pendingAttempt.detail && <p className="hint">{pendingAttempt.detail}</p>}
               {pendingAttempt.status !== 'CHARGING' && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(pendingAttempt)}>
-                    {t('pos.pending.query')}
-                  </button>
+                  {canRecord && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(pendingAttempt)}>
+                      {t('pos.pending.query')}
+                    </button>
+                  )}
                   {canReview && pendingAttempt.status === 'UNKNOWN' && (
                     <button className="btn btn-ghost btn-sm" onClick={() => setEvidenceFor(pendingAttempt)}>
                       {t('pos.pending.evidence')}
@@ -787,17 +795,21 @@ export function PosPage() {
               )}
             </div>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
-            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CASH')}>
-              {t('pos.pay.cash')}
-            </button>
-            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CARD')}>
-              {t('pos.pay.card')}
-            </button>
-          </div>
-          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => setSplitting(true)}>
-            {t('pos.pay.split')}
-          </button>
+          {canRecord && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+                <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CASH')}>
+                  {t('pos.pay.cash')}
+                </button>
+                <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CARD')}>
+                  {t('pos.pay.card')}
+                </button>
+              </div>
+              <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => setSplitting(true)}>
+                {t('pos.pay.split')}
+              </button>
+            </>
+          )}
           {/* Unresolved attempts in the shift; the shift does not close while money is in transit. */}
           {openAttempts.filter((a) => a.id !== pendingAttempt?.id && a.status !== 'CREATED').length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -809,9 +821,11 @@ export function PosPage() {
                     <span className="num" style={{ flex: 1, fontSize: 12 }}>
                       {fmt(a.cardAmount)} · {t(ATTEMPT_LABEL_KEY[a.status])}
                     </span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(a)}>
-                      {t('pos.open_attempts.query')}
-                    </button>
+                    {canRecord && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(a)}>
+                        {t('pos.open_attempts.query')}
+                      </button>
+                    )}
                     {canReview && a.status === 'UNKNOWN' && (
                       <button className="btn btn-ghost btn-sm" onClick={() => setEvidenceFor(a)}>
                         {t('pos.open_attempts.evidence')}
@@ -1146,7 +1160,7 @@ export function PosPage() {
       )}
 
       {/* Close shift */}
-      {closing && (
+      {canReview && closing && (
         <div className="overlay" onClick={() => setClosing(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="modal-head">

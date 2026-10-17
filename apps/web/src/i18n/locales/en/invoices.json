@@ -114,6 +114,7 @@
     "sample_line_subscription": "Monthly subscription — accounting system",
     "sample_line_training": "Accounting team training",
     "err_new_customer_kind": "New customer — choose their type (individual · establishment · legal person); it decides the invoice type",
+    "err_customer_existing": "Choose an existing customer. Adding a new customer needs the permission to add customers.",
     "title_edit": "Edit invoice",
     "title_create": "Create invoice",
     "subtitle": "It will be posted to accounts receivable automatically when issued",

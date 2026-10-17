@@ -10,6 +10,7 @@ import {
   type FiscalYear,
 } from '../../api/fiscal';
 import { useAuth } from '../../auth/AuthContext';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import i18n from '../../i18n';
 
@@ -32,6 +33,11 @@ export function FiscalPage() {
   // The start month belongs to the company owner and is accepted only before the first posting.
   const { user } = useAuth();
   const isOwner = user?.actorType === 'COMPANY';
+  const { can } = usePermissions();
+  // A year is added and deleted by those actions; closing and reopening a period reviews.
+  const canAdd = can('fiscal', 'add');
+  const canDelete = can('fiscal', 'delete');
+  const canReview = can('fiscal', 'review');
   const [startMonth, setStartMonth] = useState<number | null>(null);
 
   const [pendingDelete, setPendingDelete] = useState<FiscalYear | null>(null);
@@ -129,9 +135,11 @@ export function FiscalPage() {
           <div className="page-sub">{t('fiscal.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-            {t('fiscal.new_year')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
+              {t('fiscal.new_year')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -160,7 +168,7 @@ export function FiscalPage() {
         </div>
       )}
 
-      {showForm && (
+      {canAdd && showForm && (
         <div className="card">
           <div className="card-title" style={{ marginBottom: 14 }}>
             {t('fiscal.form_title')}
@@ -195,9 +203,11 @@ export function FiscalPage() {
               {year.name}{' '}
               <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('fiscal.year_range', { start: year.start.slice(0, 10), end: year.end.slice(0, 10) })}</span>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => setPendingDelete(year)}>
-              {t('fiscal.delete_year')}
-            </button>
+            {canDelete && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setPendingDelete(year)}>
+                {t('fiscal.delete_year')}
+              </button>
+            )}
           </div>
           <table>
             <thead>
@@ -221,13 +231,15 @@ export function FiscalPage() {
                     </td>
                     <td>{p.closedAt ? p.closedAt.slice(0, 10) : '—'}</td>
                     <td>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => (isClosed ? setReopenFor({ id: p.id, label: `${monthName(p.month)} ${p.year}` }) : togglePeriod(p.id, false))}
-                        disabled={busyPeriodId === p.id}
-                      >
-                        {isClosed ? t('fiscal.reopen') : t('fiscal.close')}
-                      </button>
+                      {canReview && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => (isClosed ? setReopenFor({ id: p.id, label: `${monthName(p.month)} ${p.year}` }) : togglePeriod(p.id, false))}
+                          disabled={busyPeriodId === p.id}
+                        >
+                          {isClosed ? t('fiscal.reopen') : t('fiscal.close')}
+                        </button>
+                      )}
                       {p.reopenReason && (
                         <div className="hint" style={{ marginTop: 4 }}>
                           {t('fiscal.last_reopen', { reason: p.reopenReason })}

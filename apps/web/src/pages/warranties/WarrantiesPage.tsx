@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
 import { createWarranty, deleteWarranty, listWarranties, updateWarranty, type Warranty } from '../../api/warranties';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, today } from '../../lib/format';
@@ -32,6 +33,11 @@ function expiryMeta(w: Warranty): { label: string; badgeClass: string } {
 
 export function WarrantiesPage() {
   const { t } = useTranslation();
+  // Warranties live on the maintenance screen and follow its actions.
+  const { can } = usePermissions();
+  const canAdd = can('maintenance', 'add');
+  const canEdit = can('maintenance', 'edit');
+  const canDelete = can('maintenance', 'delete');
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -120,9 +126,11 @@ export function WarrantiesPage() {
           <div className="page-sub">{t('warranties.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
-            {t('warranties.page.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
+              {t('warranties.page.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -181,8 +189,8 @@ export function WarrantiesPage() {
                   <td>
                     <RowMenu
                       actions={[
-                        { label: t('warranties.page.action_edit'), onClick: () => setModal({ mode: 'edit', warranty: w }) },
-                        { label: t('warranties.page.action_delete'), onClick: () => setPendingDelete(w), danger: true },
+                        canEdit && { label: t('warranties.page.action_edit'), onClick: () => setModal({ mode: 'edit', warranty: w }) },
+                        canDelete && { label: t('warranties.page.action_delete'), onClick: () => setPendingDelete(w), danger: true },
                       ]}
                     />
                   </td>

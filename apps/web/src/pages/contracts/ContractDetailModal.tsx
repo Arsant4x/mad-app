@@ -20,6 +20,7 @@ import {
   type RenewContractInput,
   type SettlementBasis,
 } from '../../api/contracts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt, today } from '../../lib/format';
 import { formatMoney, num0, round2, type MoneyText } from '../../lib/money';
 import { STANDARD_VAT_GROSS_FACTOR, standardVatIncludedIn, standardVatIncludedInShare, standardVatOnShare } from '../../lib/vat';
@@ -724,6 +725,12 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
 
 export function ContractDetailModal({ contract: initial, banks, onClose, onChanged }: { contract: Contract; banks: Bank[]; onClose: () => void; onChanged: () => void }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Each control follows the action its route checks: a declaration edits, a payment records, a renewal adds, a cancellation deletes.
+  const canEdit = can('contracts', 'edit');
+  const canRecord = can('contracts', 'record');
+  const canRenew = can('contracts', 'add');
+  const canCancel = can('contracts', 'delete');
   const [contract, setContract] = useState(initial);
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null | 'free'>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -814,7 +821,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
             <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>{VAT_INCLUSION_LABEL[contract.vatInclusion]}</p>
           </div>
         </div>
-        {isLegacyContract(contract) && <LegacyDeclarationForm contract={contract} onDeclared={reload} />}
+        {canEdit && isLegacyContract(contract) && <LegacyDeclarationForm contract={contract} onDeclared={reload} />}
         {(contract.unit.property.ownership === 'managed' || contract.lessor !== 'COMPANY') && contract.lessor !== 'LEGACY_UNDECLARED' && (
           <div className="field" style={{ marginBottom: 6 }}>
             <label>{t('contracts.detail.lessor')}</label>
@@ -825,7 +832,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
             </p>
           </div>
         )}
-        {contract.lessor === 'LEGACY_UNDECLARED' && <LegacyLessorForm contract={contract} onDeclared={reload} />}
+        {canEdit && contract.lessor === 'LEGACY_UNDECLARED' && <LegacyLessorForm contract={contract} onDeclared={reload} />}
 
         {contract.status === 'CANCELLED' && (
           <p className="hint" style={{ color: 'var(--rose)', marginBottom: 10 }}>
@@ -854,7 +861,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
                   <span className={`badge ${badgeOf(INSTALLMENT_STATUS_META, i.status).badgeClass}`}>{badgeOf(INSTALLMENT_STATUS_META, i.status).label}</span>
                 </td>
                 <td>
-                  {(i.status === 'DUE' || i.status === 'LATE' || i.status === 'PARTIAL') && contract.status !== 'CANCELLED' && (
+                  {canRecord && (i.status === 'DUE' || i.status === 'LATE' || i.status === 'PARTIAL') && contract.status !== 'CANCELLED' && (
                     <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11.5 }} onClick={() => setPayingInstallmentId(i.id)}>
                       {t('contracts.detail.record_payment')}
                     </button>
@@ -865,7 +872,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
           </tbody>
         </table>
 
-        {payingInstallmentId && (
+        {canRecord && payingInstallmentId && (
           <>
             {/* The engine's limit is stated where it is read: rent revenue is
                 spread over the installment's service period, and a payment with
@@ -890,7 +897,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
           </>
         )}
 
-        {!payingInstallmentId && contract.status !== 'CANCELLED' && (
+        {canRecord && !payingInstallmentId && contract.status !== 'CANCELLED' && (
           <button className="add-line" onClick={() => setPayingInstallmentId('free')}>
             {t('contracts.detail.free_payment_button')}
           </button>
@@ -971,8 +978,8 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
           </tbody>
         </table>
 
-        {cancelling && <CancelForm contract={contract} onCancel={() => setCancelling(false)} onSubmit={handleCancel} />}
-        {renewing && <RenewForm contract={contract} onCancel={() => setRenewing(false)} onSubmit={handleRenew} />}
+        {canCancel && cancelling && <CancelForm contract={contract} onCancel={() => setCancelling(false)} onSubmit={handleCancel} />}
+        {canRenew && renewing && <RenewForm contract={contract} onCancel={() => setRenewing(false)} onSubmit={handleRenew} />}
 
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onClose}>
@@ -980,12 +987,12 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
           </button>
           {/* A cancelled lease has no future to renew, and a draft isn't a
               tenancy yet. */}
-          {contract.status !== 'CANCELLED' && contract.status !== 'DRAFT' && !renewing && !cancelling && (
+          {canRenew && contract.status !== 'CANCELLED' && contract.status !== 'DRAFT' && !renewing && !cancelling && (
             <button className="btn btn-ghost" onClick={() => setRenewing(true)}>
               {t('contracts.detail.renew_contract')}
             </button>
           )}
-          {contract.status !== 'CANCELLED' && !cancelling && (
+          {canCancel && contract.status !== 'CANCELLED' && !cancelling && (
             <button className="btn btn-ghost" style={{ color: 'var(--rose)' }} onClick={() => setCancelling(true)}>
               {t('contracts.detail.cancel_contract')}
             </button>

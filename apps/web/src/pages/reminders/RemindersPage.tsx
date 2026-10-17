@@ -19,6 +19,8 @@ export function RemindersPage() {
   const { can } = usePermissions();
   // Logging a sent reminder needs record on contracts; the server refuses it otherwise.
   const canRecord = can('contracts', 'record');
+  // The policy is shown to everyone who opens the screen and changed only with edit on contracts.
+  const canEditPolicy = can('contracts', 'edit');
   const [data, setData] = useState<DueReminders | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -103,6 +105,7 @@ export function RemindersPage() {
               min="0"
               max="30"
               value={data.policy.daysBefore}
+              disabled={!canEditPolicy}
               onChange={(e) => run(() => updateReminderPolicy({ daysBefore: Number(e.target.value) }))}
             />
             <p className="hint">{t('reminders.page.days_before_hint')}</p>
@@ -114,6 +117,7 @@ export function RemindersPage() {
               min="1"
               max="90"
               value={data.policy.repeatEveryDays}
+              disabled={!canEditPolicy}
               onChange={(e) => run(() => updateReminderPolicy({ repeatEveryDays: Number(e.target.value) }))}
             />
             {/* Explains the floor of 1 rather than letting it look arbitrary. */}
@@ -122,7 +126,7 @@ export function RemindersPage() {
         </div>
         <div className="field">
           <label>
-            <input type="checkbox" checked={data.policy.enabled} onChange={(e) => run(() => updateReminderPolicy({ enabled: e.target.checked }))} />{' '}
+            <input type="checkbox" checked={data.policy.enabled} disabled={!canEditPolicy} onChange={(e) => run(() => updateReminderPolicy({ enabled: e.target.checked }))} />{' '}
             {t('reminders.page.enable')}
           </label>
         </div>
@@ -137,6 +141,7 @@ export function RemindersPage() {
               max="365"
               placeholder={t('reminders.page.escalate_placeholder')}
               value={data.policy.escalateAfterDays ?? ''}
+              disabled={!canEditPolicy}
               onChange={(e) => run(() => updateReminderPolicy({ escalateAfterDays: e.target.value === '' ? null : Number(e.target.value) }))}
             />
             <p className="hint">{t('reminders.page.escalate_hint')}</p>
@@ -145,6 +150,7 @@ export function RemindersPage() {
             <label>{t('reminders.page.escalate_to')}</label>
             <select
               value={data.policy.escalateToUserId ?? ''}
+              disabled={!canEditPolicy}
               onChange={(e) => run(() => updateReminderPolicy({ escalateToUserId: e.target.value === '' ? null : e.target.value }))}
             >
               <option value="">{t('reminders.page.account_owner')}</option>

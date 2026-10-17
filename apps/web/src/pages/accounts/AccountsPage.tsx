@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createAccount, deleteAccount, getAccountsSummary, listAccounts, updateAccount, type Account, type AccountInput, type AccountType, type AccountsSummary } from '../../api/accounts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -12,6 +13,10 @@ const TYPE_TAG_CLASS: Record<AccountType, string> = { asset: 'type-asset', liabi
 
 export function AccountsPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('accounts', 'add');
+  const canEdit = can('accounts', 'edit');
+  const canDelete = can('accounts', 'delete');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -82,9 +87,11 @@ export function AccountsPage() {
           <div className="page-sub">{t('accounts.list.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('accounts.list.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('accounts.list.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -147,9 +154,9 @@ export function AccountsPage() {
                     <div>
                       <RowMenu
                         actions={[
-                          { label: t('accounts.list.edit'), onClick: () => setModal({ mode: 'edit', account: a }) },
+                          canEdit && { label: t('accounts.list.edit'), onClick: () => setModal({ mode: 'edit', account: a }) },
                           '-',
-                          { label: t('accounts.list.delete'), onClick: () => setPendingDelete(a), danger: true },
+                          canDelete && { label: t('accounts.list.delete'), onClick: () => setPendingDelete(a), danger: true },
                         ]}
                       />
                     </div>

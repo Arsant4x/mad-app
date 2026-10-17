@@ -14,6 +14,7 @@ import {
   type CashDeposit,
   type ReconciliationOverview,
 } from '../../api/banks';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { fmt } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -25,6 +26,10 @@ import i18n from '../../i18n';
  */
 export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: () => void }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Matching and posting a line need record on banks, closing and reopening need review.
+  const canRecord = can('banks', 'record');
+  const canReview = can('banks', 'review');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState<ReconciliationOverview | null>(null);
@@ -128,10 +133,14 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                           {s.matchedLineId ? (
                             <>
                               <span className="badge paid">{t('banks.reconciliation.matched')}</span>{' '}
-                              <button className="btn link" onClick={() => act(() => unmatchStatementLine(bank.id, s.id))}>
-                                {t('banks.reconciliation.unmatch')}
-                              </button>
+                              {canRecord && (
+                                <button className="btn link" onClick={() => act(() => unmatchStatementLine(bank.id, s.id))}>
+                                  {t('banks.reconciliation.unmatch')}
+                                </button>
+                              )}
                             </>
+                          ) : !canRecord ? (
+                            <span className="badge draft">{t('banks.reconciliation.pending')}</span>
                           ) : (
                             <>
                               {suggestionFor(s.id).map((lineId) => (
@@ -183,7 +192,7 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
               </div>
             </div>
 
-            {posting && (
+            {canRecord && posting && (
               <div className="card" style={{ marginTop: 12 }}>
                 <strong>{t('banks.reconciliation.post_title')}</strong>
                 <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
@@ -241,20 +250,22 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
               </div>
             )}
 
-            <div className="toolbar" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-              <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="rec-close">{t('banks.reconciliation.close_until')}</label>
-                <input id="rec-close" type="date" value={closeUntil} onChange={(e) => setCloseUntil(e.target.value)} />
-              </div>
-              <button className="btn btn-primary" disabled={!closeUntil} onClick={() => act(() => closeReconciliation(bank.id, closeUntil))}>
-                {t('banks.reconciliation.lock')}
-              </button>
-              {data.bank.reconciledUntil && (
-                <button className="btn secondary" onClick={() => act(() => reopenReconciliation(bank.id))}>
-                  {t('banks.reconciliation.reopen')}
+            {canReview && (
+              <div className="toolbar" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                <div className="field" style={{ margin: 0 }}>
+                  <label htmlFor="rec-close">{t('banks.reconciliation.close_until')}</label>
+                  <input id="rec-close" type="date" value={closeUntil} onChange={(e) => setCloseUntil(e.target.value)} />
+                </div>
+                <button className="btn btn-primary" disabled={!closeUntil} onClick={() => act(() => closeReconciliation(bank.id, closeUntil))}>
+                  {t('banks.reconciliation.lock')}
                 </button>
-              )}
-            </div>
+                {data.bank.reconciledUntil && (
+                  <button className="btn secondary" onClick={() => act(() => reopenReconciliation(bank.id))}>
+                    {t('banks.reconciliation.reopen')}
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

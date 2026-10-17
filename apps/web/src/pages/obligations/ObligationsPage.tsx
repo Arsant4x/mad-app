@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { listObligations, toggleObligation, type GovernmentObligation } from '../../api/obligations';
+import { usePermissions } from '../../auth/PermissionsContext';
 
 // Obligation titles and authorities are stored data from the server, so these match the stored text.
 const VAT_TITLE_MARKER = 'إقرار ضريبة القيمة المضافة'; // i18n-exempt: matches the stored obligation title
@@ -12,6 +13,8 @@ const ENTITY_ORDER = 'هيئة الزكاة والضريبة والجمارك'; 
 export function ObligationsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  // Marking an obligation done reviews it; without that a row only opens the VAT return.
+  const canToggle = usePermissions().can('obligations', 'review');
   const [obligations, setObligations] = useState<GovernmentObligation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,6 +41,7 @@ export function ObligationsPage() {
       navigate('/obligations/vat-declaration');
       return;
     }
+    if (!canToggle) return;
     await toggleObligation(o.id);
     await reload();
   }
@@ -67,7 +71,7 @@ export function ObligationsPage() {
               {items.map((o) => (
                 <div
                   key={o.id}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--paper-line)', cursor: 'pointer' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--paper-line)', cursor: canToggle || o.title.includes(VAT_TITLE_MARKER) ? 'pointer' : 'default' }}
                   onClick={() => handleRowClick(o)}
                 >
                   <div style={{ fontSize: 12.5 }}>{o.title}</div>

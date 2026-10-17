@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Reservation } from '../../api/reservations';
 import type { Unit } from '../../api/units';
@@ -62,7 +62,10 @@ const reservation = {
 async function menuLabels(): Promise<string[]> {
   render(<UnitsPage />);
   await waitFor(() => expect(screen.getByText('101')).toBeTruthy());
-  fireEvent.click(screen.getByTitle(i18n.t('common.row_menu.options')));
+  // A row with no action the actor may run has no menu at all.
+  const menu = screen.queryByTitle(i18n.t('common.row_menu.options'));
+  if (!menu) return [];
+  fireEvent.click(menu);
   return [...document.querySelectorAll('.action-menu button')].map((b) => (b.textContent ?? '').trim());
 }
 
@@ -84,5 +87,33 @@ describe('Cancelling a reservation follows the delete action', () => {
   it('shows cancel reservation with delete', async () => {
     grants.add('properties:view').add('properties:delete');
     expect(await menuLabels()).toContain(i18n.t('units.page.action_cancel_reservation'));
+  });
+});
+
+/** Every unit control follows the action its route checks on the properties screen. */
+describe('Unit controls follow the actions', () => {
+  it('a view only employee gets no new, bulk or row actions', async () => {
+    grants.add('properties:view');
+    expect(await menuLabels()).toEqual([]);
+    expect(screen.queryByRole('button', { name: i18n.t('units.page.new') })).toBeNull();
+    expect(screen.queryByRole('button', { name: i18n.t('units.page.bulk') })).toBeNull();
+  });
+
+  it('add shows new, bulk and reserve; edit shows edit, maintenance and archive; delete shows delete', async () => {
+    vi.mocked(listUnits).mockResolvedValue([{ ...unit, status: 'vacant' }]);
+    vi.mocked(listReservations).mockResolvedValue([]);
+    grants.add('properties:view').add('properties:add');
+    expect(await menuLabels()).toEqual([i18n.t('units.page.action_reserve')]);
+    expect(screen.getByRole('button', { name: i18n.t('units.page.new') })).toBeTruthy();
+    expect(screen.getByRole('button', { name: i18n.t('units.page.bulk') })).toBeTruthy();
+    cleanup();
+    grants.clear();
+    grants.add('properties:view').add('properties:edit').add('properties:delete');
+    expect(await menuLabels()).toEqual([
+      i18n.t('units.page.action_edit'),
+      i18n.t('units.page.action_start_maintenance'),
+      i18n.t('units.page.action_archive'),
+      i18n.t('units.page.action_delete'),
+    ]);
   });
 });

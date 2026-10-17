@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listTrash, purgeFromTrash, restoreFromTrash, type TrashList } from '../../api/trash';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
 
@@ -14,6 +15,10 @@ import { dfmt } from '../../lib/format';
  */
 export function TrashPage() {
   const { t } = useTranslation();
+  // The bin lives on the audit screen: restoring reviews, purging deletes.
+  const { can } = usePermissions();
+  const canRestore = can('audit', 'review');
+  const canPurge = can('audit', 'delete');
   const [data, setData] = useState<TrashList | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -98,18 +103,22 @@ export function TrashPage() {
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => restoreFromTrash(group.entity, item.id), t('trash.restore_failed'))}>
-                        {t('trash.restore')}
-                      </button>{' '}
+                      {canRestore && (
+                        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => restoreFromTrash(group.entity, item.id), t('trash.restore_failed'))}>
+                          {t('trash.restore')}
+                        </button>
+                      )}{' '}
                       {/* The server refuses to purge a retained record with a named 409; the button is disabled, not hidden, so the title can explain why */}
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        disabled={busy || Boolean(item.retainedUntil)}
-                        title={item.retainedUntil ? t('trash.retained_until', { until: item.retainedUntil }) : undefined}
-                        onClick={() => setPendingPurge({ entity: group.entity, id: item.id, name: item.name })}
-                      >
-                        {t('trash.purge')}
-                      </button>
+                      {canPurge && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          disabled={busy || Boolean(item.retainedUntil)}
+                          title={item.retainedUntil ? t('trash.retained_until', { until: item.retainedUntil }) : undefined}
+                          onClick={() => setPendingPurge({ entity: group.entity, id: item.id, name: item.name })}
+                        >
+                          {t('trash.purge')}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

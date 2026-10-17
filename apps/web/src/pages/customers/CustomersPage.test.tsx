@@ -30,6 +30,8 @@ vi.mock('../../api/customers', async (importOriginal) => ({
   getCustomerSummary: vi.fn(),
 }));
 vi.mock('../../api/invoices', () => ({ listInvoices: vi.fn() }));
+// Every action held: this file measures the balance, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 const { listCustomers } = await import('../../api/customers');
 const { listInvoices } = await import('../../api/invoices');

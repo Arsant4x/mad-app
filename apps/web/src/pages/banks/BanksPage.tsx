@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { BANK_KIND_LABEL, createBank, deleteBank, getBankCodeBand, listBanks, setBankArchived, updateBank, type Bank, type BankInput, type BankUpdateInput, type CodeBandStatus } from '../../api/banks';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -12,6 +13,10 @@ import { ReconciliationPanel } from './ReconciliationPanel';
 
 export function BanksPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('banks', 'add');
+  const canEdit = can('banks', 'edit');
+  const canDelete = can('banks', 'delete');
   const [banks, setBanks] = useState<Bank[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,9 +85,11 @@ export function BanksPage() {
           <button className="btn secondary" onClick={() => setDepositing(true)}>
             {t('banks.page.cash_deposits')}
           </button>
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('banks.page.add')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('banks.page.add')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -143,11 +150,11 @@ export function BanksPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: t('banks.page.edit'), onClick: () => setModal({ mode: 'edit', bank: b }) },
+                      canEdit && { label: t('banks.page.edit'), onClick: () => setModal({ mode: 'edit', bank: b }) },
                       { label: t('banks.page.reconcile'), onClick: () => setReconciling(b) },
-                      { label: b.archived ? t('banks.page.unarchive') : t('banks.page.archive'), onClick: () => setBankArchived(b.id, !b.archived).then(reload) },
+                      canEdit && { label: b.archived ? t('banks.page.unarchive') : t('banks.page.archive'), onClick: () => setBankArchived(b.id, !b.archived).then(reload) },
                       '-',
-                      { label: t('banks.page.delete'), onClick: () => setPendingDelete(b), danger: true },
+                      canDelete && { label: t('banks.page.delete'), onClick: () => setPendingDelete(b), danger: true },
                     ]}
                   />
                 </td>

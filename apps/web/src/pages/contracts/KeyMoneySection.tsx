@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recordKeyMoney, type Contract, type KeyMoneyDirection } from '../../api/contracts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt, today } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -23,6 +24,7 @@ const DIRECTION_EFFECT: Record<KeyMoneyDirection, string> = {
  */
 export function KeyMoneySection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
   const { t } = useTranslation();
+  const canRecord = usePermissions().can('contracts', 'record');
   const [adding, setAdding] = useState(false);
   const [direction, setDirection] = useState<KeyMoneyDirection>('RECEIVED');
   const [amount, setAmount] = useState('');
@@ -55,7 +57,7 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{t('contracts.key_money.title', { n: contract.keyMoney.length })}</span>
-        {contract.status !== 'CANCELLED' && (
+        {canRecord && contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
             {adding ? t('contracts.key_money.cancel') : t('contracts.key_money.add')}
           </button>
@@ -64,7 +66,7 @@ export function KeyMoneySection({ contract, onChanged }: { contract: Contract; o
 
       {error && <p className="error-text">{error}</p>}
 
-      {adding && (
+      {canRecord && adding && (
         <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">

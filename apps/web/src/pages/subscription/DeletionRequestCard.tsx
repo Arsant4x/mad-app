@@ -9,6 +9,7 @@ import {
   type DeletionRequest,
   type DeletionRequestStatus,
 } from '../../api/deletionRequests';
+import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
 
@@ -43,6 +44,9 @@ const KIND_KEY: Record<DeletionRequest['kind'], string> = {
  */
 export function DeletionRequestCard() {
   const { t } = useTranslation();
+  // Submitting and withdrawing are the owner's; anyone else sees the request's state only.
+  const { user } = useAuth();
+  const isOwner = user?.actorType === 'COMPANY';
   const [req, setReq] = useState<DeletionRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
@@ -90,7 +94,7 @@ export function DeletionRequestCard() {
         </div>
       )}
 
-      {open ? (
+      {!isOwner ? null : open ? (
         <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(req!.id), t('subscription.common.err_withdraw'))}>
           {t('subscription.common.withdraw')}
         </button>
@@ -120,7 +124,7 @@ export function DeletionRequestCard() {
 
       {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
 
-      {confirming && (
+      {isOwner && confirming && (
         <ConfirmModal
           title={t('subscription.deletion.confirm_title')}
           body={t('subscription.deletion.confirm_body')}

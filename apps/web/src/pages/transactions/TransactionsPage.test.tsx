@@ -14,6 +14,8 @@ vi.mock('../../api/transactions', async (importOriginal) => ({
 }));
 vi.mock('../../api/banks', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api/banks')>()), listBanks: vi.fn() }));
 vi.mock('../../api/branches', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api/branches')>()), listBranches: vi.fn() }));
+// Every action held: this file measures the refusal message, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 const { listTransactions, deleteTransaction } = await import('../../api/transactions');
 const { listBanks } = await import('../../api/banks');

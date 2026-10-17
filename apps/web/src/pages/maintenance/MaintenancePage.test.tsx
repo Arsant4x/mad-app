@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaintenanceRequest } from '../../api/maintenance';
 import i18n from '../../i18n';
@@ -93,5 +93,48 @@ describe('Maintenance row actions follow the actions the server requires', () =>
     expect(button('maintenance.page.action_cancel')).not.toBeNull();
     expect(button('maintenance.page.action_assign')).toBeNull();
     expect(button('maintenance.page.action_start')).toBeNull();
+  });
+});
+
+/** A new request adds, complete records and close reviews. */
+describe('New, complete and close follow add, record and review', () => {
+  it('the new request button needs add', async () => {
+    grants.add('maintenance:view');
+    await mount();
+    expect(button('maintenance.page.new')).toBeNull();
+  });
+
+  it('shows the new request button with add', async () => {
+    grants.add('maintenance:view').add('maintenance:add');
+    await mount();
+    expect(button('maintenance.page.new')).not.toBeNull();
+  });
+
+  it('complete needs record on a request in progress', async () => {
+    vi.mocked(listMaintenance).mockResolvedValue([{ ...request, status: 'IN_PROGRESS' }]);
+    grants.add('maintenance:view');
+    await mount();
+    expect(button('maintenance.page.action_complete')).toBeNull();
+    cleanup();
+    grants.add('maintenance:record');
+    await mount();
+    expect(button('maintenance.page.action_complete')).not.toBeNull();
+  });
+
+  it('close needs review on a finished request', async () => {
+    vi.mocked(listMaintenance).mockResolvedValue([{ ...request, status: 'DONE' }]);
+    // A finished request is listed under its own filter, not under the open ones.
+    const mountDone = async () => {
+      render(<MaintenancePage />);
+      fireEvent.click(await screen.findByText(i18n.t('maintenance.page.filter_done')));
+      await screen.findByText('Leaking pipe');
+    };
+    grants.add('maintenance:view');
+    await mountDone();
+    expect(button('maintenance.page.action_close')).toBeNull();
+    cleanup();
+    grants.add('maintenance:review');
+    await mountDone();
+    expect(button('maintenance.page.action_close')).not.toBeNull();
   });
 });

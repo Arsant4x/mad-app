@@ -15,6 +15,7 @@ import {
 } from '../../api/contracts';
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt } from '../../lib/format';
 import i18n from '../../i18n';
 import { ContractDetailModal } from './ContractDetailModal';
@@ -34,6 +35,10 @@ const PAGE_SIZE = 25;
 
 export function ContractsPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('contracts', 'add');
+  // The tenant created inline goes through the customers route, so it follows that screen's add.
+  const canAddCustomer = can('customers', 'add');
   const [contracts, setContracts] = useState<ContractListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -108,9 +113,11 @@ export function ContractsPage() {
           <div className="page-sub">{t('contracts.page.subtitle')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setShowBuilder(true)} disabled={units.length === 0}>
-            {t('contracts.page.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setShowBuilder(true)} disabled={units.length === 0}>
+              {t('contracts.page.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -197,7 +204,7 @@ export function ContractsPage() {
       )}
 
       {showBuilder && (
-        <ContractModal units={units} properties={properties} customers={customers} onCancel={() => setShowBuilder(false)} onSave={handleSave} onCreateCustomer={handleCreateCustomer} />
+        <ContractModal units={units} properties={properties} customers={customers} onCancel={() => setShowBuilder(false)} onSave={handleSave} onCreateCustomer={canAddCustomer ? handleCreateCustomer : undefined} />
       )}
 
       {detailContract && (

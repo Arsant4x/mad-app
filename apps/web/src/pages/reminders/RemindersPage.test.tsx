@@ -77,3 +77,21 @@ describe('Recording a sent reminder follows the record action', () => {
     expect(recordSend()).not.toBeNull();
   });
 });
+
+/** The policy is shown to everyone who opens the screen and changed only with edit on contracts. */
+describe('The reminder policy follows the edit action', () => {
+  // The policy card is the first card on the screen: three numbers, the switch and the escalation picker.
+  const policyControls = () => [...document.querySelector('.card')!.querySelectorAll('input, select')] as HTMLInputElement[];
+
+  it('shows the policy read only to an employee without edit', async () => {
+    grants.add('contracts:view').add('contracts:record');
+    await mount();
+    expect(policyControls().map((c) => c.disabled)).toEqual([true, true, true, true, true]);
+  });
+
+  it('lets an employee with edit change it', async () => {
+    grants.add('contracts:view').add('contracts:edit');
+    await mount();
+    expect(policyControls().map((c) => c.disabled)).toEqual([false, false, false, false, false]);
+  });
+});

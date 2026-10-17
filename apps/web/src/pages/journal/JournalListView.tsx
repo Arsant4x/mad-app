@@ -22,9 +22,10 @@ export function JournalListView({
   pageCount: number;
   total: number;
   onPage: (page: number) => void;
-  onNew: () => void;
-  /** A posted entry is reversed, never deleted. */
-  onReverse: (entry: JournalEntry) => void;
+  /** Absent when the actor may not record entries. */
+  onNew?: () => void;
+  /** A posted entry is reversed, never deleted; absent when the actor may not record entries. */
+  onReverse?: (entry: JournalEntry) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -35,9 +36,11 @@ export function JournalListView({
           <div className="page-sub">{t('journal.list.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={onNew}>
-            {t('journal.list.new')}
-          </button>
+          {onNew && (
+            <button className="btn btn-primary" onClick={onNew}>
+              {t('journal.list.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -102,7 +105,7 @@ export function JournalListView({
                 </td>
                 <td>
                   {/* A posted entry is never deleted; an automatic one follows its document, and reversed or reversing entries are not reversed again. */}
-                  {!j.auto && !j.reversedBy && !j.reversalOf && (
+                  {onReverse && !j.auto && !j.reversedBy && !j.reversalOf && (
                     <RowMenu actions={[{ label: t('journal.list.reverse_action'), onClick: () => onReverse(j), danger: true }]} />
                   )}
                 </td>

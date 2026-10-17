@@ -15,6 +15,8 @@ vi.mock('../../api/attendance', async (orig) => ({
   listAttendance: vi.fn(),
   updateAttendance: vi.fn(),
 }));
+// Every action held: this file measures the check out button by day, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 import { listAttendance } from '../../api/attendance';
 import { listEmployees } from '../../api/employees';

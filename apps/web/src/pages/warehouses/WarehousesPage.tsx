@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createWarehouse, deleteWarehouse, listWarehouses, setWarehouseArchived, updateWarehouse, type Warehouse, type WarehouseInput } from '../../api/warehouses';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -9,6 +10,11 @@ import i18n from '../../i18n';
 
 export function WarehousesPage() {
   const { t } = useTranslation();
+  // Warehouses live on the inventory screen and follow its actions.
+  const { can } = usePermissions();
+  const canAdd = can('inventory', 'add');
+  const canEdit = can('inventory', 'edit');
+  const canDelete = can('inventory', 'delete');
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -66,9 +72,11 @@ export function WarehousesPage() {
           <div className="page-sub">{t('warehouses.list.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('warehouses.list.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('warehouses.list.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -130,10 +138,10 @@ export function WarehousesPage() {
                   {!w.otherBranch && (
                     <RowMenu
                       actions={[
-                        { label: t('warehouses.list.edit'), onClick: () => setModal({ mode: 'edit', warehouse: w }) },
-                        { label: w.archived ? t('warehouses.list.unarchive') : t('warehouses.list.archive'), onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
+                        canEdit && { label: t('warehouses.list.edit'), onClick: () => setModal({ mode: 'edit', warehouse: w }) },
+                        canEdit && { label: w.archived ? t('warehouses.list.unarchive') : t('warehouses.list.archive'), onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
                         '-',
-                        { label: t('warehouses.list.delete'), onClick: () => setPendingDelete(w), danger: true },
+                        canDelete && { label: t('warehouses.list.delete'), onClick: () => setPendingDelete(w), danger: true },
                       ]}
                     />
                   )}

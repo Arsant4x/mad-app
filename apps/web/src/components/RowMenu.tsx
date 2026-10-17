@@ -21,9 +21,25 @@ export interface RowMenuAction {
  */
 let closeOpenMenu: (() => void) | null = null;
 
+/** A menu entry; false, null and undefined are skipped so an entry the actor may not run is left out inline. */
+export type RowMenuEntry = RowMenuAction | '-' | false | null | undefined;
+
+/** Drops skipped entries and the separators left at an edge or next to another separator. */
+export function visibleEntries(actions: RowMenuEntry[]): (RowMenuAction | '-')[] {
+  const out: (RowMenuAction | '-')[] = [];
+  for (const a of actions) {
+    if (!a) continue;
+    if (a === '-' && (out.length === 0 || out[out.length - 1] === '-')) continue;
+    out.push(a);
+  }
+  if (out[out.length - 1] === '-') out.pop();
+  return out;
+}
+
 /** The "⋮" per-row action menu used across list screens, matching the
- * original mockup's rowMenuBtn()/openRowMenu() behavior. */
-export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
+ * original mockup's rowMenuBtn()/openRowMenu() behavior. It renders nothing when no entry is left. */
+export function RowMenu({ actions: entries }: { actions: RowMenuEntry[] }) {
+  const actions = visibleEntries(entries);
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -108,6 +124,8 @@ export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
     place();
     setOpen(true);
   }
+
+  if (actions.length === 0) return null;
 
   return (
     <>

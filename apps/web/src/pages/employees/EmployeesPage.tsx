@@ -19,6 +19,9 @@ const STATUS_META: Record<EmployeeStatus, BadgeMeta> = {
 export function EmployeesPage() {
   const { t } = useTranslation();
   const { can } = usePermissions();
+  const canAdd = can('employees', 'add');
+  const canEdit = can('employees', 'edit');
+  const canDelete = can('employees', 'delete');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,9 +90,11 @@ export function EmployeesPage() {
           <div className="page-sub">{t('employees.subtitle')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('employees.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('employees.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -140,10 +145,10 @@ export function EmployeesPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: t('employees.menu.edit'), onClick: () => setModal({ mode: 'edit', employee: e }) },
-                      { label: e.archived ? t('employees.menu.unarchive') : t('employees.menu.archive'), onClick: () => setEmployeeArchived(e.id, !e.archived).then(reload) },
+                      canEdit && { label: t('employees.menu.edit'), onClick: () => setModal({ mode: 'edit', employee: e }) },
+                      canEdit && { label: e.archived ? t('employees.menu.unarchive') : t('employees.menu.archive'), onClick: () => setEmployeeArchived(e.id, !e.archived).then(reload) },
                       '-',
-                      { label: t('employees.menu.delete'), onClick: () => setPendingDelete(e), danger: true },
+                      canDelete && { label: t('employees.menu.delete'), onClick: () => setPendingDelete(e), danger: true },
                     ]}
                   />
                 </td>

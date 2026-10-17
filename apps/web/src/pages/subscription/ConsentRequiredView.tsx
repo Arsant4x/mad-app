@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { acceptConsent, type ConsentState } from '../../api/consent';
 import { exportAllData } from '../../api/subscription';
+import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { DeletionRequestCard } from './DeletionRequestCard';
 import { dfmt } from '../../lib/format';
@@ -14,6 +15,9 @@ import { dfmt } from '../../lib/format';
  */
 export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: ConsentState; onAccepted: (next: ConsentState) => void; onLogout: () => void }) {
   const { t } = useTranslation();
+  // Accepting and closing the account are the owner's; an employee reads the list and signs out.
+  const { user } = useAuth();
+  const isOwner = user?.actorType === 'COMPANY';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -100,15 +104,19 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
       </p>
 
       <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConfirming(true)}>
-          {t('subscription.consent.accept')}
-        </button>
+        {isOwner && (
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConfirming(true)}>
+            {t('subscription.consent.accept')}
+          </button>
+        )}
         <button className="btn btn-ghost btn-sm" disabled={busy} onClick={download}>
           {t('subscription.consent.download')}
         </button>
-        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setExiting((v) => !v)}>
-          {t('subscription.consent.close_account')}
-        </button>
+        {isOwner && (
+          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setExiting((v) => !v)}>
+            {t('subscription.consent.close_account')}
+          </button>
+        )}
         <button className="btn btn-ghost btn-sm" onClick={onLogout}>
           {t('subscription.common.logout')}
         </button>
@@ -116,9 +124,9 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
       {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
 
       {/* The same closure card, not a copy, so one card governs the request wherever it shows. */}
-      {exiting && <DeletionRequestCard />}
+      {isOwner && exiting && <DeletionRequestCard />}
 
-      {confirming && (
+      {isOwner && confirming && (
         <ConfirmModal
           title={t('subscription.consent.confirm_title')}
           body={t('subscription.consent.confirm_body', { version: state.requiredVersion ?? '' })}

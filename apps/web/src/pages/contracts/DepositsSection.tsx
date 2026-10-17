@@ -10,6 +10,7 @@ import {
   type DepositHolder,
   type DepositType,
 } from '../../api/contracts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { fmt, dfmt } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 import i18n from '../../i18n';
@@ -56,6 +57,10 @@ const rowIncomplete = (r: DeductionRow) =>
  */
 export function DepositsSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Receiving a deposit records, settling it reviews.
+  const canRecord = can('contracts', 'record');
+  const canSettle = can('contracts', 'review');
   const [adding, setAdding] = useState(false);
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +141,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
         <span>
           {t('contracts.deposits.title', { n: contract.deposits.length })}{heldTotal > 0 && <span className="hint">{t('contracts.deposits.held_total', { amount: fmt(contract.depositsHeld ?? 0) })}</span>}
         </span>
-        {contract.status !== 'CANCELLED' && (
+        {canRecord && contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
             {adding ? t('contracts.deposits.cancel') : t('contracts.deposits.add')}
           </button>
@@ -145,7 +150,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
 
       {error && <p className="error-text">{error}</p>}
 
-      {adding && (
+      {canRecord && adding && (
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
@@ -244,7 +249,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                 )}
               </td>
               <td>
-                {d.status === 'HELD' && (
+                {canSettle && d.status === 'HELD' && (
                   <button
                     className="btn btn-ghost"
                     onClick={() => {
@@ -262,7 +267,8 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
         </tbody>
       </table>
 
-      {settlingId &&
+      {canSettle &&
+        settlingId &&
         (() => {
           const deposit = contract.deposits.find((d) => d.id === settlingId)!;
           const held = Number(deposit.amount);
