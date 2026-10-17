@@ -44,7 +44,7 @@ describe('Cash in transit code does not consume bank codes (e2e)', () => {
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
     await app.close();
-  }, 60000);
+  });
 
   it('a drawer deposit creates 1190 and the next bank still takes the bank MAX+1', async () => {
     const first = await auth(http().post('/banks')).send({ name: 'Bank one', kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
@@ -71,5 +71,5 @@ describe('Cash in transit code does not consume bank codes (e2e)', () => {
 
     const second = await auth(http().post('/banks')).send({ name: 'Bank two', kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     expect(await accountCode(second.body.accountId)).toBe('1101');
-  }, 60000);
+  });
 });
