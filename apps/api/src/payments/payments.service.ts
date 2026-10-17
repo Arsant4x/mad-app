@@ -258,7 +258,7 @@ export class PaymentsService {
         if (declared === 'ON_ACCOUNT') {
           // On account is invoiced debt allocated later, so the customer's net receivable must cover it, in base currency.
           // The customer row is locked first so two such receipts cannot both read the same coverage.
-          await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${dto.customerId} FOR UPDATE`;
+          await lockDocumentRow(tx, 'customers', dto.customerId);
           const allocatedNowBase = allocations.reduce((s, a) => s + toBaseAmount(a.amount, invoices.get(a.invoiceId)?.exchangeRate ?? exchangeRate), 0);
           const openBase = round2((await this.onAccountCoverageBaseOf(tx, dto.customerId)) - allocatedNowBase);
           if (openBase + 0.005 < toBaseAmount(remainder, exchangeRate)) {
@@ -339,7 +339,7 @@ export class PaymentsService {
    * was unpaid), less what the customer's receipts left unallocated at their receivable rate, reversals and refunds with
    * their sign. A prepayment document is not a receivable, so it does not enter.
    *
-   * Company wide on purpose: the debt is the customer's to the company, not to a branch.
+   * Company wide by design: the debt is the customer's to the company, not to a branch.
    */
   private async onAccountCoverageBaseOf(tx: Prisma.TransactionClient, customerId: string): Promise<number> {
     // Only a document that is unpaid or carries a credit note can hold a non zero balance.

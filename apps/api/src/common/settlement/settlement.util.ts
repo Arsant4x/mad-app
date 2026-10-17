@@ -174,7 +174,7 @@ interface LockedDocument {
  * **والسندان عند إعادة التوزيع** (توجيه ٢٧٦ · ٢و): يقفل كلٌّ صفَّه قبل أن يقرأ تخصيصاتِه ويحذفها، فالطلبُ الثاني ينتظر ثم يقرأ
  * تخصيصاتِ الأوّل ويحلّ محلَّها؛ وبلا القفل يحذف ما رآه وحدَه ويكتب فوق ما كتبه الأوّل فيبقى التوزيعان.
  */
-export type LockableDocument = 'invoices' | 'purchases' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'cash_drawers' | 'payments' | 'supplier_payments';
+export type LockableDocument = 'invoices' | 'purchases' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'cash_drawers' | 'payments' | 'supplier_payments' | 'customers';
 
 export async function lockDocumentRow(tx: Prisma.TransactionClient, table: LockableDocument, id: string): Promise<void> {
   const t = Prisma.raw(`"${table}"`);

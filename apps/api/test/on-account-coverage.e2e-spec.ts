@@ -65,14 +65,14 @@ describe('On-account receipt coverage (e2e)', () => {
     race = raceHarness(() => company.companyId, holdClient, probe);
     branchId = (await auth(http().post('/branches')).send({ name: `Branch ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(http().post('/banks')).send({ name: `Box ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: today(), branchId }).expect(201)).body.id;
-  }, 90000);
+  });
 
   afterAll(async () => {
     await holdClient?.$disconnect();
     await probe?.$disconnect();
     await removeIsolatedCompany(app, company);
     await app.close();
-  }, 60000);
+  });
 
   it('a second on-account receipt is refused once an earlier one already covers the open invoice', async () => {
     const customerId = await newCustomer('second');
