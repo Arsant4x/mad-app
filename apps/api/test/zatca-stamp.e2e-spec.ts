@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { writePastDbGuard } from './write-past-db-guard';
 import { startAuthorityStub, STUB_REJECTION_MESSAGE, type AuthorityStub } from './zatca-authority-stub';
 import { encryptSecret } from '../src/common/crypto/secret.util';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
@@ -163,7 +164,8 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
       const row = await tx.invoice.findUniqueOrThrow({ where: { id: res.body.id }, select: { zatcaSignedXml: true } });
       const corrupted = row.zatcaSignedXml!.replace(`مؤسسة الختم ${suffix}`, `مؤسسة الختم ${suffix} X`);
       expect(corrupted).not.toBe(row.zatcaSignedXml);
-      await tx.invoice.update({ where: { id: res.body.id }, data: { zatcaSignedXml: corrupted } });
+      // The database refuses changing a signed document, so damage on disk is simulated past its guard.
+      await writePastDbGuard(tx, 'invoices', () => tx.invoice.update({ where: { id: res.body.id }, data: { zatcaSignedXml: corrupted } }));
     });
 
     // التلفُ عطلٌ عندنا لا جوابٌ من الهيئة (ق-٩٧١): يُرمى بسببه ولا يُكتب مردوداً — المستندُ

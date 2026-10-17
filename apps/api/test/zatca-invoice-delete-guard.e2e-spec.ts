@@ -160,16 +160,8 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    // Chained test rows can't go through the API delete (that refusal is the
-    // very thing under test), and they aren't a real chain — strip the link,
-    // then delete normally so journal entries are reversed too.
-    await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.updateMany({
-        where: { id: { in: createdInvoiceIds } },
-        data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
-      }),
-    );
-    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    // The API refusal is the very thing under test, so the test removes its rows directly in the tenant context. A signed
+    // row cannot be unsigned in the database, and it does not need to be: the cleanup deletes it as it is.
     await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
     await authority.close();
