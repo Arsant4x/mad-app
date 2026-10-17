@@ -4,7 +4,7 @@ import { ApiCreatedResponse, ApiOkResponse, ApiProduces } from '@nestjs/swagger'
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
-import { IdempotencyKey } from '../common/idempotency/idempotency';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -99,6 +99,7 @@ export class ContractsController {
   @Post('claims/:claimId/attachments')
   @RequiresAction('add')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @IdempotencyExempt('uploads a file to a claim; it writes no document and no posting')
   addClaimAttachment(@CurrentTenant() tenant: TenantContext, @Param('claimId') claimId: string, @UploadedFile() file: Express.Multer.File) {
     return this.claimAttachments.add(tenant.companyId, claimId, file);
   }
@@ -143,6 +144,7 @@ export class ContractsController {
   @Post('handovers/:handoverId/photos')
   @RequiresAction('add')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @IdempotencyExempt('uploads a photo to a handover form; it writes no document and no posting')
   addHandoverPhoto(
     @CurrentTenant() tenant: TenantContext,
     @Param('handoverId') handoverId: string,
@@ -162,6 +164,7 @@ export class ContractsController {
   @Post(':contractId/attachments')
   @RequiresAction('add')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @IdempotencyExempt('uploads a file to a contract; it writes no document and no posting')
   addAttachment(@CurrentTenant() tenant: TenantContext, @Param('contractId') contractId: string, @UploadedFile() file: Express.Multer.File) {
     return this.attachments.add(tenant.companyId, contractId, file);
   }
@@ -174,8 +177,8 @@ export class ContractsController {
 
   @Post()
   @RequiresAction('add')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateContractDto) {
-    return this.contractsService.create(tenant.companyId, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateContractDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.contractsService.create(tenant.companyId, dto, keyedRequest(idempotencyKey, 'contracts.create', tenant, dto));
   }
 
   @Patch(':id')
@@ -186,6 +189,7 @@ export class ContractsController {
 
   @Post(':id/cancel')
   @RequiresAction('delete')
+  @IdempotencyExempt('a contract is cancelled once; a repeat is refused because it is already cancelled')
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CancelContractDto) {
     return this.contractsService.cancel(tenant.companyId, id, dto);
   }
@@ -193,6 +197,7 @@ export class ContractsController {
   /** Creates the next lease and links it back to this one. A renewal that starts before this one ends also needs delete. */
   @Post(':id/renew')
   @RequiresAction('add')
+  @IdempotencyExempt('a contract is renewed once; a repeat is refused naming the renewal')
   renew(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RenewContractDto) {
     return this.contractsService.renew(tenant, id, dto);
   }
@@ -200,6 +205,7 @@ export class ContractsController {
   /** The condition-of-unit form. Draft until signed, immutable after. */
   @Post(':id/handovers')
   @RequiresAction('add')
+  @IdempotencyExempt('opens a draft handover form with no number and no posting; a duplicate draft is deleted')
   createHandover(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateHandoverDto) {
     return this.contractsService.createHandover(tenant.companyId, id, dto);
   }
@@ -218,6 +224,7 @@ export class ContractsController {
   /** Freezes the form, with a server-side timestamp. */
   @Post(':id/handovers/:handoverId/sign')
   @RequiresAction('review')
+  @IdempotencyExempt('a handover form is signed once; a repeat is refused because the signed form is frozen')
   signHandover(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,
@@ -236,20 +243,21 @@ export class ContractsController {
   /** التقبيل — the lump sum for the right to a commercial location. */
   @Post(':id/key-money')
   @RequiresAction('record')
-  recordKeyMoney(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordKeyMoneyDto) {
-    return this.contractsService.recordKeyMoney(tenant.companyId, id, dto);
+  recordKeyMoney(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordKeyMoneyDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.contractsService.recordKeyMoney(tenant.companyId, id, dto, keyedRequest(idempotencyKey, 'contracts.key-money', tenant, { contractId: id, dto }));
   }
 
   /** A demand on the tenant outside the rent schedule — posted as a receivable
    * the moment it is raised. */
   @Post(':id/claims')
   @RequiresAction('add')
-  createClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateClaimDto) {
-    return this.contractsService.createClaim(tenant.companyId, id, dto);
+  createClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateClaimDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.contractsService.createClaim(tenant.companyId, id, dto, keyedRequest(idempotencyKey, 'contracts.claim', tenant, { contractId: id, dto }));
   }
 
   @Post(':id/claims/:claimId/pay')
   @RequiresAction('record')
+  @IdempotencyExempt('a claim is collected once in full; a repeat is refused because it is no longer open')
   payClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('claimId') claimId: string, @Body() dto: PayClaimDto) {
     return this.contractsService.payClaim(tenant.companyId, id, claimId, dto);
   }
@@ -257,6 +265,7 @@ export class ContractsController {
   /** Writes the claim off, reversing the income it recognized. */
   @Post(':id/claims/:claimId/waive')
   @RequiresAction('review')
+  @IdempotencyExempt('a claim is waived once; a repeat is refused because it is no longer open')
   waiveClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('claimId') claimId: string, @Body() dto: WaiveClaimDto) {
     return this.contractsService.waiveClaim(tenant.companyId, id, claimId, dto);
   }
@@ -265,14 +274,15 @@ export class ContractsController {
   @Post(':id/fees')
   @RequiresAction('edit')
   @ApiCreatedResponse({ type: CreatedContractFeeResponse })
-  addFee(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ContractFeeDto) {
-    return this.contractsService.addFee(tenant.companyId, id, dto);
+  addFee(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ContractFeeDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.contractsService.addFee(tenant.companyId, id, dto, keyedRequest(idempotencyKey, 'contracts.fee', tenant, { contractId: id, dto }));
   }
 
   /** إنهاءُ بند رسم — لا حذف؛ ما طولب عنه يبقى. */
   @Post(':id/fees/:feeId/end')
   @RequiresAction('edit')
   @ApiCreatedResponse({ type: ContractFeeResponse })
+  @IdempotencyExempt('sets the end date of a fee line; a repeat sets the same date and writes no document')
   endFee(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('feeId') feeId: string, @Body() dto: EndContractFeeDto) {
     return this.contractsService.endFee(tenant.companyId, id, feeId, dto);
   }
@@ -281,13 +291,14 @@ export class ContractsController {
    * never as revenue. */
   @Post(':id/deposits')
   @RequiresAction('record')
-  recordDeposit(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordDepositDto) {
-    return this.contractsService.recordDeposit(tenant.companyId, id, dto);
+  recordDeposit(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordDepositDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.contractsService.recordDeposit(tenant.companyId, id, dto, keyedRequest(idempotencyKey, 'contracts.deposit', tenant, { contractId: id, dto }));
   }
 
   /** Closes the deposit out: itemized deductions, remainder refunded. */
   @Post(':id/deposits/:depositId/settle')
   @RequiresAction('review')
+  @IdempotencyExempt('a deposit is settled once; a repeat is refused because it is already settled')
   settleDeposit(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,

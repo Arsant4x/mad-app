@@ -25,6 +25,7 @@ import { baseCurrencyTotals, computeDocumentTotals, lineDiscount, lineGross, typ
 import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
 import { assertSaleNotBlockedByExpiry, fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postPrepaymentApplicationEntry, postPrepaymentInvoiceEntry } from '../journal/auto-posting.util';
 import { getOrCreateCustomerPrepaymentsAccount } from '../journal/prepayment-account.util';
@@ -310,12 +311,21 @@ export class InvoicesService {
     };
   }
 
-  async create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto, credit: CreditContext) {
+  async create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto, credit: CreditContext, request?: KeyedRequest) {
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextInvoiceNumber's comment.
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, (tx) => this.createWithinTx(tx, companyId, allowedBranchIds, dto, credit)),
+    // A replay answers with the invoice as stored; the stock fulfilment summary belongs to the first answer only.
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => this.replayedDocument(tx, id), () =>
+      retryOnUniqueConflict(() =>
+        this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, () => this.createWithinTx(tx, companyId, allowedBranchIds, dto, credit))),
+      ),
     );
+  }
+
+  /** The invoice or note a keyed request wrote, as its create answered it but without the stock fulfilment summary. */
+  private async replayedDocument(tx: Prisma.TransactionClient, id: string) {
+    const row = await tx.invoice.findUnique({ where: { id }, include: INVOICE_INCLUDE });
+    return row ? { ...row, stockFulfilment: undefined } : null;
   }
 
   /**
@@ -941,8 +951,9 @@ export class InvoicesService {
    * جاز أن يُعتمد أكثرُ مما فُوتر. والأصلُ نفسُه يُقاس على فروع القارئ في
    * `adjustableOriginal`.
    */
-  issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateCreditNoteDto) {
-    return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateCreditNoteDto, request?: KeyedRequest) {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.invoice.findUnique({ where: { id }, include: INVOICE_INCLUDE }), () =>
+    retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
       const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds, 'CREDIT_NOTE');
       // دائنٌ على مدينٍ زائد (`ق-٩٥٢`): يعكس فوترةً إضافية لا بيعاً — فلا مرتجعَ فيه ولا رفّ.
       const correctsDebitNote = original.docType === 'DEBIT_NOTE';
@@ -995,7 +1006,7 @@ export class InvoicesService {
       // The note lowers what the original still owes, so its status is derived again in the same transaction.
       await recomputeInvoiceStatus(tx, invoiceId);
       return note;
-    }));
+    }))));
   }
 
   /**
@@ -1010,8 +1021,9 @@ export class InvoicesService {
    * السقف، وإلا جاز أن يُصحَّح أكثرُ مما زاد. والهدفُ نفسُه يُقاس على فروع القارئ في
    * `adjustableOriginal`.
    */
-  issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateDebitNoteDto) {
-    return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateDebitNoteDto, request?: KeyedRequest) {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.invoice.findUnique({ where: { id }, include: INVOICE_INCLUDE }), () =>
+    retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
       const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds, 'DEBIT_NOTE');
       // ⑧ فوترةٌ إضافية: سطورُها جديدةٌ تُحلّ كأيّ بيع — من الصنف أو من إعلان السطر.
       const lines = await priceLines(tx, dto.lines);
@@ -1034,7 +1046,7 @@ export class InvoicesService {
         status: 'DUE',
         post: postDebitNoteEntry,
       });
-    }));
+    }))));
   }
 
   /**

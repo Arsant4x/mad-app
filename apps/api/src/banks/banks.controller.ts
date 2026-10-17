@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards , Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -66,13 +67,14 @@ export class BanksController {
   @Post('network-settlements')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: CreatedNetworkSettlementResponse })
-  createNetworkSettlement(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateNetworkSettlementDto) {
-    return this.settlements.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  createNetworkSettlement(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateNetworkSettlementDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.settlements.create(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'banks.network-settlement', tenant, dto));
   }
 
   @Post('network-settlements/:settlementId/void')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: VoidedNetworkSettlementResponse })
+  @IdempotencyExempt('a settlement is voided once; a repeat is refused because it is already void')
   voidNetworkSettlement(@CurrentTenant() tenant: TenantContext, @Param('settlementId') settlementId: string, @Body() dto: VoidNetworkSettlementDto) {
     return this.settlements.void(tenant.companyId, tenant.allowedBranchIds, settlementId, dto.reason);
   }
@@ -88,14 +90,15 @@ export class BanksController {
   @Post('cash-deposits')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: CreatedCashDepositResponse })
-  createCashDeposit(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDepositDto) {
-    return this.deposits.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  createCashDeposit(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDepositDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.deposits.create(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'banks.cash-deposit', tenant, dto));
   }
 
   @Post('cash-deposits/:depositId/void')
   @RequiresAction('record')
   // أعمدةُ المستند بلا الدرج والبنك (`update` بلا ضمّ) — صنفٌ غيرُ صنف القائمة.
   @ApiCreatedResponse({ type: VoidedCashDepositResponse })
+  @IdempotencyExempt('a deposit is voided once while in transit; a repeat is refused because it is no longer in transit')
   voidCashDeposit(@CurrentTenant() tenant: TenantContext, @Param('depositId') depositId: string, @Body() dto: VoidCashDepositDto) {
     return this.deposits.void(tenant.companyId, tenant.allowedBranchIds, depositId, dto.reason);
   }
@@ -111,6 +114,7 @@ export class BanksController {
   @Post(':id/reconciliation/match')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: BankStatementLineResponse })
+  @IdempotencyExempt('links a statement line to a ledger row; it writes no document and a repeat is refused once linked')
   reconciliationMatch(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: MatchStatementLineDto) {
     return this.reconciliation.match(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId, dto.lineId);
   }
@@ -118,6 +122,7 @@ export class BanksController {
   @Post(':id/reconciliation/unmatch')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: BankStatementLineResponse })
+  @IdempotencyExempt('unlinks a statement line from its ledger row; it writes no document and no posting')
   reconciliationUnmatch(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UnmatchStatementLineDto) {
     return this.reconciliation.unmatch(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId);
   }
@@ -126,6 +131,7 @@ export class BanksController {
   @Post(':id/reconciliation/post')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: BankStatementLineResponse })
+  @IdempotencyExempt('posts a statement line once and matches it; a repeat is refused because the line is already matched')
   reconciliationPost(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: PostStatementLineDto) {
     return this.reconciliation.postFromStatement(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId, dto.counterpartyAccountId, dto.memo, dto.depositId);
   }
@@ -133,6 +139,7 @@ export class BanksController {
   @Post(':id/reconciliation/close')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: ReconciliationStateResponse })
+  @IdempotencyExempt('moves the reconciled date of a bank; it writes no document and no posting')
   reconciliationClose(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseReconciliationDto) {
     return this.reconciliation.close(tenant.companyId, tenant.allowedBranchIds, id, dto.until);
   }
@@ -140,6 +147,7 @@ export class BanksController {
   @Post(':id/reconciliation/reopen')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: ReconciliationStateResponse })
+  @IdempotencyExempt('clears the reconciled date of a bank; it writes no document and no posting')
   reconciliationReopen(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.reconciliation.reopen(tenant.companyId, tenant.allowedBranchIds, id);
   }
@@ -169,8 +177,8 @@ export class BanksController {
   @Post()
   @RequiresAction('add')
   @ApiCreatedResponse({ type: BankRowResponse })
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateBankDto) {
-    return this.banksService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateBankDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.banksService.create(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'banks.create', tenant, dto));
   }
 
   @Patch(':id')
@@ -188,6 +196,7 @@ export class BanksController {
   @OwnerOnly(MSG.bank_transfer_forbidden)
   // اتّحادٌ مميَّزٌ بـ`kind` — صنفان في `oneOf` كتقرير الخصم في الكاشير، لا صنفٌ بحقولٍ اختيارية.
   @ApiCreatedResponse({ schema: { oneOf: [{ $ref: getSchemaPath(BankAccountTransferResponse) }, { $ref: getSchemaPath(CashBoxTransferResponse) }] } })
+  @IdempotencyExempt('moves a bank or box to another branch; a repeat is refused because it is already in that branch')
   transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferBankDto) {
     return this.banksService.transfer(tenant.companyId, tenant.actorType, id, dto);
   }

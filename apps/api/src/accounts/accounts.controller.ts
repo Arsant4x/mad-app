@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -33,6 +34,7 @@ export class AccountsController {
 
   @Post()
   @RequiresAction('add')
+  @IdempotencyExempt('an account code is unique in the chart; a repeat is refused naming the code')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateAccountDto) {
     return this.accountsService.create(tenant.companyId, dto);
   }

@@ -45,6 +45,11 @@ const SCHEMA = readFileSync(join(__dirname, '..', '..', 'prisma', 'schema.prisma
 /** علامةُ الإعلان — كلمتان تُقرآن في التعليق وتُمسكان بالبحث. */
 export const PARENT_DECLARATION = 'بلا أبٍ';
 
+/** The same declaration in English, for schema comments written in English: a doc line that starts with it. */
+export const PARENT_DECLARATION_EN = 'No parent:';
+
+const declaresNoParent = (doc: string) => doc.includes(PARENT_DECLARATION) || doc.split('\n').some((line) => line.replace(/^\/\/\/\s*/, '').startsWith(PARENT_DECLARATION_EN));
+
 export interface SchemaModel {
   name: string;
   body: string;
@@ -95,7 +100,7 @@ export function undeclaredOrphans(schema: string): string[] {
   return models
     .filter((m) => /^\s*companyId\s+String/m.test(m.body))
     .filter((m) => parentsOf(m, names).length === 0)
-    .filter((m) => !m.doc.includes(PARENT_DECLARATION))
+    .filter((m) => !declaresNoParent(m.doc))
     .map((m) => m.name);
 }
 
@@ -136,6 +141,12 @@ describe('نموذجُ مستأجرٍ بلا أبٍ يُعلن سببَه (ق-٥
 
     const declared = [`/// **${PARENT_DECLARATION}** — كيانٌ جذريّ يملكه التاجر.`, undeclared].join('\n');
     expect(undeclaredOrphans(declared)).toEqual([]);
+  });
+
+  it('accepts the English declaration only at the start of a doc line', () => {
+    const undeclared = ['model Thing {', '  id        String  @id @default(uuid())', '  companyId String', '  company   Company @relation(fields: [companyId], references: [id])', '}'].join('\n');
+    expect(undeclaredOrphans([`/// ${PARENT_DECLARATION_EN} a root entity the merchant owns.`, undeclared].join('\n'))).toEqual([]);
+    expect(undeclaredOrphans([`/// It has ${PARENT_DECLARATION_EN.toLowerCase()} written in passing.`, undeclared].join('\n'))).toEqual(['Thing']);
   });
 
   it('ولا يُدان مَن له أبٌ مفرد — ولو لم يُعلن', () => {

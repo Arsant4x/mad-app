@@ -1,7 +1,9 @@
-import { BadRequestException, createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { BadRequestException, ConflictException, createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { Request } from 'express';
 import { MSG } from '../i18n/messages';
+import type { TenantPrismaService } from '../tenant/tenant-prisma.service';
 
 /**
  * ⚖️ **الإرسالُ المكرّر لا يُنشئ مستندين** (توجيه ٢٧٦ · `ق-١٦٠٩`/ب، بالقاعدة ٣٧ — مقياسُ م٥ في المسح ٣٤).
@@ -66,3 +68,95 @@ export async function onceForKey<T>(key: string | undefined, lookup: () => Promi
     throw e;
   }
 }
+
+/**
+ * A create request that carried a key, for the routes that keep their keys in `idempotency_records` rather than on the
+ * document row: the key, the route it was sent to, and a fingerprint of who sent what.
+ */
+export interface KeyedRequest {
+  key: string;
+  scope: string;
+  fingerprint: string;
+}
+
+/**
+ * The keyed request for one route, or `undefined` when no key came (the route then behaves as it always did).
+ * The fingerprint covers the actor and the whole request, so the same key with any other request is told apart.
+ */
+export function keyedRequest(key: string | undefined, scope: string, actor: { profileId: string }, request: unknown): KeyedRequest | undefined {
+  if (!key) return undefined;
+  return { key, scope, fingerprint: requestFingerprint({ actor: actor.profileId, request }) };
+}
+
+/** sha256 of a canonical JSON form: object keys sorted, undefined values dropped, dates as ISO strings. */
+export function requestFingerprint(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+function canonical(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined);
+    return Object.fromEntries(entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => [k, canonical(v)]));
+  }
+  return value;
+}
+
+/**
+ * Runs the body of a keyed create inside the transaction that writes the document, then records the key with what it wrote.
+ * A parallel request with the same key waits on the lock until this one commits, then finds the record and gives way before it
+ * takes a document number; `onceForRequest` then answers it with the document this one wrote.
+ */
+export async function recordKeyedRequest<T>(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  request: KeyedRequest | undefined,
+  body: () => Promise<T>,
+  resourceIdOf: (result: T) => string = (result) => (result as { id: string }).id,
+): Promise<T> {
+  if (!request) return body();
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`idempotency:${companyId}:${request.key}`}))`;
+  if (await tx.idempotencyRecord.findUnique({ where: { companyId_key: { companyId, key: request.key } }, select: { id: true } })) throw new IdempotentReplay();
+  const result = await body();
+  await tx.idempotencyRecord.create({
+    data: { companyId, key: request.key, scope: request.scope, fingerprint: request.fingerprint, resourceId: resourceIdOf(result) },
+  });
+  return result;
+}
+
+/**
+ * Once per key for the routes recorded in `idempotency_records`: a key already recorded answers with its document, refused
+ * with a named 409 when it was recorded for another request; otherwise `create` runs, and `create` must wrap its
+ * transaction body in `recordKeyedRequest` with the same request.
+ */
+export function onceForRequest<T, R = T>(
+  tenantPrisma: Pick<TenantPrismaService, 'runInTenantContext'>,
+  companyId: string,
+  request: KeyedRequest | undefined,
+  load: (tx: Prisma.TransactionClient, resourceId: string) => Promise<R | null>,
+  create: () => Promise<T>,
+): Promise<T | R> {
+  return onceForKey<T | R>(
+    request?.key,
+    () =>
+      tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const record = await tx.idempotencyRecord.findUnique({ where: { companyId_key: { companyId, key: request!.key } } });
+        if (!record) return null;
+        if (record.scope !== request!.scope || record.fingerprint !== request!.fingerprint) throw new ConflictException(MSG.idempotency_key_reused);
+        const found = await load(tx, record.resourceId);
+        if (!found) throw new ConflictException(MSG.idempotency_key_document_gone);
+        return found;
+      }),
+    create,
+  );
+}
+
+/** Metadata key of a POST route that takes no Idempotency-Key, read by the coverage spec. */
+export const IDEMPOTENCY_EXEMPT = 'idempotency:exempt';
+
+/**
+ * Marks a POST route on a document controller that takes no Idempotency-Key, with the reason; the coverage spec refuses a
+ * POST under such a controller that has neither the key nor this.
+ */
+export const IdempotencyExempt = (reason: string) => SetMetadata(IDEMPOTENCY_EXEMPT, reason);

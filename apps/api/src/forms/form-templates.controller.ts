@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -23,6 +24,7 @@ import { FormTemplatesService } from './form-templates.service';
 @Controller('form-templates')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @TenantWide('قوالبُ المنشأة وكتالوجُ القوالب العامّة تُقرأ لكلّ فاعل لأن الموظّفَ يعبّئ النموذجَ على إصدارٍ منشور — والكتابةُ على شاشة «النماذج»')
+@IdempotencyExempt('the company copies of form templates: no numbered document and no posting')
 export class FormTemplatesController {
   constructor(private readonly service: FormTemplatesService) {}
 

@@ -4,6 +4,7 @@ import { ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiProduces } from '@ne
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -50,6 +51,7 @@ export class ContractFormsController {
   @Post()
   @RequiresAction('record')
   @ApiCreatedResponse({ type: FormInstanceResponse })
+  @IdempotencyExempt('opens a draft form with no number and no posting; a duplicate draft is deleted')
   create(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Body() dto: CreateFormInstanceDto) {
     return this.service.create(tenant.companyId, id, dto, actorOf(tenant, req));
   }
@@ -72,6 +74,7 @@ export class ContractFormsController {
   @Post(':formId/seal')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: FormInstanceResponse })
+  @IdempotencyExempt('sealing by hand is refused; a form is sealed when the tenant signs')
   seal(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.service.seal(tenant.companyId, id);
   }
@@ -93,6 +96,7 @@ export class ContractFormsController {
   )
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormSentResponse })
+  @IdempotencyExempt('sends a draft form once; a repeat is refused because the form is no longer a draft')
   send(
     @CurrentTenant() tenant: TenantContext,
     @Req() req: Request,
@@ -133,6 +137,7 @@ export class ContractFormsController {
   )
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormPaperSignedResponse })
+  @IdempotencyExempt('signs and seals the form once; a repeat is refused because the sealed form is frozen')
   paper(
     @CurrentTenant() tenant: TenantContext,
     @Req() req: Request,
@@ -149,6 +154,7 @@ export class ContractFormsController {
   @Post(':formId/device-link')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: FormDeviceLinkResponse })
+  @IdempotencyExempt('opens a signing link on the staff device; it writes no document and no posting')
   deviceLink(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
     return this.service.deviceLink(tenant.companyId, id, formId, actorOf(tenant, req));
   }
@@ -160,6 +166,7 @@ export class ContractFormsController {
   @Post(':formId/substitute')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: FormSentResponse })
+  @IdempotencyExempt('asks the tenant to approve a substitute recipient; it writes no document and no posting')
   requestSubstitute(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string, @Body() dto: RequestSubstituteDto) {
     return this.service.requestSubstitute(tenant.companyId, id, formId, actorOf(tenant, req), dto);
   }
@@ -167,6 +174,7 @@ export class ContractFormsController {
   @Post(':formId/resend')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: FormSentResponse })
+  @IdempotencyExempt('sends the signing link again; it writes no document and no posting')
   resend(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
     return this.service.resend(tenant.companyId, id, formId, actorOf(tenant, req));
   }
@@ -174,6 +182,7 @@ export class ContractFormsController {
   @Post(':formId/revisions')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: FormInstanceResponse })
+  @IdempotencyExempt('an objected form has one revision; a repeat is refused because the revision exists')
   revise(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
     return this.service.revise(tenant.companyId, id, formId, actorOf(tenant, req));
   }

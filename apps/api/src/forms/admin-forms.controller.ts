@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { PlatformRole } from '@mad-app/db';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
 import { FormTemplateResponse, FormTemplateRowResponse, FormTypeResponse } from './dto/form-responses.dto';
@@ -19,6 +20,7 @@ const PLATFORM: FormScope = { companyId: null };
 @Controller('admin/form-types')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 @RequiresPlatformRole(PlatformRole.COMPLIANCE)
+@IdempotencyExempt('the platform catalogue of form types: no numbered document and no posting')
 export class AdminFormTypesController {
   constructor(private readonly service: FormTemplatesService) {}
 
@@ -48,6 +50,7 @@ export class AdminFormTypesController {
 @Controller('admin/form-templates')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 @RequiresPlatformRole(PlatformRole.COMPLIANCE)
+@IdempotencyExempt('the platform form templates: no numbered document and no posting')
 export class AdminFormTemplatesController {
   constructor(private readonly service: FormTemplatesService) {}
 

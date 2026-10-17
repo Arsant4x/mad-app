@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -24,8 +25,8 @@ export class JournalController {
 
   @Post()
   @RequiresAction('record')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateJournalEntryDto) {
-    return this.journalService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateJournalEntryDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.journalService.create(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'journal.create', tenant, dto));
   }
 
   /**
@@ -34,6 +35,7 @@ export class JournalController {
    */
   @Post(':id/reverse')
   @RequiresAction('record')
+  @IdempotencyExempt('an entry is reversed once; a repeat is refused because the entry is already reversed')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReverseJournalEntryDto) {
     return this.journalService.reverse(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
@@ -34,6 +35,7 @@ export class CashDrawersController {
 
   @Post()
   @OwnerOnly(MSG.cash_drawer_forbidden)
+  @IdempotencyExempt('a drawer name is unique; a repeat is refused naming the drawer')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDrawerDto) {
     return this.cashDrawers.create(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, dto);
   }
@@ -47,6 +49,7 @@ export class CashDrawersController {
   /** نقلُ الدرج إلى فرعٍ آخر — إغلاقٌ وفتحٌ بعدّ النقد ونقلِ رصيده بقيدين (`ق-١٤١٣`). */
   @Post(':id/transfer')
   @OwnerOnly(MSG.cash_drawer_forbidden)
+  @IdempotencyExempt('moves a drawer to another branch; a repeat is refused because it is already in that branch')
   transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferCashDrawerDto) {
     return this.cashDrawers.transfer(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
   }

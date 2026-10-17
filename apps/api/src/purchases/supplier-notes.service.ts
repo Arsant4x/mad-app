@@ -16,6 +16,7 @@ import { MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postSupplierNoteEntry } from '../journal/auto-posting.util';
@@ -54,12 +55,12 @@ const NOTE_INCLUDE = { supplier: true, lines: { where: { supersededAt: null } } 
 export class SupplierNotesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto) {
-    return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'credit');
+  issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto, request?: KeyedRequest) {
+    return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'credit', request);
   }
 
-  issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto) {
-    return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'debit');
+  issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto, request?: KeyedRequest) {
+    return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'debit', request);
   }
 
   /**
@@ -69,10 +70,11 @@ export class SupplierNotesService {
    * محجوبٍ عن القارئ يبقى مخصوماً من السقف، وإلا جاز أن يُقبل من المورّد أكثرُ مما فُوتر؛ والأصلُ نفسُه يُقاس
    * على فروع القارئ بـ`assertBranchAllowed` قبل أيّ كتابة.
    */
-  private issue(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto, side: NoteSide) {
+  private issue(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto, side: NoteSide, request?: KeyedRequest) {
     const docType = side === 'credit' ? PURCHASE_NOTE_KINDS.credit : PURCHASE_NOTE_KINDS.debit;
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.purchase.findUnique({ where: { id }, include: NOTE_INCLUDE }), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const original = await tx.purchase.findUnique({ where: { id: purchaseId }, include: NOTE_INCLUDE });
         if (!original) throw new NotFoundException(MSG.purchase_not_found);
         const { correctsOpposite } = assertAdjustableTarget(
@@ -224,7 +226,7 @@ export class SupplierNotesService {
         // على طبقة الأصل بقاعدة الانتشار، والمُعادةُ إلى `5100`، والخدميُّ إلى حساب الفئة.
         await reconcileNonDeductibleVat(tx, companyId, created.id, { date: created.date, trigger: 'SUPPLIER_NOTE' });
         return posted;
-      }),
-    );
+      })),
+    ));
   }
 }

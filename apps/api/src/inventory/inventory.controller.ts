@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -52,13 +53,15 @@ export class InventoryController {
   /** الاسمُ يُمرَّر لأن الإعلانَ **يُختم باسم مُعلِنه** وقتَ الفعل لا يُحلّ لاحقاً (كما سجلّ التدقيق). */
   @Post('opening')
   @RequiresAction('record')
-  declareOpening(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: DeclareStockOpeningDto) {
-    return this.stockOpenings.declare(tenant.companyId, tenant.allowedBranchIds, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, dto);
+  declareOpening(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: DeclareStockOpeningDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    const declarer = { id: tenant.profileId, actorType: tenant.actorType, name: user.username };
+    return this.stockOpenings.declare(tenant.companyId, tenant.allowedBranchIds, declarer, dto, keyedRequest(idempotencyKey, 'inventory.opening', tenant, dto));
   }
 
   /** إلغاءُ سطرٍ — عكسٌ لا محو، ويُرفض بعد استهلاك. */
   @Post('opening/:id/lines/:lineId/void')
   @RequiresAction('delete')
+  @IdempotencyExempt('an opening line is voided once; a repeat is refused because the line is already void')
   voidOpeningLine(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('lineId') lineId: string) {
     return this.stockOpenings.voidLine(tenant.companyId, tenant.allowedBranchIds, id, lineId);
   }
@@ -100,13 +103,14 @@ export class InventoryController {
   /** Record for every movement; one that reduces inventory value (stock out, negative adjustment) also needs review. */
   @Post('movements')
   @RequiresAction('record')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateStockMovementDto) {
-    return this.inventoryService.create(tenant, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateStockMovementDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.inventoryService.create(tenant, dto, keyedRequest(idempotencyKey, 'inventory.movement', tenant, dto));
   }
 
   /** ㉙ عكسُ الحركة بحركةٍ مقابلة — لا حذف (ق-١٠٦٣): تاريخُ المخزون لا يُمحى. */
   @Post('movements/:id/reverse')
   @RequiresAction('delete')
+  @IdempotencyExempt('a movement is reversed once; a repeat is refused because it is already reversed')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.inventoryService.reverse(tenant.companyId, tenant.allowedBranchIds, id);
   }
@@ -125,12 +129,13 @@ export class InventoryController {
 
   @Post('write-offs')
   @RequiresAction('record')
-  recordWriteOff(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateWriteOffDto) {
-    return this.writeOffs.create(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, dto);
+  recordWriteOff(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateWriteOffDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.writeOffs.create(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, dto, keyedRequest(idempotencyKey, 'inventory.write-off', tenant, dto));
   }
 
   @Post('write-offs/:id/approve')
   @RequiresAction('review')
+  @IdempotencyExempt('a write-off is decided once; a repeat is refused because it is no longer pending')
   approveWriteOff(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string) {
     // الاسم يُمرَّر لأن الاعتماد الذاتي **يُكتب حدثاً باسم فاعله** — واسمُه
     // يُخزَّن وقت الفعل لا يُحلّ لاحقاً (كما في بقية سجل التدقيق).
@@ -144,6 +149,7 @@ export class InventoryController {
 
   @Post('write-offs/:id/reject')
   @RequiresAction('review')
+  @IdempotencyExempt('a write-off is decided once; a repeat is refused because it is no longer pending')
   rejectWriteOff(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RejectWriteOffDto) {
     return this.writeOffs.reject(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, id, dto);
   }
@@ -177,6 +183,7 @@ export class InventoryController {
   @Post('write-offs/:id/attachments')
   @RequiresAction('record')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @IdempotencyExempt('uploads a file to a write-off; it writes no document and no posting')
   addWriteOffAttachment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
     return this.writeOffAttachments.add(tenant.companyId, tenant.allowedBranchIds, id, file);
   }

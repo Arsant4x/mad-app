@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Customer } from './customers';
+import { withRequestKey } from './idempotency';
 import type { MoneyText } from '../lib/money';
 import type { TaxCategory } from '../lib/vat';
 import type { InvoiceDocType, InvoiceStatus } from '@mad-app/shared/api/enums';
@@ -164,14 +165,17 @@ export const downloadClearedXml = async (invoice: Pick<Invoice, 'id' | 'no'>) =>
 };
 /** ④A1: الدفعاتُ المقدَّمة المعلَّقة لعميل — ما يعرضه بنّاءُ الفاتورة للتطبيق. */
 export const listOpenPrepayments = (customerId: string) => apiClient.get<OpenPrepayment[]>(`/invoices/open-prepayments/${customerId}`).then((r) => r.data);
-export const createInvoice = (dto: CreateInvoiceInput) => apiClient.post<Invoice>('/invoices', dto).then((r) => r.data);
+/** `requestKey` is the key of one open form: a retry under it answers with the invoice already written. */
+export const createInvoice = (dto: CreateInvoiceInput, requestKey?: string) => apiClient.post<Invoice>('/invoices', dto, withRequestKey(requestKey)).then((r) => r.data);
 /** الملاحظاتُ وحالةُ السداد وحدَهما — المحتوى الموقَّع لا يُعدَّل بعد الإصدار (الخادم يرفضه بـ409 · ق-٩٤٣)، ولا حذفَ لمستندٍ صادر. */
 export const updateInvoice = (id: string, dto: UpdateInvoiceInput) => apiClient.patch<Invoice>(`/invoices/${id}`, dto).then((r) => r.data);
-export const issueCreditNote = (invoiceId: string, dto: CreateCreditNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/credit-note`, dto).then((r) => r.data);
+export const issueCreditNote = (invoiceId: string, dto: CreateCreditNoteInput, requestKey?: string) =>
+  apiClient.post<Invoice>(`/invoices/${invoiceId}/credit-note`, dto, withRequestKey(requestKey)).then((r) => r.data);
 
 export type CreateDebitNoteInput = CreateDebitNoteDto;
 
 /** بدلٌ عن مردودة (ق-٩٥٨): مستندٌ جديدٌ بعدّادٍ وتجزئةٍ جديدَين، والمردودةُ تُغلق ولا تُمسّ؛ يُرسَل معه ساعةُ الجهاز كما في الإنشاء. */
 export const issueReplacement = (invoiceId: string, dto: { issuedAt?: string; issuedOffsetMin?: number } = {}) =>
   apiClient.post<Invoice>(`/invoices/${invoiceId}/replacement`, dto).then((r) => r.data);
-export const issueDebitNote = (invoiceId: string, dto: CreateDebitNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/debit-note`, dto).then((r) => r.data);
+export const issueDebitNote = (invoiceId: string, dto: CreateDebitNoteInput, requestKey?: string) =>
+  apiClient.post<Invoice>(`/invoices/${invoiceId}/debit-note`, dto, withRequestKey(requestKey)).then((r) => r.data);

@@ -3,7 +3,7 @@ import { ApiCreatedResponse, ApiExtraModels, ApiOkResponse, getSchemaPath } from
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
-import { IdempotencyKey } from '../common/idempotency/idempotency';
+import { IdempotencyExempt, IdempotencyKey } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -88,6 +88,7 @@ export class PosController {
   @Post('shifts')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosShiftResponse })
+  @IdempotencyExempt('a cashier has one open shift; a repeat is refused while it is open')
   openShift(@CurrentTenant() tenant: TenantContext, @Body() dto: OpenShiftDto) {
     return this.posService.openShift(tenant, dto);
   }
@@ -95,6 +96,7 @@ export class PosController {
   @Post('shifts/:id/close')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: PosClosedShiftResponse })
+  @IdempotencyExempt('a shift closes once; a repeat is refused because it is closed')
   closeShift(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseShiftDto) {
     return this.posService.closeShift(tenant, id, dto);
   }
@@ -103,6 +105,7 @@ export class PosController {
   @Post('sales/sync')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosSyncedSaleResponse })
+  @IdempotencyExempt('keyed by the terminal sale id in the body: the same sale answers with its invoice, another is refused')
   syncSale(@CurrentTenant() tenant: TenantContext, @Body() dto: SyncPosSaleDto) {
     return this.posService.syncSale(tenant, dto);
   }
@@ -128,6 +131,7 @@ export class PosController {
   @Post('payment-attempts')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosPaymentAttemptResponse })
+  @IdempotencyExempt('keyed by the terminal sale id in the body; a repeat answers with the same attempt')
   createAttempt(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosPaymentAttemptDto) {
     return this.attempts.create(tenant, dto);
   }
@@ -151,6 +155,7 @@ export class PosController {
   @Post('payment-attempts/:id/charge')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  @IdempotencyExempt('a conditional state change; a repeat reads the attempt as it is and charges nothing')
   chargeAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.charge(tenant, id);
   }
@@ -159,6 +164,7 @@ export class PosController {
   @Post('payment-attempts/:id/resolve')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  @IdempotencyExempt('a conditional state change on an unanswered attempt; a repeat finds it answered')
   resolveAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.resolve(tenant, id);
   }
@@ -167,6 +173,7 @@ export class PosController {
   @Post('payment-attempts/:id/resolve-with-evidence')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  @IdempotencyExempt('a conditional state change on an unanswered attempt; a repeat is refused once it is answered')
   resolveAttemptWithEvidence(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ResolvePaymentAttemptWithEvidenceDto) {
     return this.attempts.resolveWithEvidence(tenant, id, dto);
   }
@@ -175,6 +182,7 @@ export class PosController {
   @Post('payment-attempts/:id/cancel')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  @IdempotencyExempt('cancels an attempt before it is sent; a repeat is refused because it is no longer cancellable')
   cancelAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.cancel(tenant, id);
   }

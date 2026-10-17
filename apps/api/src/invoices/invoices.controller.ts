@@ -6,6 +6,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload, TenantContext } from '../auth/types';
 import { AuditEntityFromResult } from '../audit/audit-entity-from-result.decorator';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -60,9 +61,9 @@ export class InvoicesController {
    */
   @Post()
   @RequiresAction('add')
-  async create(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: CreateInvoiceDto) {
+  async create(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: CreateInvoiceDto, @IdempotencyKey() idempotencyKey: string | undefined) {
     const credit = await this.invoicesService.creditContextFor(tenant, user.username, dto, 'ON_ACCOUNT');
-    return this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, dto, credit);
+    return this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, dto, credit, keyedRequest(idempotencyKey, 'invoices.create', tenant, dto));
   }
 
   /** Issues a ZATCA 381 credit note against this invoice — gated by 'add'
@@ -71,8 +72,9 @@ export class InvoicesController {
   @Post(':id/credit-note')
   @RequiresAction('add')
   @AuditEntityFromResult()
-  issueCreditNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateCreditNoteDto) {
-    return this.invoicesService.issueCreditNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  issueCreditNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateCreditNoteDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    const request = keyedRequest(idempotencyKey, 'invoices.credit-note', tenant, { invoiceId: id, dto });
+    return this.invoicesService.issueCreditNote(tenant.companyId, tenant.allowedBranchIds, id, dto, request);
   }
 
   /** Issues a ZATCA 383 debit note — additional billing against this
@@ -80,8 +82,9 @@ export class InvoicesController {
   @Post(':id/debit-note')
   @RequiresAction('add')
   @AuditEntityFromResult()
-  issueDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateDebitNoteDto) {
-    return this.invoicesService.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  issueDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateDebitNoteDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    const request = keyedRequest(idempotencyKey, 'invoices.debit-note', tenant, { invoiceId: id, dto });
+    return this.invoicesService.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto, request);
   }
 
   /**
@@ -92,6 +95,7 @@ export class InvoicesController {
   @Post(':id/replacement')
   @RequiresAction('add')
   @AuditEntityFromResult()
+  @IdempotencyExempt('a rejected invoice is replaced once; a repeat is refused naming the replacement')
   issueReplacement(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: IssueReplacementDto) {
     return this.invoicesService.issueReplacement(tenant, user.username, id, dto);
   }

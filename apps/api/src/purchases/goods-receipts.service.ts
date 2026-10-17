@@ -6,6 +6,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postGoodsReceiptEntry } from '../journal/auto-posting.util';
 import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';
@@ -116,9 +117,10 @@ export class GoodsReceiptsService {
    * استلامٌ مسجَّل على شراءٍ قائم — جزئيٌّ أو مكمِّل (`ق-١١٢٢`/②).
    * الشراءُ يجب أن يكون شراءً لا إشعاراً، غيرَ ملغى، وسطورُه المطلوبة حيّةً مخزنيةً وله، والكمّيةُ لا تتجاوز ما بقي.
    */
-  record(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateGoodsReceiptDto) {
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  record(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateGoodsReceiptDto, request?: KeyedRequest) {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.goodsReceipt.findUnique({ where: { id }, include: RECEIPT_INCLUDE }), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const purchase = await tx.purchase.findFirst({
           where: { id: purchaseId, ...branchFilter(allowedBranchIds) },
           include: { supplier: { select: { name: true } }, lines: { where: { supersededAt: null } } },
@@ -180,8 +182,8 @@ export class GoodsReceiptsService {
         // ⚖️ `ق-١٣٤٢` حصّةُ ما وصل من الضريبة غيرِ القابلة للخصم تنتقل من الوسيط إلى طبقتها الجديدة — بتاريخ الاستلام.
         await reconcileNonDeductibleVat(tx, companyId, purchase.id, { date: receivedAt, trigger: 'RECEIPT', labelSuffix: `استلام ${receipt.no}` });
         return tx.goodsReceipt.findUniqueOrThrow({ where: { id: receipt.id }, include: RECEIPT_INCLUDE });
-      }),
-    );
+      })),
+    ));
   }
 
   /** الرفُّ ثم القيد — فإن رُفض الرفُّ سقطت المعاملةُ قبل أن يُكتب قيد (كما في الشراء). */

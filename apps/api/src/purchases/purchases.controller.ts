@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -42,6 +43,7 @@ export class PurchasesController {
   /** توزيعُ سطرٍ خدميّ (شحنٌ · تخليصٌ · رسوم) على طبقاتٍ — بفعل «تسجيل» كسائر وقائع التشغيل. */
   @Post(':id/landed-costs')
   @RequiresAction('record')
+  @IdempotencyExempt('a service line has one active distribution; a repeat is refused as already distributed')
   distributeLandedCost(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateLandedCostDto) {
     return this.landedCosts.distribute(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
@@ -73,8 +75,9 @@ export class PurchasesController {
   /** استلامٌ مسجَّل — جزئيٌّ أو مكمِّل — بفعل «تسجيل» كسائر وقائع التشغيل. */
   @Post(':id/receipts')
   @RequiresAction('record')
-  recordReceipt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateGoodsReceiptDto) {
-    return this.receipts.record(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  recordReceipt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateGoodsReceiptDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    const request = keyedRequest(idempotencyKey, 'purchases.receipt', tenant, { purchaseId: id, dto });
+    return this.receipts.record(tenant.companyId, tenant.allowedBranchIds, id, dto, request);
   }
 
   /** إلغاءُ استلامٍ — عكسٌ لا محو، ولا يُلغى ما استُهلك منه. */
@@ -89,14 +92,16 @@ export class PurchasesController {
 
   @Post(':id/supplier-credit-note')
   @RequiresAction('add')
-  supplierCreditNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateSupplierNoteDto) {
-    return this.supplierNotes.issueCreditNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  supplierCreditNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateSupplierNoteDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    const request = keyedRequest(idempotencyKey, 'purchases.supplier-credit-note', tenant, { purchaseId: id, dto });
+    return this.supplierNotes.issueCreditNote(tenant.companyId, tenant.allowedBranchIds, id, dto, request);
   }
 
   @Post(':id/supplier-debit-note')
   @RequiresAction('add')
-  supplierDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateSupplierNoteDto) {
-    return this.supplierNotes.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  supplierDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateSupplierNoteDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    const request = keyedRequest(idempotencyKey, 'purchases.supplier-debit-note', tenant, { purchaseId: id, dto });
+    return this.supplierNotes.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto, request);
   }
 
   /** تقرير مصاريف التأسيس. Declared before the plain list so the router never
@@ -140,14 +145,15 @@ export class PurchasesController {
   @Post(':purchaseId/attachments')
   @RequiresAction('add')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @IdempotencyExempt('uploads a file to a purchase; it writes no document and no posting')
   addAttachment(@CurrentTenant() tenant: TenantContext, @Param('purchaseId') purchaseId: string, @UploadedFile() file: Express.Multer.File) {
     return this.attachments.add(tenant.companyId, tenant.allowedBranchIds, purchaseId, file);
   }
 
   @Post()
   @RequiresAction('add')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePurchaseDto) {
-    return this.purchasesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePurchaseDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.purchasesService.create(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'purchases.create', tenant, dto));
   }
 
   @Patch(':id')

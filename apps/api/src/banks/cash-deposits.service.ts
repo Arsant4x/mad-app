@@ -6,6 +6,7 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postCashDepositEntry, postCashDepositVoidEntry } from '../journal/auto-posting.util';
 import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME } from '../journal/pos-settlement.util';
@@ -64,8 +65,15 @@ export class CashDepositsService {
    * مسمّىً بالرصيد.
    * **على مستوى المنشأة بحقّها**: الدرجُ والبنكُ يُقرآن بمعرّفيهما ثم يُفحص فرعُ الدرج على فروع القارئ.
    */
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: { drawerId: string; bankId: string; amount: number; date: string; memo?: string }) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: { drawerId: string; bankId: string; amount: number; date: string; memo?: string }, request?: KeyedRequest) {
+    const replayed = async (tx: Prisma.TransactionClient, id: string) => {
+      const row = await tx.cashDeposit.findUnique({ where: { id }, include: { drawer: { select: { id: true, name: true } }, bank: { select: { id: true, name: true } } } });
+      if (!row) return null;
+      const entry = row.journalEntryId ? await tx.journalEntry.findUnique({ where: { id: row.journalEntryId }, select: { no: true } }) : null;
+      return { ...row, amount: money(row.amount), date: row.date.toISOString().slice(0, 10), entryNo: entry?.no ?? '' };
+    };
+    return onceForRequest(this.tenantPrisma, companyId, request, replayed, () =>
+    this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
       const drawer = await tx.cashDrawer.findUnique({ where: { id: dto.drawerId }, select: { id: true, name: true, accountId: true, branchId: true, isActive: true } });
       if (!drawer) throw new NotFoundException(MSG.cash_drawer_not_found);
       if (drawer.branchId) assertBranchAllowed(allowedBranchIds, drawer.branchId);
@@ -97,7 +105,7 @@ export class CashDepositsService {
         include: { drawer: { select: { id: true, name: true } }, bank: { select: { id: true, name: true } } },
       });
       return { ...created, amount: money(created.amount), date: created.date.toISOString().slice(0, 10), entryNo: entry.no };
-    });
+    })));
   }
 
   /**

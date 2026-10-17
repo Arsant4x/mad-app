@@ -41,6 +41,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'DocumentSequence',
   // وما أُخذ منه (`ق-٣٤٥`): يُكتب من المنفذ بسياقه، ويُختم ويُقرأ تحت سياق المنشأة.
   'DocumentNumberAllocation',
+  // Idempotency keys of create requests: written and read under the company's context only.
+  'IdempotencyRecord',
   // قبولُ التاجر لقائمة المعالجين الفرعيين (`ق-٥٨٩`): صفٌّ يحمل `companyId` ويُقرأ تحت
   // سياق منشأته — وقبولُ منشأةٍ لا يُقرأ ولا يُكتب من سياق أخرى.
   'ProcessingAgreementAcceptance',
