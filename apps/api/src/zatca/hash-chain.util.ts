@@ -188,7 +188,7 @@ export function documentInvoiceType(doc: DocumentForInvoiceType): 'standard' | '
   return doc.zatcaInvoiceType ? zatcaTypeOf(doc.zatcaInvoiceType) : invoiceTypeFor(doc.customer, doc.lines);
 }
 
-/** ما يلزم إيصالاً ليُعرف أيُحجب: مشتريه وسطورُه (نوعُ المستند) وحالُه لدى الهيئة. */
+/** What a receipt needs to know whether it is held back: the document's type inputs and its state at the authority. */
 export interface ReceiptGateInput extends DocumentForInvoiceType {
   zatcaStatus: string;
 }
