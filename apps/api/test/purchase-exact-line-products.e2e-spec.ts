@@ -51,7 +51,7 @@ describe('purchase line amounts use the exact decimal product (e2e)', () => {
     warehouseId = (await post('/warehouses').send({ name: `exact warehouse ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `exact branch ${suffix}`, warehouseId }).expect(201)).body.id;
     productId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `exact product ${suffix}`, price: 10, cost: 1 }).expect(201)).body.id;
-  }, 60000);
+  });
 
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
