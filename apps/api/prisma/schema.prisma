@@ -5276,9 +5276,9 @@ model QuoteLine {
   @@map("quote_lines")
 }
 
-/// One scheduled rent payment for a Contract, generated evenly across the
-/// contract's cycle at creation time (see ContractsService.generateInstallments)
-/// and re-derivable on demand. `status` auto-flips DUE -> LATE lazily (on
+/// One scheduled rent payment for a Contract, generated at creation time by
+/// generateInstallmentSchedule and sized by the period it covers; the schedule is
+/// not regenerated afterwards. `status` auto-flips DUE -> LATE lazily (on
 /// read, not via a background job — matches the mockup's `refreshInstallmentStatuses`).
 model Installment {
   id        String  @id @default(uuid())
