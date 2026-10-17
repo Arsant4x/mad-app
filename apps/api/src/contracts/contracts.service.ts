@@ -411,6 +411,29 @@ function mixedShareFieldsFor(kind: string, share: { exemptSharePercent?: number 
   return { exemptSharePercent: percent, exemptShareBasis: basis };
 }
 
+/**
+ * Whether an edit changes the declared tax treatment (classification, VAT inclusion, mixed exempt share). A contract still
+ * carrying a legacy value has no treatment yet, so declaring it is not a change.
+ */
+function changesTaxTreatment(
+  existing: Pick<Contract, 'classification' | 'vatInclusion' | 'lessor' | 'exemptSharePercent'>,
+  dto: Pick<UpdateContractDto, 'classification' | 'vatInclusion' | 'exemptSharePercent'>,
+): boolean {
+  const lessor = existing.lessor as RentLessor;
+  const declared = rentTaxTreatment(existing.classification as RentClassification, existing.vatInclusion as RentVatInclusion, lessor, sharePercentOf(existing.exemptSharePercent));
+  if (!declared) return false;
+  const nextKind = (dto.classification ?? existing.classification) as RentClassification;
+  const nextShare = nextKind === 'MIXED' ? (dto.exemptSharePercent ?? sharePercentOf(existing.exemptSharePercent)) : null;
+  const next = rentTaxTreatment(nextKind, (dto.vatInclusion ?? existing.vatInclusion) as RentVatInclusion, lessor, nextShare);
+  return !next || next.classification !== declared.classification || next.inclusive !== declared.inclusive || next.exemptShare !== declared.exemptShare;
+}
+
+/** Rent accrual rows and collections on a contract; once there is one, what it was posted under stays. */
+async function postedRentRows(tx: Prisma.TransactionClient, contractId: string): Promise<number> {
+  const [accrued, paid] = await Promise.all([tx.rentAccrual.count({ where: { contractId } }), tx.rentPayment.count({ where: { contractId } })]);
+  return accrued + paid;
+}
+
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
@@ -654,12 +677,15 @@ export class ContractsService {
       if (existing.lessor === 'LEGACY_UNDECLARED' && dto.lessor === undefined) {
         throw new BadRequestException(MSG.contract_lessor_required);
       }
+      // Posted rent, its later reductions and the VAT return all read the tax treatment, so it stays once rent was posted.
+      if (changesTaxTreatment(existing, dto) && (await postedRentRows(tx, id)) > 0) {
+        throw new ConflictException(MSG.contract_tax_treatment_locked_after_posting);
+      }
 
       const data: Prisma.ContractUncheckedUpdateInput = {};
       if (dto.classification !== undefined) data.classification = dto.classification;
       if (dto.vatInclusion !== undefined) data.vatInclusion = dto.vatInclusion;
-      // ⚖️ نسبةُ المختلط تتبع التصنيفَ الذي يبقى بعد التعديل (السؤال ٤١٢): تُعلَن مع «مختلط» وتُمحى مع غيره، وتسري على ما
-      // يُستحقّ بعدها — فالصفُّ المرحَّلُ يحمل لقطتَه كما يحمل لقطةَ التصنيف.
+      // The mixed share follows the classification that remains after the edit: declared with MIXED, cleared with any other.
       if (dto.classification !== undefined || dto.exemptSharePercent !== undefined || dto.exemptShareBasis !== undefined) {
         const nextKind = dto.classification ?? existing.classification;
         Object.assign(
@@ -683,9 +709,8 @@ export class ContractsService {
         );
         // **لا يُغيَّر المؤجّرُ بعد ترحيل**: القبضُ رُحّل أمانةً للمالك أو إيراداً للمنشأة، والاستحقاقُ ذمّةً — وتحويلُه
         // إعادةُ كتابة تاريخ (`§6.4`). أمّا إعلانُ مؤجّرِ عقدٍ قديم فيجوز ولو بعد قبض: لا معاملةَ له قبله، ويسري على ما بعده.
-        if (existing.lessor !== 'LEGACY_UNDECLARED' && next.lessor !== existing.lessor) {
-          const [accrued, paid] = await Promise.all([tx.rentAccrual.count({ where: { contractId: id } }), tx.rentPayment.count({ where: { contractId: id } })]);
-          if (accrued + paid > 0) throw new ConflictException(MSG.contract_lessor_locked_after_posting);
+        if (existing.lessor !== 'LEGACY_UNDECLARED' && next.lessor !== existing.lessor && (await postedRentRows(tx, id)) > 0) {
+          throw new ConflictException(MSG.contract_lessor_locked_after_posting);
         }
         Object.assign(data, next);
       }
