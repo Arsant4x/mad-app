@@ -72,6 +72,18 @@ describe('نطاقاتُ الترقيم وسقفُها (ق-٢٩٥)', () => {
     expect(status.warn).toBe(true);
   });
 
+  it('the cash in transit code 1190 is reserved: banks never get it and it is not counted as used', () => {
+    expect(nextCodeInBands(['1100', '1101', '1190'], BANK_BANDS)).toBe(1102);
+    expect(bandRemaining(['1100', '1101', '1190'], BANK_BANDS)).toBe(bandRemaining(['1100', '1101'], BANK_BANDS));
+    // Banks that reached 1189 skip the reserved code instead of taking it.
+    expect(nextCodeInBands(range(1100, 1189), BANK_BANDS)).toBe(1191);
+    expect(nextCodeInBands([...range(1100, 1189), '1190'], BANK_BANDS)).toBe(1191);
+    // A reserved slot is never issued, so it is neither capacity nor remaining.
+    expect(bandRemaining([], BANK_BANDS)).toBe(bandCapacity(BANK_BANDS));
+    expect(bandCapacity(BANK_BANDS)).toBe(100 + 399 - 1);
+    expect(bandRemaining(range(1100, 1189), BANK_BANDS)).toBe(9 + 399);
+  });
+
   it('ومفتاحٌ غير مسجَّل يسقط صراحةً — لا إنذارَ صامت', () => {
     expect(() => bandGroup('wallet')).toThrow(/غير مسجَّلة/);
   });
