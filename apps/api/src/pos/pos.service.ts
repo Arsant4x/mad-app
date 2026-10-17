@@ -32,7 +32,7 @@ import { CUSTOMER_PUBLIC_SELECT } from '../customers/customer-identity.util';
 import { gatedReceiptFields, invoiceTypeFor, ReceiptClearance, ReceiptGateInput } from '../zatca/hash-chain.util';
 import { translate } from '../common/i18n/messages';
 import { PaymentsService } from '../payments/payments.service';
-import { localDateOf } from '../common/wall-clock.util';
+import { DEVICE_CLOCK_TOLERANCE_MIN, localDateOf } from '../common/wall-clock.util';
 import { rateForCategory } from '../common/vat/line-tax.util';
 import { ZatcaService } from '../zatca/zatca.service';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
@@ -575,7 +575,12 @@ export class PosService {
    *
    * (ومستودعُ الفرع لم يعد يُقرأ هنا: الخصمُ صار مالكُه سطرَ الفاتورة — `م٦` — وكان المتغيّرُ يُحسب ولا يُقرأ.)
    */
-  async prepareSale(tx: Prisma.TransactionClient, tenant: TenantContext, dto: CreatePosSaleDto, opts: { ringAt?: string; ringOffsetMin?: number }): Promise<PreparedSale> {
+  async prepareSale(
+    tx: Prisma.TransactionClient,
+    tenant: TenantContext,
+    dto: CreatePosSaleDto,
+    opts: { ringAt?: string; ringOffsetMin?: number; viaSync?: boolean },
+  ): Promise<PreparedSale> {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) throw new ConflictException(MSG.pos_no_open_shift);
 
@@ -590,16 +595,22 @@ export class PosService {
       // ⑤A4: وصفتُه تقرّر نوعَ المستند — كاملةٌ (مؤسّسة/اعتباريّ/مسجَّل) تُجاز قبل أن تُشارَك، فيُعلَم ذلك هنا للإيصال.
       if (dto.customerId) await assertBuyerKindDeclared(tx, dto.customerId);
       /**
-       * ⭐ **يومُ الفاتورة يومُ الجهاز، لا يومُ UTC ولا يومُ عودة الشبكة** (`ق-١٨٥`).
-       *
-       * كان يُشتقّ من `toISOString().slice(0, 10)` — تاريخُ UTC — فبيعٌ في الواحدة
-       * صباحاً بتوقيت الرياض يُؤرَّخ **أمس**، وبيعٌ أوفلاين يُزامَن بعد يوم يُبلَّغ
-       * بتاريخٍ خارج نافذة الـ٢٤ ساعة **ونحن من صنعها**. الآن: اللحظة من الجهاز
-       * (`ringAt`) وانحرافُه معها، فيُحسب يومُه؛ وتُحفظ اللحظةُ والانحراف لمستند
-       * الهيئة. طرفيةٌ لم تُرسل انحرافاً (عميلٌ أقدم) تُعامَل كما كانت: يومُ UTC
-       * بلا وقتٍ معلوم — حدٌّ معلَن لا تخمين.
+       * The invoice day is the device's day, read with the offset the device sends, not the UTC day. A live sale is
+       * timed by the server clock; a synced offline sale keeps the time the device rang it, bounded by its shift's
+       * opening and now, since that time is stamped in the signed document. A terminal that sends no offset keeps the
+       * UTC day without a time.
        */
-      const rungAt = opts.ringAt ? new Date(opts.ringAt) : new Date();
+      const now = new Date();
+      let rungAt = now;
+      if (opts.viaSync && opts.ringAt) {
+        rungAt = new Date(opts.ringAt);
+        const tolerance = DEVICE_CLOCK_TOLERANCE_MIN * 60_000;
+        if (rungAt.getTime() < shift.openedAt.getTime() - tolerance || rungAt.getTime() > now.getTime() + tolerance) {
+          throw new BadRequestException(
+            formatMessage(MSG.pos_sync_ring_time_outside_shift, { ringAt: rungAt.toISOString(), openedAt: shift.openedAt.toISOString() }),
+          );
+        }
+      }
       const offsetKnown = opts.ringAt !== undefined && opts.ringOffsetMin !== undefined;
       const issueDate = localDateOf(rungAt, offsetKnown ? opts.ringOffsetMin! : 0);
       const posLines = dto.lines.map((l) => {

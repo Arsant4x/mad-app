@@ -7,6 +7,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
+import { backdateShiftOpening } from './backdate-shift';
 
 // ميزانية الحزمة (ق-١٢٨٥): لم تُقَس بعد، فتُعلن بسقفٍ واسع ثم تُضبط على ثلاثة أضعاف أوّل زمنٍ مقيس.
 jest.setTimeout(240000);
@@ -132,8 +133,10 @@ describe('القوائمُ تُرشَّح بفروع القارئ (e2e)', () => 
           .send({ clientSaleId: randomUUID(), ringAt: ringAt(hours), ringOffsetMin: 180, lines: [{ productId: serviceId, quantity: 1 }], paymentMethod: 'CASH' })
           .expect(201)
       ).body.id;
-    await restricted(http().post('/pos/shifts')).send({ openingFloat: 0, branchId: branchA }).expect(201);
-    await owner(http().post('/pos/shifts')).send({ openingFloat: 0, branchId: branchB }).expect(201);
+    const shiftA = (await restricted(http().post('/pos/shifts')).send({ openingFloat: 0, branchId: branchA }).expect(201)).body.id as string;
+    const shiftB = (await owner(http().post('/pos/shifts')).send({ openingFloat: 0, branchId: branchB }).expect(201)).body.id as string;
+    // The sales are synced at a fixed past day, so their shifts opened before it.
+    await backdateShiftOpening(app, company.companyId, [shiftA, shiftB], new Date(ringBase - 3_600_000));
     const saleA = await sale(restricted, 0);
     const saleB = await sale(owner, 6);
     const incidentOf = async (invoiceId: string): Promise<string> =>

@@ -208,7 +208,8 @@ async function main(): Promise<void> {
     );
 
     const clientSaleId = `truth-${stamp}`;
-    const ringAt = new Date(Date.now() - 3 * 60 * 60_000).toISOString();
+    // A synced sale must be rung inside its shift, which opened moments ago.
+    const ringAt = new Date().toISOString();
     check('مزامنةٌ أولى', 'POST', '/v1/pos/sales/sync', await as(http().post('/v1/pos/sales/sync')).send({ clientSaleId, ringAt, lines, paymentMethod: 'CASH' }));
     check('مزامنةٌ مكرَّرة (إعادة)', 'POST', '/v1/pos/sales/sync', await as(http().post('/v1/pos/sales/sync')).send({ clientSaleId, ringAt, lines, paymentMethod: 'CASH' }));
     check('وقائعُ الانقطاع', 'GET', '/v1/pos/incidents', await as(http().get('/v1/pos/incidents')));

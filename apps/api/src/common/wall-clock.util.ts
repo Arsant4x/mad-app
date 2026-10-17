@@ -45,6 +45,9 @@ export const KSA_UTC_OFFSET_MIN = 180;
  */
 export const SCHEDULE_TIME_ZONE = 'Asia/Riyadh';
 
+/** How far a time sent by a device may run ahead of the server clock, for a device clock that is a little fast. */
+export const DEVICE_CLOCK_TOLERANCE_MIN = 5;
+
 export interface WallClock {
   /** `YYYY-MM-DD` كما تقرؤه الهيئة (`cbc:IssueDate`). */
   date: string;

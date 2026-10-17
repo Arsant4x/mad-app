@@ -10,6 +10,7 @@ import { IntegrationsService } from '../src/integrations/integrations.service';
 import { MockTerminalAdapter, TERMINAL_ADAPTERS } from '../src/integrations/payment-terminal.adapter';
 import { PosCardVerificationsService } from '../src/pos/pos-card-verifications.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
+import { backdateShiftOpening } from './backdate-shift';
 
 jest.setTimeout(120000);
 
@@ -295,6 +296,8 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
     const ringAt = new Date(Date.now() - 5 * DAY_MS).toISOString();
     const reference = `RRN-5D-${Date.now()}`;
     const sale = ringing({ ringAt, cardDeviceReference: reference });
+    // The sale was rung five days ago, so the shift it is synced to opened before it.
+    await backdateShiftOpening(app, co.companyId, [ownerShiftId], new Date(Date.now() - 6 * DAY_MS));
     const synced = await auth(http().post('/pos/sales/sync')).send(sale).expect(201);
 
     // القائمةُ للمراجعة — لا للكاشير.

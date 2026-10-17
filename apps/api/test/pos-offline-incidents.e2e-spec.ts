@@ -6,6 +6,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { backdateShiftOpening } from './backdate-shift';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (56.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
@@ -92,6 +93,8 @@ describe('POS offline incidents — inferred on the server (e2e)', () => {
     companyId = login.body.user.companyId;
     productId = (await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `عصير برتقال ${suffix}`, price: 12 }).expect(201)).body.id;
     shiftId = (await auth(http().post('/pos/shifts')).send({ openingFloat: 100 }).expect(201)).body.id;
+    // Sales are synced at a fixed past day, so the shift opened before it.
+    await backdateShiftOpening(app, companyId, [shiftId], new Date(base - 2 * 86_400_000));
 
     const profile = (await auth(http().get('/company-profile')).expect(200)).body;
     expect(profile.posOfflineGapMinutes).toBe(2); // الافتراض دقيقتان (ق-٢٠١/٢).

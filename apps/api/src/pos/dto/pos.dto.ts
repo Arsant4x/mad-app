@@ -90,10 +90,9 @@ export class CreatePosSaleDto {
   customerId?: string;
 
   /**
-   * متى رُنّ البيع فعلاً (ISO) **وانحرافُ الجهاز عن UTC بالدقائق** (`ق-١٨٥`) —
-   * للبيع الحيّ والمزامَن سواء: منهما يُشتقّ يومُ الفاتورة **ووقتُها** كما يقرؤهما
-   * التاجر، لا تاريخُ UTC ولا منتصفُ الليل. **انحرافٌ بلا لحظةٍ يُرفَض** — لا معنى له
-   * وحده؛ ولحظةٌ بلا انحراف تُقبَل (طرفيةٌ أقدم) وتُعامَل بيوم UTC كما كانت.
+   * When the sale was rung (ISO) and the device's offset from UTC in minutes. The offset gives the invoice day as the
+   * merchant reads it; the time is kept only for a synced offline sale, between its shift's opening and now, while a
+   * live sale is timed by the server. An offset without a time is refused.
    */
   @ValidateIf((o: CreatePosSaleDto) => o.ringAt !== undefined || o.ringOffsetMin !== undefined)
   @IsDateString()

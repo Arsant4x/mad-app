@@ -7,6 +7,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
+import { backdateShiftOpening } from './backdate-shift';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (30.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(95000);
@@ -38,6 +39,8 @@ describe('POS offline sync (e2e)', () => {
     token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
     productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `شاي مثلج ${suffix}`, price: 40 }).expect(201)).body.id;
     shiftId = (await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 100 }).expect(201)).body.id;
+    // Sales below are synced at fixed past instants, so the shift opened before them.
+    await backdateShiftOpening(app, companyIdOfToken(token), [shiftId], new Date('2026-08-01T00:00:00.000Z'));
   }, 60000);
 
   afterAll(async () => {

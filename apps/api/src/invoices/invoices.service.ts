@@ -71,6 +71,7 @@ import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { LINE_ORDER, numberLines } from '../common/document-lines.util';
 import { CUSTOMER_PUBLIC_SELECT } from '../customers/customer-identity.util';
+import { assertIssueTimeBounded } from './issue-time.util';
 
 /** أنواعُ مستند البيع — الأساسُ وإشعاراه؛ نظيرُها في الشراء `PURCHASE_NOTE_KINDS` (المصدرُ الواحد `ق-١٠٠٨`/١). */
 const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = { base: 'INVOICE', credit: 'CREDIT_NOTE', debit: 'DEBIT_NOTE' };
@@ -578,6 +579,7 @@ export class InvoicesService {
      * و`trustLineTax` للنسخ الداخليّ من سطورٍ مخزَّنة (البدلُ · تحويلُ العرض): تُوثَق فئتُها كما كُتبت. */
     link: { replacesInvoiceId?: string; trustLineTax?: boolean } | null = null,
   ) {
+    await assertIssueTimeBounded(tx, companyId, dto);
     // ⑧ الفئةُ والنسبةُ تُحلّان قبل أيّ حساب: من الصنف لحظةَ البيع، أو من إعلان السطر، أو من الأصل المنسوخ.
     const lines = await priceLines(tx, dto.lines, { trusted: link?.trustLineTax });
     const { subtotal, taxTotal, total } = computeTotals(lines);
