@@ -20,11 +20,14 @@ describe('⑥A3 — تصحيحُ إقرارٍ سابق (م٦٣)', () => {
     expect(judgeCorrection(q(2026, 4), { year: 2026, periodType: 'MONTHLY', periodNo: 7 }, 100, NOW)).toEqual({ ok: true });
   });
 
-  it('③ ⚠️ نقصٌ يبلغ خمسةَ آلافٍ لا يُبتلع هنا — يوجب إشعارَ الهيئة (م٦٣/١ مقابل ٣)', () => {
+  it('③ an understatement below 15,000 SAR is corrected in the return, 15,000 and above needs a notice', () => {
     expect(judgeCorrection(q(2026, 3), target(2026, 2), 4999.99, NOW)).toEqual({ ok: true });
-    // «less than five thousand» — فالحدُّ نفسُه خارجُ الرخصة.
-    expect(judgeCorrection(q(2026, 3), target(2026, 2), CORRECTION_UNDERSTATEMENT_LIMIT, NOW)).toEqual({ ok: false, code: 'UNDERSTATEMENT_NEEDS_NOTICE' });
-    expect(judgeCorrection(q(2026, 3), target(2026, 2), 9000, NOW)).toEqual({ ok: false, code: 'UNDERSTATEMENT_NEEDS_NOTICE' });
+    // ZATCA amendments guideline example 25: a 10,000 SAR understatement goes into the corrections section.
+    expect(judgeCorrection(q(2026, 3), target(2026, 2), 10000, NOW)).toEqual({ ok: true });
+    expect(judgeCorrection(q(2026, 3), target(2026, 2), 14999.99, NOW)).toEqual({ ok: true });
+    expect(judgeCorrection(q(2026, 3), target(2026, 2), 15000, NOW)).toEqual({ ok: false, code: 'UNDERSTATEMENT_NEEDS_NOTICE' });
+    expect(judgeCorrection(q(2026, 3), target(2026, 2), 20000, NOW)).toEqual({ ok: false, code: 'UNDERSTATEMENT_NEEDS_NOTICE' });
+    expect(CORRECTION_UNDERSTATEMENT_LIMIT).toBe(15000);
   });
 
   it('④ الزيادةُ بلا حدٍّ مبلغيّ (م٦٣/٢) — ولو كانت ضخمة', () => {
@@ -43,10 +46,7 @@ describe('⑥A3 — تصحيحُ إقرارٍ سابق (م٦٣)', () => {
   });
 });
 
-/**
- * **رسالةُ «تغيّر بعد التقديم» بالحدّ الذي يحكم به `judgeCorrection` وبالاتجاه** — كانت نصّاً يقول «دون 15,000»
- * والنصُّ المقروء «less than five thousand (5,000) SAR»، ويوجب العشرين يوماً على الزيادة والنقص معاً.
- */
+/** The after-filing note uses the limit judgeCorrection applies, and the direction of the difference. */
 describe('⑥A3 — رسالةُ «تغيّر بعد التقديم» من الحدّ نفسِه وبالاتجاه (م٦٣)', () => {
   const limitText = CORRECTION_UNDERSTATEMENT_LIMIT.toLocaleString('en-US');
 
@@ -57,15 +57,18 @@ describe('⑥A3 — رسالةُ «تغيّر بعد التقديم» من ال�
     expect(note).toContain(`إلا ما دون ${limitText} ريال فيجوز استدراكُه في الإقرار التالي (م٦٣/٣) — وهذا منه`);
   });
 
-  it('⭐ ② نقصٌ يبلغ الحدّ ⟸ لا يُستدرك في الإقرار التالي — والحدُّ خمسةُ آلافٍ لا خمسةَ عشر', () => {
-    // عند الحدّ بالضبط وبين الحدّين القديم والصحيح: كلاهما يوجب الإشعار.
-    for (const current of [1000 + CORRECTION_UNDERSTATEMENT_LIMIT, 1000 + 12000]) {
+  it('② an understatement of 15,000 SAR or more cannot be carried into the next return, below it can', () => {
+    // At the limit exactly and above it: both need the notice.
+    for (const current of [1000 + 15000, 1000 + 20000]) {
       const note = filedChangeNote(1000, current);
       expect(note).toContain('إشعارُ الهيئة خلال عشرين يوماً');
-      expect(note).toContain(`ولا يُستدرك في الإقرار التالي لأنه يبلغ ${limitText} ريال فأكثر`);
+      expect(note).toContain('ولا يُستدرك في الإقرار التالي لأنه يبلغ 15,000 ريال فأكثر');
       expect(note).not.toContain('وهذا منه');
     }
-    for (const n of [filedChangeNote(1000, 1450), filedChangeNote(1000, 13000), filedChangeNote(5000, 100)]) expect(n).not.toContain('15,000');
+    // Between the old 5,000 figure and 15,000 the amount is corrected in the next return.
+    const between = filedChangeNote(1000, 1000 + 10000);
+    expect(between).toContain('إلا ما دون 15,000 ريال فيجوز استدراكُه في الإقرار التالي (م٦٣/٣) — وهذا منه');
+    for (const n of [filedChangeNote(1000, 1450), between, filedChangeNote(1000, 21000)]) expect(n).not.toContain(' 5,000 ');
   });
 
   it('③ زيادةٌ ⟸ تُصحَّح في أيّ إقرارٍ لاحق — ولا عشرين يوماً عليها', () => {
