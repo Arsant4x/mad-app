@@ -23,9 +23,11 @@ export class CancelContractDto {
   @IsNotEmpty()
   cancelReason!: string;
 
-  /** 'keep' leaves not-yet-due installments owed as-is; 'cancel' voids every
-   * unpaid installment due on/after the cancel date — matches the mockup's
-   * cancel-contract dialog. */
+  /** 'keep' leaves the installments due on/after the cancel date owed, and what
+   * is not billed of them yet is recorded at the cancellation as other income
+   * (4300), never rent; 'cancel' voids every unpaid or partly paid installment
+   * due on/after the cancel date. A settlement worked out from 'installments'
+   * or 'all' needs 'cancel'. */
   @IsIn(['keep', 'cancel'])
   installmentDisposition!: 'keep' | 'cancel';
 
@@ -38,8 +40,8 @@ export class CancelContractDto {
    * - `all` — everything still unpaid from the cancel date onwards.
    *
    * The last two are conveniences that compute an amount; only the number they
-   * arrive at is stored, because the installments themselves may be voided in
-   * the same call.
+   * arrive at is stored, because the installments themselves are voided in the
+   * same call.
    */
   @IsOptional()
   @IsIn(SETTLEMENT_BASES)

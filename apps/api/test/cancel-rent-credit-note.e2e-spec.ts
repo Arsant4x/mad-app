@@ -73,10 +73,10 @@ describe('إلغاءُ العقد يُصحّح ضريبةَ المقبوض مق�
     const before = await snapshot();
     await auth(http().post(`/contracts/${contractId}/payments`)).send({ date: today, amount: 1150, method: 'CASH', installmentId: future!.id }).expect(201);
     const paid = await snapshot();
-    // `keep`: الأقساطُ غيرُ المقبوضة تبقى كما هي — فلا يُعكس قسطُ هذا الشهر حين يقع الاختبارُ أوّلَ الشهر (استحقاقُه = يومُ الإلغاء)،
-    // والمقيسُ وحدَه هو المقبوضُ مقدَّماً.
+    // The unpaid installments after today are cancelled; on the first of a month this month's is among them, and its
+    // reversal is read below the same way as the reversal of its part after today on any other day.
     await auth(http().post(`/contracts/${contractId}/cancel`))
-      .send({ cancelDate: today, cancelReason: `إلغاءٌ بردّ المقدَّم ${suffix}`, installmentDisposition: 'keep', unearnedDisposition: 'refund' })
+      .send({ cancelDate: today, cancelReason: `إلغاءٌ بردّ المقدَّم ${suffix}`, installmentDisposition: 'cancel', unearnedDisposition: 'refund' })
       .expect(201);
     const after = await snapshot();
 

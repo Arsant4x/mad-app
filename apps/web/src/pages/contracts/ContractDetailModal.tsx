@@ -234,7 +234,7 @@ const SETTLEMENT_BASIS_LABEL: Record<SettlementBasis, string> = {
   get all() { return i18n.t('contracts.detail.settlement_basis.all'); },
 };
 
-function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: CancelContractInput) => Promise<void> }) {
+export function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: CancelContractInput) => Promise<void> }) {
   const { t } = useTranslation();
   const [cancelDate, setCancelDate] = useState(today());
   const [cancelReason, setCancelReason] = useState('');
@@ -262,6 +262,10 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
           ? unpaidFromCancelDate.reduce((sum, i) => sum + Number(i.amount), 0)
           : 0;
 
+  // Settling from the installments charges them already, so the server refuses keeping them due as well.
+  const settlesFromInstallments = settlementBasis === 'installments' || settlementBasis === 'all';
+  const disposition = settlesFromInstallments ? 'cancel' : installmentDisposition;
+
   async function submit() {
     setError(null);
     if (!cancelReason.trim()) {
@@ -280,7 +284,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
       await onSubmit({
         cancelDate,
         cancelReason: cancelReason.trim(),
-        installmentDisposition,
+        installmentDisposition: disposition,
         ...(settlementBasis === 'none'
           ? {}
           : {
@@ -310,10 +314,17 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
       </div>
       <div className="field">
         <label>{t('contracts.detail.cancel_form.upcoming_installments')}</label>
-        <select value={installmentDisposition} onChange={(e) => setInstallmentDisposition(e.target.value as 'keep' | 'cancel')}>
+        <select value={disposition} onChange={(e) => setInstallmentDisposition(e.target.value as 'keep' | 'cancel')}>
           <option value="cancel">{t('contracts.detail.cancel_form.cancel_them')}</option>
-          <option value="keep">{t('contracts.detail.cancel_form.keep_them')}</option>
+          <option value="keep" disabled={settlesFromInstallments}>
+            {t('contracts.detail.cancel_form.keep_them')}
+          </option>
         </select>
+        {settlesFromInstallments ? (
+          <p className="hint">{t('contracts.detail.cancel_form.settlement_cancels_installments')}</p>
+        ) : (
+          disposition === 'keep' && <p className="hint">{t('contracts.detail.cancel_form.keep_hint')}</p>
+        )}
       </div>
 
       <div className="two-col">

@@ -2038,6 +2038,8 @@ export interface ContractSettlementForPosting {
   tenant: string;
   date: Date;
   baseAmount: number;
+  /** The installments kept due by the cancellation rather than an agreed settlement: the same entry, named in the memo. */
+  keptInstallments?: boolean;
 }
 
 /**
@@ -2062,7 +2064,7 @@ export async function postContractSettlementEntry(tx: Prisma.TransactionClient, 
   return createJournalEntry(tx, {
     companyId,
     date: s.date,
-    memo: `تسوية إلغاء عقد ${s.contractNo} — ${s.tenant}`,
+    memo: s.keptInstallments ? `أقساطٌ أُبقيت مستحقّةً عند إلغاء عقد ${s.contractNo} — ${s.tenant}` : `تسوية إلغاء عقد ${s.contractNo} — ${s.tenant}`,
     unitId: s.unitId,
     lines: [
       { accountId: ids.get('1200')!, debit: s.baseAmount, credit: 0 },

@@ -107,6 +107,7 @@ export async function recognizeDueWithinTx(
   // مرشّحون: أقساطٌ بدأت خدمتُها، وأساسُها (المستحقُّ أو المقبوض) أكثرُ ممّا اعتُرف به —
   // **يُرشَّحون في القاعدة لا في العميل** (ق-٧٠٦ بروحه): كان الكنسُ يحمّل كلَّ قسطٍ بدأت خدمتُه
   // بدفعاته (عشراتُ الآلاف على التطوير) ليُخرج بضعةً، فيقترب من مهلة معاملة العزل (ق-٧٠٤).
+  // A cancelled contract is left out: its cancellation recognizes up to the cancel date and settles the rest.
   const ids = await tx.$queryRaw<{ id: string }[]>`
     SELECT i.id
     FROM "contract_installments" i
@@ -121,6 +122,7 @@ export async function recognizeDueWithinTx(
       AND i."serviceEnd" IS NOT NULL
       ${contractId ? Prisma.sql`AND i."contractId" = ${contractId}` : Prisma.empty}
       AND (CASE WHEN i."accrualBasis" = 'ACCRUAL' THEN i."baseAccruedNet" ELSE COALESCE(p.collected, 0) END) > i."baseRecognized"
+      AND NOT EXISTS (SELECT 1 FROM "contracts" c WHERE c.id = i."contractId" AND c."status" = 'CANCELLED')
   `;
   const candidates = await tx.installment.findMany({
     where: { id: { in: ids.map((r) => r.id) } },
