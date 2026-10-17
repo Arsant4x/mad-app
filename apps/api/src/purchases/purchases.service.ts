@@ -488,10 +488,20 @@ export class PurchasesService {
       const rows = await tx.purchase.findMany({
         // والمُلغى بقيد عكسٍ ليس مصروفاً (`ق-٩٩٧`/②).
         where: { categoryCode: AMORTIZABLE_CATEGORY, voidedAt: null },
-        select: { incorpItem: true, baseTotal: true, amortize: true, amortizeMonths: true },
+        select: {
+          incorpItem: true,
+          baseSubtotal: true,
+          amortize: true,
+          amortizeMonths: true,
+          nonDeductibleVatEvents: { select: { baseExpense: true } },
+        },
       });
 
-      const total = rows.reduce((s, p) => s + Number(p.baseTotal), 0);
+      // The ledger debits the category account with the net amount; recoverable VAT goes to 1250,
+      // and only the non-deductible share posted to the expense account joins the cost.
+      const costOf = (p: (typeof rows)[number]) =>
+        round2(Number(p.baseSubtotal) + p.nonDeductibleVatEvents.reduce((s, e) => s + Number(e.baseExpense), 0));
+      const total = round2(rows.reduce((s, p) => s + costOf(p), 0));
       const amortizedCount = rows.filter((p) => p.amortize).length;
 
       const byItem = new Map<string, { count: number; total: number; amortizeMonths: number | null }>();
@@ -501,7 +511,7 @@ export class PurchasesService {
         const key = p.incorpItem?.trim() || 'بدون بند محدَّد';
         const cur = byItem.get(key) ?? { count: 0, total: 0, amortizeMonths: null };
         cur.count += 1;
-        cur.total += Number(p.baseTotal);
+        cur.total = round2(cur.total + costOf(p));
         if (p.amortize && cur.amortizeMonths === null) cur.amortizeMonths = p.amortizeMonths ?? 0;
         byItem.set(key, cur);
       }

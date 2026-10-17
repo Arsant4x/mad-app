@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (10.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(35000);
@@ -22,6 +24,7 @@ describe('Incorporation expenses report (e2e)', () => {
   let app: INestApplication;
   let token: string;
   let supplierId: string;
+  let isolated: IsolatedCompany | undefined;
   const created: string[] = [];
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const ITEM = `رسوم ترخيص ${suffix}`;
@@ -61,6 +64,7 @@ describe('Incorporation expenses report (e2e)', () => {
   afterAll(async () => {
     for (const id of created) await auth(request(app.getHttpServer()).delete(`/purchases/${id}`));
     if (supplierId) await auth(request(app.getHttpServer()).delete(`/suppliers/${supplierId}`));
+    await removeIsolatedCompany(app, isolated);
     await app.close();
   });
 
@@ -91,8 +95,8 @@ describe('Incorporation expenses report (e2e)', () => {
     const row = after.items.find((i) => i.item === ITEM);
     expect(row).toBeTruthy();
     expect(row!.count).toBe(2);
-    // 1500 net + 15% VAT = 1725 total, in base currency.
-    expect(row!.total).toBeCloseTo(1725, 2);
+    // 1500 net in base currency; the recoverable 15% VAT is an asset in 1250, not a cost.
+    expect(row!.total).toBeCloseTo(1500, 2);
     expect(row!.method).toBe('دفعة واحدة');
   }, 60000);
 
@@ -106,6 +110,44 @@ describe('Incorporation expenses report (e2e)', () => {
     expect(after.items.find((i) => i.item === amortItem)!.method).toBe('استهلاك (24 شهر)');
   }, 60000);
 
+  it('totals exclude recoverable VAT and agree with the formation expense account in the ledger', async () => {
+    const iso = await registerIsolatedCompany(app, 'incorp-vat');
+    isolated = iso;
+    const isoAuth = (r: request.Test) => r.set('Authorization', `Bearer ${iso.token}`);
+    const sup = await isoAuth(request(app.getHttpServer()).post('/suppliers')).send({ name: `مورد تأسيس ${suffix}` }).expect(201);
+    const recoverableItem = `recoverable ${suffix}`;
+    const excludedItem = `excluded ${suffix}`;
+    const purchaseIds: string[] = [];
+    for (const body of [
+      { subtotal: 1000, category: 'مصروفات تأسيس', incorpItem: recoverableItem },
+      { subtotal: 1000, category: 'مصروفات تأسيس', incorpItem: excludedItem, excludeFromVat: true },
+    ]) {
+      const res = await isoAuth(request(app.getHttpServer()).post('/purchases'))
+        .send({ supplierId: sup.body.id, date: '2025-05-01', ...body })
+        .expect(201);
+      purchaseIds.push(res.body.id);
+    }
+
+    const isoReport: Report = (await isoAuth(request(app.getHttpServer()).get('/purchases/incorporation-report')).expect(200)).body;
+    expect(isoReport.items.find((i) => i.item === recoverableItem)?.total).toBeCloseTo(1000, 2);
+    expect(isoReport.items.find((i) => i.item === excludedItem)?.total).toBeCloseTo(1150, 2);
+    expect(isoReport.total).toBeCloseTo(2150, 2);
+
+    const ledger = await app.get(TenantPrismaService).runInTenantContext(iso.companyId, async (tx) => {
+      const docs = await tx.purchase.findMany({
+        where: { id: { in: purchaseIds } },
+        select: { journalEntryId: true, nonDeductibleVatEvents: { select: { journalEntryId: true } } },
+      });
+      const entryIds = docs.flatMap((d) => [d.journalEntryId, ...d.nonDeductibleVatEvents.map((e) => e.journalEntryId)]).filter((x): x is string => !!x);
+      const lines = await tx.journalLine.findMany({
+        where: { journalEntryId: { in: entryIds }, account: { code: '5500' } },
+        select: { debit: true, credit: true },
+      });
+      return lines.reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0);
+    });
+    expect(isoReport.total).toBeCloseTo(ledger, 2);
+  }, 90000);
+
   it('still reports an establishment purchase that has no line item', async () => {
     const before = await report();
     await buy({ subtotal: 300, category: 'مصروفات تأسيس' });
@@ -114,6 +156,6 @@ describe('Incorporation expenses report (e2e)', () => {
     const unlabelled = after.items.find((i) => i.item === 'بدون بند محدَّد');
     expect(unlabelled).toBeTruthy();
     // Dropping unlabelled rows would make the report disagree with the ledger.
-    expect(after.total).toBeCloseTo(before.total + 345, 2);
+    expect(after.total).toBeCloseTo(before.total + 300, 2);
   }, 60000);
 });
