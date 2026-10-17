@@ -146,7 +146,7 @@ describe('نموذجُ مستأجرٍ بلا أبٍ يُعلن سببَه (ق-٥
   it('accepts the English declaration only at the start of a doc line', () => {
     const undeclared = ['model Thing {', '  id        String  @id @default(uuid())', '  companyId String', '  company   Company @relation(fields: [companyId], references: [id])', '}'].join('\n');
     expect(undeclaredOrphans([`/// ${PARENT_DECLARATION_EN} a root entity the merchant owns.`, undeclared].join('\n'))).toEqual([]);
-    expect(undeclaredOrphans([`/// It has ${PARENT_DECLARATION_EN.toLowerCase()} written in passing.`, undeclared].join('\n'))).toEqual(['Thing']);
+    expect(undeclaredOrphans([`/// Written in passing: ${PARENT_DECLARATION_EN} is not a declaration here.`, undeclared].join('\n'))).toEqual(['Thing']);
   });
 
   it('ولا يُدان مَن له أبٌ مفرد — ولو لم يُعلن', () => {
