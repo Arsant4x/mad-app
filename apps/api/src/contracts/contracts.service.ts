@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@mad-app/db';
+import { ClaimKind, Contract, DeductionKind, DepositType, InstallmentStatus, Prisma, Property, Unit } from '@mad-app/db';
 import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { companyToday } from '../common/company-day.util';
 import { documentYear } from '../common/document-year.util';
@@ -23,6 +23,7 @@ import {
 } from '../journal/auto-posting.util';
 import {
   ACCRUAL_CONTRACT_SELECT,
+  type AccrualContract,
   accrueDueWithinTx,
   accrueForPaymentWithinTx,
   discountAccrualWithinTx,
@@ -100,25 +101,65 @@ async function spreadRentPayment(
   installment: { id: string; dueDate: Date } | null,
   amount: number,
 ): Promise<{ installmentId: string | null; amount: number }[]> {
-  const candidates = await tx.installment.findMany({
-    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL' },
-    orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
-    select: { id: true, amount: true, payments: { select: { netAmount: true, discount: true } } },
-  });
+  const candidates = await openRentInstallments(tx, contractId, treatment);
   const ordered = installment ? [...candidates.filter((c) => c.id === installment.id), ...candidates.filter((c) => c.id !== installment.id)] : candidates;
   let left = round2(amount);
   const parts: { installmentId: string | null; amount: number }[] = [];
   for (const c of ordered) {
     if (left <= 0) break;
-    const settled = round2(c.payments.reduce((s, p) => s + Number(p.netAmount) + Number(p.discount), 0));
-    const remaining = round2(rentAmountsOf(Number(c.amount), treatment).gross - settled);
-    if (remaining <= 0) continue;
-    const take = round2(Math.min(left, remaining));
+    if (c.remaining <= 0) continue;
+    const take = round2(Math.min(left, c.remaining));
     parts.push({ installmentId: c.id, amount: take });
     left = round2(left - take);
   }
   if (left > 0) parts.push({ installmentId: null, amount: left });
   return parts;
+}
+
+/**
+ * A contract's open accrual installments, oldest due first, each with what is still owed on it in the contract currency
+ * (gross with VAT less net plus discount paid). `dueBy` keeps those due on or before that day.
+ */
+async function openRentInstallments(
+  tx: Prisma.TransactionClient,
+  contractId: string,
+  treatment: RentTaxTreatment,
+  dueBy?: Date,
+): Promise<{ id: string; remaining: number }[]> {
+  const rows = await tx.installment.findMany({
+    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL', ...(dueBy ? { dueDate: { lte: dueBy } } : {}) },
+    orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+    select: { id: true, amount: true, payments: { select: { netAmount: true, discount: true } } },
+  });
+  return rows.map((c) => {
+    const settled = round2(c.payments.reduce((s, p) => s + Number(p.netAmount) + Number(p.discount), 0));
+    return { id: c.id, remaining: round2(rentAmountsOf(Number(c.amount), treatment).gross - settled) };
+  });
+}
+
+/**
+ * An installment's status derived from what was paid on it against its gross (its amount when unclassified), like an
+ * invoice's; when nothing is paid it keeps its due or late status, which follows the date.
+ */
+async function settledInstallmentStatus(
+  tx: Prisma.TransactionClient,
+  target: { id: string; amount: Prisma.Decimal; status: InstallmentStatus },
+  treatment: RentTaxTreatment | null,
+): Promise<InstallmentStatus> {
+  const paid = await tx.rentPayment.aggregate({ where: { installmentId: target.id }, _sum: { netAmount: true, discount: true } });
+  const settled = round2(Number(paid._sum.netAmount ?? 0) + Number(paid._sum.discount ?? 0));
+  const gross = treatment ? rentAmountsOf(Number(target.amount), treatment).gross : round2(Number(target.amount));
+  const derived = deriveSettlementStatus(settled, gross);
+  return derived === 'PAID' ? 'PAID' : derived === 'PARTIAL' ? 'PARTIAL' : target.status;
+}
+
+/** The rent part of an unpaid rent deduction from a deposit, worked out before anything is written. */
+interface UnpaidRentPlan {
+  contract: AccrualContract;
+  treatment: RentTaxTreatment | null;
+  /** What goes to the rent installments, in the contract currency; the rest covers claims or the cancellation settlement. */
+  toRent: number;
+  cancelled: boolean;
 }
 
 /** بندُ الرسم كما يُردّ (`ق-١٤٣٨`): المالُ نصٌّ بخانتين، والأيامُ `YYYY-MM-DD`. */
@@ -1140,16 +1181,8 @@ export class ContractsService {
         const touched = [...new Set([installment?.id, ...rows.map((r) => r.installmentId)].filter((id): id is string => !!id))];
         for (const installmentId of touched) {
           const target = installmentId === installment?.id ? installment : await tx.installment.findUniqueOrThrow({ where: { id: installmentId } });
-          // **الحالةُ تُشتقّ من المقبوض مقابل الإجماليّ** — كما الفاتورة (`SPEC 4.5` · `ق-١٠٤٠`): لا ختمٌ ثابت.
-          // الإجماليُّ بالضريبة من الدالّة نفسِها التي يقيس بها الاستحقاق (`rentAmountsOf`)، والقديمُ غيرُ
-          // المصنَّف بمبلغه؛ والمقبوضُ مجموعُ دفعات القسط (الصافي + الخصم — فالخصمُ يُنقص المستحقَّ في
-          // المحرّك `ق-٤٦٩`). و`PARTIAL` تتقدّم على `LATE` — المدفوعُ يتقدّم على كلِّ شيء — والتأخّرُ يُقرأ
-          // من التاريخ. ⛔ ولا تُقرأ الحالةُ في الاستحقاق ولا في الأعمار ولا في الإقرار — بنقطة الضريبة وحدَها.
-          const settledAgg = await tx.rentPayment.aggregate({ where: { installmentId }, _sum: { netAmount: true, discount: true } });
-          const settled = round2(Number(settledAgg._sum.netAmount ?? 0) + Number(settledAgg._sum.discount ?? 0));
-          const gross = treatment ? rentAmountsOf(Number(target.amount), treatment).gross : round2(Number(target.amount));
-          const derived = deriveSettlementStatus(settled, gross);
-          const status = derived === 'PAID' ? 'PAID' : derived === 'PARTIAL' ? 'PARTIAL' : target.status;
+          // Accrual, aging and the VAT return never read this status; they follow the tax point.
+          const status = await settledInstallmentStatus(tx, target, treatment);
           await tx.installment.update({
             where: { id: installmentId },
             // العدّادُ يُزاد بما اعتُرف به **في قيد القبض القائم وحده** — وصفرٌ على مسار
@@ -1753,6 +1786,9 @@ export class ContractsService {
         if (deducted > held) {
           throw new BadRequestException(formatMessage(MSG.deductions_exceed_deposit, { held: formatMoney(held) }));
         }
+        const settledAt = new Date(dto.settledAt);
+        const unpaidRent = sumMoney(dto.deductions.filter((d) => d.kind === 'UNPAID_RENT').map((d) => d.amount));
+        const rentPlan = unpaidRent > 0 ? await this.planUnpaidRentDeduction(tx, deposit, unpaidRent, settledAt) : null;
 
         const rate = Number(deposit.exchangeRate);
         const amountFor = (target: 'receivable' | 'income') =>
@@ -1833,6 +1869,8 @@ export class ContractsService {
             })) as unknown as Prisma.DepositDeductionUncheckedCreateInput[],
           });
         }
+        // The cash side of the rent part is the deposit at its own rate, or what Ejar releases at the day's rate.
+        if (rentPlan) await this.applyUnpaidRentDeduction(tx, companyId, depositId, rentPlan, settledAt, heldByCompany ? rate : (dayRate ?? rate));
 
         await tx.contractDeposit.update({
           where: { id: depositId },
@@ -1845,8 +1883,115 @@ export class ContractsService {
         });
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
-      }),
+      }, ACCRUAL_TX_OPTIONS),
     );
+  }
+
+  /**
+   * Refuses unpaid rent above what the tenant owes on the contract, before anything is written. Rent counts where it is
+   * the company's receivable: installments due by the settlement date, or all open ones once the cancellation billed them.
+   */
+  private async planUnpaidRentDeduction(
+    tx: Prisma.TransactionClient,
+    deposit: { id: string; currency: string; contract: Contract },
+    amount: number,
+    settledAt: Date,
+  ): Promise<UnpaidRentPlan> {
+    const contract = deposit.contract;
+    // Rent is received only in its contract currency, from a deposit as from a payment.
+    if (!sameCurrency(deposit.currency, contract.currency)) {
+      throw new BadRequestException(formatMessage(MSG.rent_payment_currency_mismatch, { payment: deposit.currency, contract: contract.currency }));
+    }
+    const accrual = await tx.contract.findUniqueOrThrow({ where: { id: contract.id }, select: ACCRUAL_CONTRACT_SELECT });
+    const treatment = treatmentOf(accrual);
+    const rentOwed = treatment !== null && !treatment.managed;
+    const cancelled = contract.status === 'CANCELLED';
+    const open = treatment && rentOwed ? await openRentInstallments(tx, contract.id, treatment, cancelled ? undefined : settledAt) : [];
+    const dueRent = sumMoney(open.map((i) => Math.max(0, i.remaining)));
+    const toRent = round2(Math.min(amount, dueRent));
+    const rest = round2(amount - toRent);
+    if (rest > 0) {
+      const other = await this.otherOwedOnContract(tx, contract, deposit.id);
+      if (rest > other) {
+        if (!rentOwed && other === 0) throw new BadRequestException(MSG.deposit_unpaid_rent_not_receivable);
+        throw new BadRequestException(formatMessage(MSG.deposit_unpaid_rent_exceeds_due, { due: formatMoney(round2(dueRent + other)) }));
+      }
+    }
+    return { contract: accrual, treatment, toRent, cancelled };
+  }
+
+  /**
+   * What the tenant owes on the contract outside its installments, in the contract currency: open claims and the
+   * cancellation settlement, less what earlier deposits took as unpaid rent beyond the installments they paid.
+   */
+  private async otherOwedOnContract(tx: Prisma.TransactionClient, contract: Contract, depositId: string): Promise<number> {
+    const rate = Number(contract.exchangeRate) || 1;
+    const claims = await tx.contractClaim.findMany({
+      where: { contractId: contract.id, status: 'OPEN' },
+      select: { amount: true, taxAmount: true, currency: true, baseAmount: true, baseTax: true },
+    });
+    const onClaims = sumMoney(
+      claims.map((c) =>
+        sameCurrency(c.currency, contract.currency) ? round2(Number(c.amount) + Number(c.taxAmount)) : round2((Number(c.baseAmount) + Number(c.baseTax)) / rate),
+      ),
+    );
+    const settlement = contract.status === 'CANCELLED' ? Number(contract.settlementAmount ?? 0) : 0;
+    const earlier = await tx.contractDeposit.findMany({
+      where: { contractId: contract.id, status: 'SETTLED', id: { not: depositId } },
+      select: { deductions: { where: { kind: 'UNPAID_RENT' }, select: { amount: true } }, rentPayments: { select: { netAmount: true } } },
+    });
+    const takenBeyondRent = sumMoney(
+      earlier.map((d) => round2(sumMoney(d.deductions.map((x) => Number(x.amount))) - sumMoney(d.rentPayments.map((p) => Number(p.netAmount))))),
+    );
+    return round2(Math.max(0, onClaims + settlement - takenBeyondRent));
+  }
+
+  /**
+   * A payment without cash, linked to the deposit, on each installment the unpaid rent pays, oldest due first. The
+   * deposit settlement entry already credits 1200 for it; only billing an installment not billed yet is posted here.
+   */
+  private async applyUnpaidRentDeduction(tx: Prisma.TransactionClient, companyId: string, depositId: string, plan: UnpaidRentPlan, settledAt: Date, rate: number) {
+    const { contract, treatment } = plan;
+    if (plan.toRent <= 0 || !treatment) return;
+    const parts = await spreadRentPayment(tx, contract.id, treatment, null, plan.toRent);
+    // What fell due by a settlement date still to come is billed on its due date, as the daily sweep would.
+    const asOf = settledAt.getTime() > Date.now() ? settledAt : new Date();
+    for (const part of parts) {
+      // The plan caps the amount at the open installments, so a part without one means the two disagree.
+      if (part.installmentId === null) throw new Error(`unpaid rent of deposit ${depositId} reached past the open installments`);
+      const base = toBaseAmount(part.amount, rate);
+      const row = await tx.rentPayment.create({
+        data: {
+          contractId: contract.id,
+          installmentId: part.installmentId,
+          depositId,
+          date: settledAt,
+          amount: part.amount,
+          discount: 0,
+          netAmount: part.amount,
+          method: 'CASH',
+          currency: contract.currency,
+          exchangeRate: rate,
+          baseAmount: base,
+          baseDiscount: 0,
+          baseNetAmount: base,
+        } as unknown as Prisma.RentPaymentUncheckedCreateInput,
+      });
+      // A cancelled contract was billed by its cancellation, the installments it keeps included.
+      if (!plan.cancelled) {
+        const billed = await accrueForPaymentWithinTx(
+          tx,
+          companyId,
+          contract,
+          treatment,
+          { id: row.id, date: settledAt, grossInContractCurrency: part.amount, installmentId: part.installmentId },
+          asOf,
+        );
+        if (!billed) throw new BadRequestException(MSG.rent_accrual_period_locked);
+      }
+      const target = await tx.installment.findUniqueOrThrow({ where: { id: part.installmentId } });
+      await tx.installment.update({ where: { id: target.id }, data: { status: await settledInstallmentStatus(tx, target, treatment) } });
+    }
   }
 
   /** `EJ-<year>-<seq>`, same max-based scheme as invoice/purchase/journal

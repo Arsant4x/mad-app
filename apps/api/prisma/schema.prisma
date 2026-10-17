@@ -4347,12 +4347,15 @@ model ContractDeposit {
   settlementEntryTenant JournalEntry? @relation("ContractDeposit_settlementEntryId_tenant", fields: [companyId, settlementEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   deductions DepositDeduction[]
+  /// The rent installments its unpaid rent deduction paid.
+  rentPayments RentPayment[] @relation("RentPaymentFromDeposit")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("contract_deposits")
   depositDeduction_depositId_tenant DepositDeduction[] @relation("DepositDeduction_depositId_tenant")
+  rentPayment_depositId_tenant RentPayment[] @relation("RentPayment_depositId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -5629,6 +5632,13 @@ model RentPayment {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   creditFromContractTenant Contract? @relation("RentPayment_creditFromContractId_tenant", fields: [companyId, creditFromContractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// Unpaid rent taken from this security deposit when it was settled: paid without cash, so no bank and no cash box move.
+  /// Null for every other payment.
+  depositId String?
+  deposit   ContractDeposit? @relation("RentPaymentFromDeposit", fields: [depositId], references: [id], onDelete: SetNull)
+  /// Cross-company write guard: the composite key beside the single one, with no delete action (the single key carries it).
+  depositTenant ContractDeposit? @relation("RentPayment_depositId_tenant", fields: [companyId, depositId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
   date       DateTime      @db.Date
   amount     Decimal       @db.Decimal(18, 2)
   discount   Decimal       @default(0) @db.Decimal(18, 2)
@@ -5684,6 +5694,8 @@ model RentPayment {
   @@index([installmentId])
   /// للمفتاح: `creditFromContractId` بـ`SET NULL`، فلا يمسح الحذفُ الجدولَ كلَّه لكلِّ عقد.
   @@index([creditFromContractId])
+  /// For the key: `depositId` is ON DELETE SET NULL, so deleting a deposit does not scan the whole table.
+  @@index([depositId])
   @@map("rent_payments")
   rentAccrual_paymentId_tenant RentAccrual[] @relation("RentAccrual_paymentId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).

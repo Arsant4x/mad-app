@@ -15,6 +15,7 @@ import {
   type InstallmentStatus,
   type RecordPaymentInput,
   type RecordPaymentMethod,
+  type RentPayment,
   type RentPaymentMethod,
   type RenewContractInput,
   type SettlementBasis,
@@ -53,6 +54,13 @@ const RENT_PAYMENT_METHOD_LABEL: Record<RentPaymentMethod, string> = {
   get BANK() { return i18n.t('contracts.detail.payment_method.bank'); },
   get CARD() { return i18n.t('contracts.detail.payment_method.card'); },
 };
+
+/** Where a payment came from. A deduction from the tenant credit or the deposit is not a collection today, so it is never shown as cash. */
+export function paymentSourceLabel(p: Pick<RentPayment, 'method' | 'creditFromContractId' | 'depositId'>): string {
+  if (p.creditFromContractId) return i18n.t('contracts.detail.credit_deduction');
+  if (p.depositId) return i18n.t('contracts.detail.deposit_deduction');
+  return RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method;
+}
 
 /** The contract fields that decide whether VAT applies and whether it is included. */
 type TaxedContract = { classification: string; vatInclusion: string; exemptSharePercent?: string | null };
@@ -957,8 +965,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
               <tr key={p.id}>
                 <td className="num">{dfmt(p.date)}</td>
                 <td className="num">{fmt(p.netAmount)}</td>
-                {/* A deduction from the tenant credit is not a collection today, so it is never shown as cash. */}
-                <td>{p.creditFromContractId ? t('contracts.detail.credit_deduction') : (RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method)}</td>
+                <td>{paymentSourceLabel(p)}</td>
               </tr>
             ))}
           </tbody>

@@ -491,6 +491,7 @@
     "col_method": "Method",
     "no_payments": "No payments recorded yet",
     "credit_deduction": "Deduction from tenant credit",
+    "deposit_deduction": "Deduction from the deposit",
     "close": "Close",
     "renew_contract": "Renew contract",
     "cancel_contract": "Cancel contract"
