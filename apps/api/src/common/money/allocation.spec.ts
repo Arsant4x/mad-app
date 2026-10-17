@@ -1,4 +1,4 @@
-import { allocateEvenly, moneyEquals, MONEY_EPSILON, sumMoney } from './allocation';
+import { allocateByWeights, allocateEvenly, moneyEquals, MONEY_EPSILON, sumMoney } from './allocation';
 import { roundTo } from './rounding';
 
 /**
@@ -87,5 +87,58 @@ describe('توزيع المبالغ', () => {
     expect(MONEY_EPSILON).toBe(0.01);
     expect(moneyEquals(100, 100.01)).toBe(true);
     expect(moneyEquals(100, 100.02)).toBe(false);
+  });
+});
+
+describe('allocateByWeights', () => {
+  function* pseudoRandom(seed: number): Generator<number> {
+    let x = seed;
+    for (;;) {
+      x = (x * 1103515245 + 12345) % 2147483648;
+      yield x / 2147483648;
+    }
+  }
+
+  it('the parts sum to the total for any total and any positive weights', () => {
+    const rnd = pseudoRandom(20261017);
+    const failures: string[] = [];
+    for (let i = 0; i < 2000; i += 1) {
+      const total = roundTo((rnd.next().value - 0.15) * 100000, 'LINE_AMOUNT');
+      const count = 1 + Math.floor(rnd.next().value * 40);
+      const weights = Array.from({ length: count }, () => 0.01 + rnd.next().value * 24);
+      const parts = allocateByWeights(total, weights);
+      if (parts.length !== count) failures.push(`${total}/${count}: length ${parts.length}`);
+      const sum = sumMoney(parts);
+      if (sum !== total) failures.push(`${total}/${weights.join(',')}: sum ${sum}`);
+    }
+    expect(failures.slice(0, 5)).toEqual([]);
+  });
+
+  it('splits by the weights: 18,000 over 12 and 6 months is 12,000 and 6,000', () => {
+    expect(allocateByWeights(18000, [12, 6])).toEqual([12000, 6000]);
+    expect(allocateByWeights(5500, [1, 1, 1, 1, 1.5])).toEqual([1000, 1000, 1000, 1000, 1500]);
+  });
+
+  it('equal weights give exactly the parts of allocateEvenly', () => {
+    const rnd = pseudoRandom(91);
+    for (let i = 0; i < 1000; i += 1) {
+      const total = roundTo((rnd.next().value - 0.2) * 50000, 'LINE_AMOUNT');
+      const count = 1 + Math.floor(rnd.next().value * 30);
+      const weight = [1, 3, 6, 12][i % 4];
+      expect(allocateByWeights(total, new Array(count).fill(weight))).toEqual(allocateEvenly(total, count));
+    }
+  });
+
+  it('the remainder lands on the last part, or on the first when asked', () => {
+    expect(allocateByWeights(10, [1, 2])).toEqual([3.33, 6.67]);
+    expect(allocateByWeights(10, [2, 1], { remainderOn: 'first' })).toEqual([6.67, 3.33]);
+    expect(allocateByWeights(-10, [1, 2])).toEqual([-3.33, -6.67]);
+  });
+
+  it('refuses weights it cannot split by', () => {
+    for (const bad of [[], [0, 0], [1, -1], [1, NaN], [1, Infinity]]) {
+      expect(() => allocateByWeights(100, bad)).toThrow(RangeError);
+    }
+    expect(() => allocateByWeights(NaN, [1])).toThrow(RangeError);
   });
 });

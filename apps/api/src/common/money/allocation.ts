@@ -52,6 +52,36 @@ export function allocateEvenly(
 }
 
 /**
+ * Splits `total` in proportion to `weights`, and the parts add up to `total` exactly.
+ *
+ * Like `allocateEvenly` the split is done in halalas: every part is its truncated share and the remainder lands
+ * on one known part, the last unless `remainderOn: 'first'`. Equal weights therefore give exactly the parts of
+ * `allocateEvenly`.
+ */
+export function allocateByWeights(
+  total: number,
+  weights: readonly number[],
+  options: { context?: RoundingContext; remainderOn?: 'first' | 'last' } = {},
+): number[] {
+  const context = options.context ?? 'LINE_AMOUNT';
+  if (!Number.isFinite(total)) throw new RangeError('allocateByWeights: the total is not finite');
+  if (weights.length < 1) throw new RangeError('allocateByWeights: no weights');
+  if (weights.some((w) => !Number.isFinite(w) || w < 0)) throw new RangeError(`allocateByWeights: weights ${weights.join(', ')} are not all finite and non negative`);
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+  if (!(weightSum > 0)) throw new RangeError('allocateByWeights: the weights add up to zero');
+
+  const rounded = roundTo(total, context);
+  const places = SCALE[context];
+  const units = Math.round(Number(`${rounded}e${places}`));
+  const unit = Number(`1e-${places}`);
+
+  const at = options.remainderOn === 'first' ? 0 : weights.length - 1;
+  const shares = weights.map((w, i) => (i === at ? 0 : Math.trunc((units * w) / weightSum)));
+  shares[at] = units - shares.reduce((sum, s) => sum + s, 0);
+  return shares.map((s) => roundTo(s * unit, context));
+}
+
+/**
  * جمعُ مبالغ **مدوَّراً عند كل تراكم** — لا جمعاً عائماً ثم تدويراً في النهاية.
  *
  * وهو ما تفعله `computeDocumentTotals` أصلاً؛ وهذه تُخرجه لمن يجمع خارج
