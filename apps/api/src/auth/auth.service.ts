@@ -215,21 +215,24 @@ export class AuthService {
 
     if (!stored) throw new UnauthorizedException(MSG.session_invalid);
 
-    if (stored.revokedAt) {
-      // Reuse of an already-rotated refresh token likely means it leaked —
-      // kill every session for this identity as a precaution.
-      await this.prisma.refreshToken.updateMany({
-        where: { loginIdentityId: stored.loginIdentityId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      throw new UnauthorizedException(MSG.session_invalid);
-    }
+    if (stored.revokedAt) return this.refuseReusedToken(stored.loginIdentityId);
 
     if (stored.expiresAt < new Date()) throw new UnauthorizedException(MSG.session_expired);
 
-    await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+    // Revoke only while still unrevoked: when two calls carry the same token, the one that revokes it first wins and the other is reuse.
+    const revoked = await this.prisma.refreshToken.updateMany({ where: { id: stored.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (revoked.count !== 1) return this.refuseReusedToken(stored.loginIdentityId);
 
     return this.buildSessionFromIdentity(await this.loadProfiles(asHumanIdentity(stored.loginIdentity)));
+  }
+
+  /** Reuse of an already-rotated refresh token likely means it leaked, so every session of this identity ends. */
+  private async refuseReusedToken(loginIdentityId: string): Promise<never> {
+    await this.prisma.refreshToken.updateMany({
+      where: { loginIdentityId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    throw new UnauthorizedException(MSG.session_invalid);
   }
 
   /** Re-derives the current user's view from a valid access token payload,
