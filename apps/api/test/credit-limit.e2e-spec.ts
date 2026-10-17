@@ -198,4 +198,31 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
     const after = await bill(c).expect(201);
     expect(after.body.creditOverrideById).toBeNull();
   }, 90000);
+
+  it('a back-dated invoice is measured against what the customer owes today', async () => {
+    const c = await customerWithLimit(1000, 'back-dated');
+    const tenDaysAgo = new Date(Date.now() - 10 * 86_400_000).toISOString().slice(0, 10);
+    // Today 1 x 800 at 15% = 920 passes; ten days earlier 1 x 400 at 15% = 460 brings the customer to 1,380.
+    await bill(c, 0, { lines: [{ description: `today ${suffix}`, quantity: 1, unitPrice: 800, taxRate: 15 }] }).expect(201);
+    const backDated = () =>
+      bill(c, 0, {
+        issueDate: tenDaysAgo,
+        dueDate: tenDaysAgo,
+        lines: [{ description: `back-dated ${suffix}`, quantity: 1, unitPrice: 400, taxRate: 15 }],
+      });
+
+    await auth(request(app.getHttpServer()).patch('/company-profile')).send({ creditLimitHardBlock: true }).expect(200);
+    try {
+      const blocked = await backDated().expect(403);
+      expect(blocked.body.code).toBe(CREDIT_CODE.hardBlock);
+      expect(String(blocked.body.message)).toContain('920.00');
+      expect(String(blocked.body.message)).toContain('1,380.00');
+    } finally {
+      await auth(request(app.getHttpServer()).patch('/company-profile')).send({ creditLimitHardBlock: false }).expect(200);
+    }
+
+    const refused = await backDated().expect(409);
+    expect(refused.body.code).toBe(CREDIT_CODE.exceeded);
+    expect(String(refused.body.message)).toContain('920.00');
+  }, 90000);
 });
