@@ -8,11 +8,12 @@ readsDeclaredStrings();
 
 /**
  * Subscription time is money: the only code that may move a company's subscription end is a method
- * that first consumes a two person platform decision. A company is born with an end equal to its start.
+ * that first consumes a two person platform decision inside its own transaction, so a failed write
+ * leaves the decision unspent. A company is born with an end equal to its start.
  * Any other write of `subEnd` under src fails this guard.
  */
 const SRC = join(__dirname, '..');
-export const DECISION_CALL = /\bdecisions\.consume\(\s*'SUBSCRIPTION_CHANGE'/;
+export const DECISION_CALL = /\bdecisions\.consumeWithinTx\(\s*\w+\s*,\s*'SUBSCRIPTION_CHANGE'/;
 const WRITE_KEYS = new Set(['data', 'create', 'update']);
 const SQL_WRITE = /\b(UPDATE|INSERT|SET)\b[\s\S]*"subEnd"|"subEnd"[\s\S]*\b(UPDATE|SET)\b/i;
 
@@ -134,12 +135,25 @@ describe('subscription end is written only on the two person decision path', () 
     const decided = [
       'class CompaniesService {',
       '  async updateSubscription(id: string, dto: Dto) {',
+      '    return this.prisma.$transaction(async (tx) => {',
+      "      await this.decisions.consumeWithinTx(tx, 'SUBSCRIPTION_CHANGE', id, by);",
+      '      return tx.company.update({ where: { id }, data: { subEnd: new Date(dto.subEnd) } });',
+      '    });',
+      '  }',
+      '}',
+    ].join('\n');
+    expect(subscriptionEndWrites(decided).filter((w) => !w.allowed)).toEqual([]);
+
+    // Spending the decision in a transaction of its own and writing the end after it is a split write.
+    const split = [
+      'class CompaniesService {',
+      '  async updateSubscription(id: string, dto: Dto) {',
       "    await this.decisions.consume('SUBSCRIPTION_CHANGE', id);",
       '    return this.prisma.company.update({ where: { id }, data: { subEnd: new Date(dto.subEnd) } });',
       '  }',
       '}',
     ].join('\n');
-    expect(subscriptionEndWrites(decided).filter((w) => !w.allowed)).toEqual([]);
+    expect(subscriptionEndWrites(split).filter((w) => !w.allowed).map((w) => w.scope)).toEqual(['CompaniesService.updateSubscription']);
 
     const born = 'function birth(p) { const born = new Date(); return p.company.create({ data: { subStart: born, subEnd: born } }); }';
     expect(subscriptionEndWrites(born).filter((w) => !w.allowed)).toEqual([]);

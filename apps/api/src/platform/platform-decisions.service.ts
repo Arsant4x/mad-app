@@ -75,9 +75,18 @@ export class PlatformDecisionsService {
     if (existing.status !== 'PENDING') throw new ConflictException(formatMessage(MSG.decision_not_pending, { status: existing.status }));
     if (existing.requestedById === decidedById) throw new ConflictException(MSG.decision_same_hand);
 
-    return this.prisma.platformDecision.update({
-      where: { id },
-      data: { status: approve ? 'APPROVED' : 'REJECTED', decidedById, decidedAt: new Date(), note: note?.trim() || null },
+    // The write holds the pending condition itself, so of two decisions sent at once only one lands.
+    return this.prisma.$transaction(async (tx) => {
+      const decided = await tx.platformDecision.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: approve ? 'APPROVED' : 'REJECTED', decidedById, decidedAt: new Date(), note: note?.trim() || null },
+      });
+      if (decided.count === 0) {
+        const now = await tx.platformDecision.findUnique({ where: { id }, select: { status: true } });
+        if (!now) throw new NotFoundException(MSG.decision_not_found);
+        throw new ConflictException(formatMessage(MSG.decision_not_pending, { status: now.status }));
+      }
+      return tx.platformDecision.findUniqueOrThrow({ where: { id } });
     });
   }
 
@@ -97,12 +106,17 @@ export class PlatformDecisionsService {
     const approved = await tx.platformDecision.findMany({ where: { action, targetId, status: 'APPROVED' }, orderBy: { decidedAt: 'desc' } });
     if (approved.length === 0) throw new ConflictException(formatMessage(MSG.decision_required, { action: PLATFORM_ACTION_LABEL[action] }));
     const decision = action === 'SUBSCRIPTION_CHANGE' ? approvedForEnd(approved, values.subEnd ?? null) : approved[0];
-    return tx.platformDecision.update({ where: { id: decision.id }, data: { status: 'EXECUTED', executedAt: new Date(), executedById } });
-  }
-
-  /** The same outside a transaction, for paths that have none. */
-  consume(action: PlatformDecisionAction, targetId: string, executedById: string, values: AppliedValues = {}) {
-    return this.prisma.$transaction((tx) => this.consumeWithinTx(tx, action, targetId, executedById, values));
+    // The write holds the approved condition itself, so of two applies sent at once only one spends it.
+    const spent = await tx.platformDecision.updateMany({
+      where: { id: decision.id, status: 'APPROVED' },
+      data: { status: 'EXECUTED', executedAt: new Date(), executedById },
+    });
+    if (spent.count === 0) {
+      const now = await tx.platformDecision.findUnique({ where: { id: decision.id }, select: { status: true } });
+      if (!now) throw new NotFoundException(MSG.decision_not_found);
+      throw new ConflictException(formatMessage(MSG.decision_no_longer_approved, { status: now.status }));
+    }
+    return tx.platformDecision.findUniqueOrThrow({ where: { id: decision.id } });
   }
 
   /**
