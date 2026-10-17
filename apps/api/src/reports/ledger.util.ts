@@ -173,6 +173,10 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
   if (filter.to) range.lte = filter.to;
   const where = lineWhere(filter, scope, Object.keys(range).length ? range : undefined);
   const count = await tx.journalLine.count({ where });
+  // Totals and closing cover the whole range; only the listed rows are capped.
+  const inRange = await tx.journalLine.aggregate({ where, _sum: { debit: true, credit: true } });
+  const rangeDebit = Number(inRange._sum.debit ?? 0);
+  const rangeCredit = Number(inRange._sum.credit ?? 0);
   const lines = await tx.journalLine.findMany({
     where,
     select: {
@@ -197,13 +201,9 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
   const docs = await sourcesOf(tx, [...new Set(lines.map((l) => l.journalEntryId))]);
 
   let running = opening;
-  let totalDebit = 0;
-  let totalCredit = 0;
   const rows: LedgerRow[] = lines.map((l) => {
     const debit = Number(l.debit);
     const credit = Number(l.credit);
-    totalDebit += debit;
-    totalCredit += credit;
     running = round2(running + signed(debit, credit));
     return {
       lineId: l.id,
@@ -230,9 +230,9 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
     side,
     opening: money(opening),
     rows,
-    totalDebit: money(round2(totalDebit)),
-    totalCredit: money(round2(totalCredit)),
-    closing: money(running),
+    totalDebit: money(round2(rangeDebit)),
+    totalCredit: money(round2(rangeCredit)),
+    closing: money(round2(opening + signed(rangeDebit, rangeCredit))),
     count,
     truncated: count > lines.length,
   };
