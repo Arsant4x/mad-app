@@ -9,6 +9,7 @@ import { round2, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { openingEntryDate } from '../journal/opening-balance.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
@@ -115,6 +116,8 @@ export class StockOpeningsService {
         if (!dto.lines?.length) throw new BadRequestException(MSG.stock_opening_lines_required);
 
         const openingDate = await this.resolveOpeningDate(tx, companyId, dto.openingDate);
+        // Zero cost lines post no entry, yet they still put stock into the opening period.
+        await assertPeriodOpen(tx, openingDate);
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
 
         // ١. كلُّ سطرٍ يُفحص قبل أن يُكتب شيء: الصنفُ والمستودعُ والاقتناءُ والدفعة — فرفضٌ في الخامس لا يترك أربعة.
@@ -302,6 +305,7 @@ export class StockOpeningsService {
       const original = await tx.stockMovement.findUniqueOrThrow({ where: { id: line.movementId }, select: { branchId: true } });
       const branchId = await resolveBranchId(tx, original.branchId, allowedBranchIds, 'mirror');
       const today = await companyToday(tx, companyId);
+      await assertPeriodOpen(tx, today);
       const reversal = await tx.stockMovement.create({
         data: {
           companyId,

@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { companyToday } from '../common/company-day.util';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { grant } from '../delegations/permission-tree';
@@ -126,6 +127,9 @@ export class InventoryService {
             expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
           })
         : null;
+
+      // A movement changes the balances of its period even when it posts no entry (a transfer, or a zero cost).
+      await assertPeriodOpen(tx, new Date(dto.date));
 
       const movement = await tx.stockMovement.create({
         data: {
@@ -423,6 +427,7 @@ export class InventoryService {
       const entering = original.type === 'IN' || (original.type === 'ADJUSTMENT' && signedQty > 0);
       const reason = `عكسُ الحركة ${original.id.slice(0, 8)}${original.reason ? ` — ${original.reason}` : ''}`;
       const base = { companyId, branchId: original.branchId, productId: original.productId, date: await companyToday(tx, companyId), reason, origin: 'MANUAL' as const, reversalOfId: original.id };
+      await assertPeriodOpen(tx, base.date);
 
       /**
        * ⚖️ ق-١٣٦٣ — **العكسُ يُقيَّد إن قُيّد أصلُه**: مرآةُ قيده بما تحرّك فعلاً (الطبقةُ تُقفل بتكلفتها اليوم · والمستعادُ بتكلفة ما خرج).
