@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { formatMoney, netTotals, num, num0, round2, roundMoney, roundPercentOf, sumMoney } from './money';
+import { documentTotals, formatMoney, netTotals, num, num0, round2, roundMoney, roundPercentOf, roundProduct, sumMoney } from './money';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (0.1 ث — ثلاثةُ أضعافه دون الافتراضيّ، فالميزانيةُ الافتراضيُّ نفسُه).
 //    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
@@ -85,5 +85,23 @@ describe('Net document totals match the server on half halala ties', () => {
   it('netTotals at a zero rate keeps the rounded net as the total', () => {
     expect(netTotals(100.3, 0)).toEqual({ subtotal: 100.3, tax: 0, total: 100.3 });
     expect(netTotals(1.005, 0)).toEqual({ subtotal: 1.01, tax: 0, total: 1.01 });
+  });
+
+  it('roundProduct multiplies the decimal values: 0.375 x 0.6 is 0.23, and just under the half stays down', () => {
+    expect(roundProduct(0.375, 0.6)).toBe(0.23);
+    expect(roundProduct(-0.375, 0.6)).toBe(-0.23);
+    expect(roundProduct(0.374, 0.6)).toBe(0.22);
+  });
+
+  it('documentTotals taxes each rate on the sum of its nets, not the sum of the line taxes', () => {
+    // 0.03 and 0.07 at 15%: the line taxes 0.0045 and 0.0105 add to 0.015, the rate on 0.10 gives 0.02.
+    const lines = [
+      { quantity: 1, unitPrice: 0.03, taxRate: 15, taxCategory: 'S' },
+      { quantity: 1, unitPrice: 0.07, taxRate: 15, taxCategory: 'S' },
+      { quantity: 1, unitPrice: 5, taxRate: 0, taxCategory: 'Z', taxExemptionReasonCode: 'VATEX-SA-32' },
+    ];
+    expect(documentTotals(lines)).toEqual({ subtotal: 5.1, tax: 0.02, total: 5.12 });
+    expect(documentTotals([{ quantity: 1, unitPrice: 100.3, discount: 0, taxRate: 15, taxCategory: 'S' }])).toEqual({ subtotal: 100.3, tax: 15.05, total: 115.35 });
+    expect(documentTotals([{ quantity: 2, unitPrice: 10, discount: 4.5, taxRate: 15, taxCategory: 'S' }])).toEqual({ subtotal: 15.5, tax: 2.33, total: 17.83 });
   });
 });

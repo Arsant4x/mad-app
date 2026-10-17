@@ -1,7 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { NonDeductibleVatPlacement, NonDeductibleVatTrigger, Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { round2, roundTo } from '../common/money/rounding';
+import { round2, roundProductOf, roundTo } from '../common/money/rounding';
 import { postNonDeductibleVatEntry } from '../journal/auto-posting.util';
 import { allocationOf, raiseLayerCost, recordCostShares, type CostShareNode } from './layer-cost-allocation.util';
 
@@ -130,7 +130,7 @@ async function targetsFor(tx: Tx, doc: NonNullable<Awaited<ReturnType<typeof loa
   const rate = Number(doc.exchangeRate);
   const shares = allocateByWeight(
     tax,
-    doc.lines.map((l) => round2(Number(l.quantity) * Number(l.unitPrice) * rate)),
+    doc.lines.map((l) => roundProductOf([Number(l.quantity), Number(l.unitPrice), rate], 'LINE_AMOUNT')),
   );
   const out: Target[] = [];
 

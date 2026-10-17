@@ -10,7 +10,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMoney, round2, roundTo } from '../common/money/rounding';
-import { baseCurrencyTotals, computeNetTotals } from '../common/money/totals';
+import { baseCurrencyTotals, computeDocumentTotals, computeNetTotals } from '../common/money/totals';
 import { money } from '../common/money/text';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
 import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/settlement/settlement.util';
@@ -54,6 +54,11 @@ function resolveAmortization(amortize: boolean, categoryCode: string | null | un
 export function computePurchaseTax(subtotal: number, exempt: boolean) {
   const t = computeNetTotals(subtotal, exempt ? 0 : STANDARD_VAT_RATE);
   return { subtotal: t.subtotal, tax: t.taxTotal, total: t.total };
+}
+
+/** The net of purchase or supplier note lines: each line quantity × price on the decimal values, as the totals function sums them. */
+export function purchaseLinesSubtotal(lines: readonly { quantity: number; unitPrice: number }[]): number {
+  return computeDocumentTotals(lines.map((l) => ({ quantity: l.quantity, unitPrice: l.unitPrice, taxRate: 0 }))).subtotal;
 }
 
 /** A purchase or supplier note's base currency columns, from the one base totals function. */
@@ -103,14 +108,13 @@ export class PurchasesService {
   private stockedSubtotal(dto: { subtotal: number; lines?: { productId?: string; quantity: number; unitPrice: number }[] }): number {
     if (!dto.lines?.length) return 0;
 
-    const sum = (rows: typeof dto.lines) => roundTo(rows.reduce((t, l) => t + l.quantity * l.unitPrice, 0), 'LINE_AMOUNT');
-    const all = sum(dto.lines);
+    const all = purchaseLinesSubtotal(dto.lines);
     if (Math.abs(all - roundTo(dto.subtotal, 'LINE_AMOUNT')) > 0.005) {
       throw new BadRequestException(
         formatMessage(MSG.purchase_lines_total_mismatch, { lines: String(all), subtotal: String(dto.subtotal) }),
       );
     }
-    return sum(dto.lines.filter((l) => l.productId));
+    return purchaseLinesSubtotal(dto.lines.filter((l) => l.productId));
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto, request?: KeyedRequest) {
@@ -322,7 +326,7 @@ export class PurchasesService {
       }
 
       // البنودُ مصدرُ الإجمالي كالإنشاء: إن أُرسلت اشتُقّ منها، وإن أُرسل معها إجماليٌّ وجب أن يطابقها.
-      const linesSubtotal = dto.lines ? roundTo(dto.lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0), 'LINE_AMOUNT') : null;
+      const linesSubtotal = dto.lines ? purchaseLinesSubtotal(dto.lines) : null;
       if (dto.lines) this.stockedSubtotal({ subtotal: dto.subtotal ?? linesSubtotal!, lines: dto.lines });
       const amountsGiven =
         dto.subtotal !== undefined || dto.exempt !== undefined || dto.lines !== undefined || dto.exchangeRate !== undefined || dto.currency !== undefined;

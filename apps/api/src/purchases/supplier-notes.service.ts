@@ -14,7 +14,6 @@ import {
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
-import { roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
@@ -26,7 +25,7 @@ import { recordCostShares } from './layer-cost-allocation.util';
 import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { recomputePurchaseStatus } from './purchase-settlement.util';
 import { assertPurchaseReferences } from './purchase-references.util';
-import { computePurchaseTax, purchaseBaseTotals } from './purchases.service';
+import { computePurchaseTax, purchaseBaseTotals, purchaseLinesSubtotal } from './purchases.service';
 
 /** أنواعُ مستند الشراء — الأساسُ وإشعاراه، كما للفاتورة `INVOICE`/`CREDIT_NOTE`/`DEBIT_NOTE`. */
 export const PURCHASE_NOTE_KINDS: NoteKinds<'PURCHASE' | 'SUPPLIER_CREDIT_NOTE' | 'SUPPLIER_DEBIT_NOTE'> = {
@@ -109,13 +108,7 @@ export class SupplierNotesService {
         );
 
         // Purchase totals: the lines summed, then the tax by the exemption inherited from the original.
-        const { subtotal, tax: taxAmount, total: noteTotal } = computePurchaseTax(
-          roundTo(
-            lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0),
-            'LINE_AMOUNT',
-          ),
-          original.exempt,
-        );
+        const { subtotal, tax: taxAmount, total: noteTotal } = computePurchaseTax(purchaseLinesSubtotal(lines), original.exempt);
 
         // ④ السقفُ من الأصل (`ق-١٠٠٦`/⑤): الدائنُ على الشراء، والمدينُ على دائنٍ زائد — لا يتجاوزان ما تبقّى.
         if (side === 'credit' || correctsOpposite) {

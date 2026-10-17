@@ -4,7 +4,7 @@ import { branchFilter } from '../branches/branch-scope.util';
 import { companyToday } from '../common/company-day.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { round2, roundTo } from '../common/money/rounding';
+import { round2, roundProductOf, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -49,9 +49,9 @@ export interface PurchaseForReceipt {
   lines: { id: string; productId: string | null; quantity: Prisma.Decimal | number; unitPrice: Prisma.Decimal | number; batchNo: string | null; expiryDate: Date | null }[];
 }
 
-/** قيمةُ سطر شراءٍ بالعملة الأساسية — التدويرُ سطراً سطراً، وقيدُ الشراء يجمع هذه لا يدوّر المجموع. */
+/** A purchase line in the base currency, rounded per line on the exact decimal product; the purchase entry sums these. */
 export function purchaseLineBase(line: { quantity: Prisma.Decimal | number; unitPrice: Prisma.Decimal | number }, exchangeRate: number): number {
-  return round2(Number(line.quantity) * Number(line.unitPrice) * exchangeRate);
+  return roundProductOf([Number(line.quantity), Number(line.unitPrice), exchangeRate], 'LINE_AMOUNT');
 }
 
 /** Σ قيمة السطور المخزنية بالعملة الأساسية — ما يُمدين الوسيطَ في قيد الشراء. */
@@ -148,7 +148,7 @@ export class GoodsReceiptsService {
           }
           const lineBase = purchaseLineBase(line, rate);
           // المكمِّلُ يرحّل الفرقَ عمّا رُحِّل قبله — لا كمّيتَه مدوَّرةً — فيتصافى الوسيط بلا هللة.
-          const baseAmount = qty === remainingQty ? round2(lineBase - done.base) : Math.min(round2(qty * Number(line.unitPrice) * rate), round2(lineBase - done.base));
+          const baseAmount = qty === remainingQty ? round2(lineBase - done.base) : Math.min(roundProductOf([qty, Number(line.unitPrice), rate], 'LINE_AMOUNT'), round2(lineBase - done.base));
           wanted.push({ line, quantity: qty, batchNo: dl.batchNo?.trim() || line.batchNo, expiryDate: dl.expiryDate ? new Date(dl.expiryDate) : line.expiryDate, baseAmount });
         }
 
