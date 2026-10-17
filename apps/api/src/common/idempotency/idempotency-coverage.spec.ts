@@ -186,6 +186,8 @@ describe('Idempotency-Key on every POST of a controller that writes documents or
     const reason = 'a thing is written once by its state check';
 
     it('refuses a POST with neither the key nor an exemption, and one with a short reason', () => {
+      const bare = ["@Controller('things')", 'export class ThingsController {', '  @Post()', '  create() {}', '}'].join('\n');
+      expect(postRoutesOf(bare).map(routeProblem)).toEqual(['takes no Idempotency-Key and gives no exemption']);
       expect(postRoutesOf(controller('', '')).map(routeProblem)).toEqual(['takes no Idempotency-Key and gives no exemption']);
       expect(postRoutesOf(controller("\n  @IdempotencyExempt('short')", '')).map(routeProblem)).toEqual(['the exemption gives no reason of at least twenty characters']);
       expect(postRoutesOf(controller(`\n  @IdempotencyExempt('${reason}')`, ', @IdempotencyKey() key: string | undefined')).map(routeProblem)).toEqual([
