@@ -4,14 +4,11 @@ import { branchFilter } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
-import { zoneOffsetMin } from '../common/wall-clock.util';
+import { DEVICE_CLOCK_TOLERANCE_MIN, zoneOffsetMin } from '../common/wall-clock.util';
 import { RecordAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
 import { ListAttendanceQueryDto } from './dto/list-attendance-query.dto';
 
 const RECORD_INCLUDE = { employee: { select: { id: true, fullName: true } } } as const;
-
-/** How far a recorded time may run ahead of the server clock, for a device clock that is a little fast. */
-const ATTENDANCE_CLOCK_TOLERANCE_MIN = 5;
 
 const minutesOf = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
@@ -34,7 +31,7 @@ async function assertAttendanceTimes(
 
   const { timeZone } = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { timeZone: true } });
   const now = new Date();
-  const latest = now.getTime() + ATTENDANCE_CLOCK_TOLERANCE_MIN * 60_000;
+  const latest = now.getTime() + DEVICE_CLOCK_TOLERANCE_MIN * 60_000;
   const offsetMin = zoneOffsetMin(now, timeZone);
   const day = date.toISOString().slice(0, 10);
   const dayStart = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());

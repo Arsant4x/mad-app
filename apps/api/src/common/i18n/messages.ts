@@ -492,6 +492,7 @@ export const MSG = {
   templates_owner_only: 'templates.owner_only',
   pos_shift_already_open: 'pos.shift_already_open',
   pos_no_open_shift: 'pos.no_open_shift',
+  pos_sync_ring_time_outside_shift: 'pos.sync_ring_time_outside_shift',
   pos_shift_not_found: 'pos.shift_not_found',
   pos_shift_closed: 'pos.shift_closed',
   pos_not_your_shift: 'pos.not_your_shift',
@@ -601,6 +602,8 @@ export const MSG = {
   /** ⚖️ المردودةُ تُغلق ولا تُمسّ ويُصدَر بدلاً منها جديد (`ق-٩٥٨`) — والمنعُ بالشكل: لا إعادةَ ولا ادّعاءَ ولا إشعارَ عليها (`ق-٩٦٤`). */
   invoice_replacement_only_rejected: 'invoices.replacement_only_rejected',
   invoice_already_replaced: 'invoices.already_replaced',
+  invoice_issued_at_other_day: 'invoices.issued_at_other_day',
+  invoice_issued_at_in_future: 'invoices.issued_at_in_future',
   zatca_rejected_not_resubmittable: 'zatca.rejected_not_resubmittable',
   credit_note_target_rejected: 'creditNotes.target_rejected',
 
@@ -1869,6 +1872,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.pos_shift_already_open]: { ar: 'لديك مناوبة مفتوحة بالفعل — أقفلها قبل فتح غيرها', en: 'You already have an open shift — close it before opening another' },
   [MSG.pos_no_open_shift]: { ar: 'لا توجد مناوبة مفتوحة — افتح مناوبة قبل تسجيل البيع', en: 'No open shift — open one before ringing a sale' },
+  [MSG.pos_sync_ring_time_outside_shift]: {
+    ar: 'وقت البيع {ringAt} خارج المناوبة المفتوحة، من فتحها {openedAt} إلى الآن. راجع ساعة الجهاز',
+    en: 'The sale time {ringAt} is outside the open shift, from its opening at {openedAt} until now. Check the device clock',
+  },
   [MSG.pos_shift_not_found]: { ar: 'المناوبة غير موجودة', en: 'Shift not found' },
   [MSG.pos_shift_closed]: { ar: 'المناوبة مقفلة بالفعل', en: 'Shift is already closed' },
   [MSG.pos_not_your_shift]: { ar: 'لا يمكنك إقفال مناوبة فتحها غيرك', en: 'You cannot close a shift someone else opened' },
@@ -2251,6 +2258,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
    */
   [MSG.invoice_replacement_only_rejected]: { ar: 'لا يُصدَر بدلٌ إلا عن فاتورة مردودة من هيئة الزكاة', en: 'A replacement can only be issued for an invoice rejected by ZATCA' },
   [MSG.invoice_already_replaced]: { ar: 'صدر بدلُ هذه الفاتورة المردودة من قبل: {no} — والمردودة مغلقة لا تُمسّ', en: 'A replacement for this rejected invoice was already issued: {no} — the rejected one is closed and untouched' },
+  [MSG.invoice_issued_at_other_day]: {
+    ar: 'وقت الإصدار يقع يوم {day} وتاريخ الفاتورة {issueDate}. الوقت والتاريخ لليوم نفسه',
+    en: 'The issue time falls on {day} and the invoice date is {issueDate}. The time and the date must be the same day',
+  },
+  [MSG.invoice_issued_at_in_future]: {
+    ar: 'وقت الإصدار {issuedAt} لم يأتِ بعد. تُصدَر الفاتورة بوقت إصدارها',
+    en: 'The issue time {issuedAt} has not come yet. An invoice is issued at the time it is issued',
+  },
   [MSG.zatca_rejected_not_resubmittable]: { ar: 'الفاتورة المردودة لا تُعاد إلى الهيئة ولا تُوقَّع ثانيةً — عدّادها وتجزئتها كما هما؛ أصدِر بدلاً عنها', en: 'A rejected invoice is not resubmitted or re-signed — its counter and hash stay as they are; issue a replacement instead' },
   [MSG.credit_note_target_rejected]: { ar: 'لا إشعار على فاتورة مردودة — فهي ليست فاتورة ضريبية صحيحة؛ أصدِر بدلاً عنها ثم صحّح البدل إن لزم', en: 'No note can be issued against a rejected invoice — it is not a valid tax invoice; issue a replacement, then correct the replacement if needed' },
 

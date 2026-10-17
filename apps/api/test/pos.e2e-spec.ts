@@ -7,6 +7,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
+import { backdateShiftOpening } from './backdate-shift';
 import { decodeZatcaQr } from '../src/zatca/qr.util';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (39.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
@@ -223,6 +224,9 @@ describe('POS cashier (e2e)', () => {
     // مناوبةٌ مفتوحة إن لم تكن — الاختبار أخيرٌ في الملف فيُغلق ما فتحه.
     const open = await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 });
     const openedHere = open.status === 201;
+    // The sale is synced at a fixed past instant, so the shift opened before it.
+    const current = (await auth(request(app.getHttpServer()).get('/pos/shifts/current')).expect(200)).body.shift.id as string;
+    await backdateShiftOpening(app, companyIdOfToken(token), [current], new Date('2026-09-01T00:00:00.000Z'));
 
     const payload = { clientSaleId: randomUUID(), ringAt: '2026-09-04T22:15:00.000Z', ringOffsetMin: 180, lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' };
     const sale = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
