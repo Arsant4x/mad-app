@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { dayStartOf } from '../common/wall-clock.util';
+import { companyToday } from '../common/company-day.util';
 
 /**
  * ⚖️ **تقويمُ المنشأة المالي — يولد معها ويتجدّد، فلا يعمل القفلُ مفتوحاً** (توجيه ٢٧٥ · `ق-١٥٨٤`، بحكم صاحب المشروع).
@@ -121,7 +121,8 @@ export async function ensureFiscalYearFor(tx: Prisma.TransactionClient, date: Da
 }
 
 /** **سنةُ الميلاد**: السنةُ الميلادية التي تحوي يومَ الإنشاء — داخل معاملة الميلاد بعد ضبط سياقها. */
-export async function createBirthFiscalYear(tx: Prisma.TransactionClient, companyId: string, today: Date = dayStartOf(new Date())) {
-  const range = fiscalYearContaining(today, 1);
+export async function createBirthFiscalYear(tx: Prisma.TransactionClient, companyId: string, today?: Date) {
+  // The company's day, not the UTC one: a company born just after its new year's midnight starts in the new year.
+  const range = fiscalYearContaining(today ?? (await companyToday(tx, companyId)), 1);
   return createFiscalYearWithinTx(tx, companyId, { name: fiscalYearName(range.start, 1), ...range });
 }

@@ -9,7 +9,7 @@ const FISCAL_SEARCH_FIELDS = ['name'] as const;
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
 import { closeFiscalYearWithinTx, reverseClosingEntryWithinTx } from './year-closing.util';
 import { createFiscalYearWithinTx, fiscalYearContaining, fiscalYearName, lockFiscalCalendar } from './fiscal-calendar.util';
-import { dayStartOf } from '../common/wall-clock.util';
+import { companyToday } from '../common/company-day.util';
 
 const YEAR_INCLUDE = { periods: { orderBy: [{ year: 'asc' as const }, { month: 'asc' as const }] } };
 
@@ -47,7 +47,7 @@ export class FiscalService {
       if (await tx.journalEntry.findFirst({ where: { companyId }, select: { id: true } })) throw new ConflictException(MSG.fiscal_start_month_after_posting);
       await tx.company.update({ where: { id: companyId }, data: { fiscalStartMonth: month } });
       await tx.fiscalYear.deleteMany({ where: { companyId } });
-      const range = fiscalYearContaining(dayStartOf(new Date()), month);
+      const range = fiscalYearContaining(await companyToday(tx, companyId), month);
       await createFiscalYearWithinTx(tx, companyId, { name: fiscalYearName(range.start, month), ...range });
     });
   }

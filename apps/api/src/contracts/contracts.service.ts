@@ -455,12 +455,12 @@ export class ContractsService {
   ) {}
 
   list(companyId: string, query: ListContractsQueryDto = {}) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listRefreshed(tx, query));
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listRefreshed(tx, companyId, query));
   }
 
   findOne(companyId: string, id: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      await this.refreshInstallmentStatuses(tx, id);
+      await this.refreshInstallmentStatuses(tx, companyId, id);
       const contract = await tx.contract.findUnique({ where: { id }, include: CONTRACT_INCLUDE });
       if (!contract) throw new NotFoundException(MSG.contract_not_found);
       // العميلُ مصدرُ الحقيقة (`ق-١٠٢٨`/⑥): ما افترق على العقد قبل هذا البناء يُصحَّح بالاشتقاق عند
@@ -610,7 +610,7 @@ export class ContractsService {
           // ⭐ ما حلّ استحقاقُه من الجدول يُستحقّ ذمّةً في اللحظة نفسِها (ق-٩١٧ · ق-٩٢٧/٥):
           // عقدٌ يُدخَل بتاريخٍ مضى يحمل أقساطاً حلّت، وكلٌّ منها نقطةُ ضريبةٍ بتاريخها —
           // لا ينتظر الكنسَ اليوميّ. والمقفلُ من الفترات يُتخطّى ويُعدّ لا يوقف الإنشاء.
-          await accrueDueWithinTx(tx, companyId, new Date(), created.id);
+          await accrueDueWithinTx(tx, companyId, await companyToday(tx, companyId), created.id);
         }
 
         // ⚖️ بنودُ الرسوم (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠): تُكتب للمسوّدة كما للحيّ، وتُطالَب لما حلّ من أقساط الحيّ في اللحظة نفسِها.
@@ -618,7 +618,7 @@ export class ContractsService {
           await tx.contractFee.createMany({
             data: dto.fees.map((f) => ({ contractId: created.id, label: f.label.trim(), amount: f.amount, effectiveFrom: new Date(f.effectiveFrom ?? dto.start) })) as unknown as Prisma.ContractFeeCreateManyInput[],
           });
-          if (!isDraft) await raiseDueFeesWithinTx(tx, companyId, new Date(), created.id);
+          if (!isDraft) await raiseDueFeesWithinTx(tx, companyId, await companyToday(tx, companyId), created.id);
         }
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE }));
@@ -649,7 +649,7 @@ export class ContractsService {
           const fee = await tx.contractFee.create({
             data: { contractId, label: dto.label.trim(), amount: dto.amount, effectiveFrom: dto.effectiveFrom ? new Date(dto.effectiveFrom) : await companyToday(tx, companyId) } as unknown as Prisma.ContractFeeUncheckedCreateInput,
           });
-          const raised = contract.status !== 'DRAFT' ? (await raiseDueFeesWithinTx(tx, companyId, new Date(), contractId)).raised : 0;
+          const raised = contract.status !== 'DRAFT' ? (await raiseDueFeesWithinTx(tx, companyId, await companyToday(tx, companyId), contractId)).raised : 0;
           return { ...presentFee(fee), raisedClaims: raised };
         }),
         ACCRUAL_TX_OPTIONS,
@@ -1163,6 +1163,7 @@ export class ContractsService {
         if (accrualPath && treatment) {
           // ① يُستحقّ ما يلزم — بعد كتابة الدفعة كي يقرأها المحرّك: نقطتُها المقدَّمة بقدرها
           //    إن سبقت الاستحقاق، أو باقي القسط إن حلّ، وما فاض عنه بقدره (م٢٠/٢ · ق-٩٢٤). ولكلِّ جزءٍ قسطُه.
+          const today = await companyToday(tx, companyId);
           for (const row of rows) {
             const accrued = await accrueForPaymentWithinTx(
               tx,
@@ -1170,7 +1171,7 @@ export class ContractsService {
               accrualContract,
               treatment,
               { id: row.id, date: new Date(dto.date), grossInContractCurrency: row.amount, installmentId: row.installmentId },
-              new Date(),
+              today,
             );
             if (!accrued) throw new BadRequestException(MSG.rent_accrual_period_locked);
           }
@@ -1331,7 +1332,8 @@ export class ContractsService {
         const end = new Date(dto.end);
         if (start <= source.start) throw new BadRequestException(MSG.renewal_must_start_after_source);
 
-        let creditDate = await companyToday(tx, companyId);
+        const today = await companyToday(tx, companyId);
+        let creditDate = today;
         if (start <= source.end) {
           if (!canEndEarly) throw new ForbiddenException(MSG.early_renewal_needs_cancel_permission);
           const cut = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() - 1));
@@ -1390,7 +1392,7 @@ export class ContractsService {
             vatInclusion: dto.vatInclusion,
             ...lessor,
             ...mixedShare,
-            status: start > new Date() ? 'UPCOMING' : 'DUE',
+            status: start > today ? 'UPCOMING' : 'DUE',
             currency: source.currency,
             exchangeRate,
             baseValue: toBaseAmount(value, exchangeRate),
@@ -1429,8 +1431,8 @@ export class ContractsService {
         // includes rent received for days after the cut, and it moves on the same day as the cut's postings.
         await applyTenantCreditOnRenewalWithinTx(tx, companyId, source, created, creditDate);
 
-        // كسابقتها في `create`: ما حلّ من جدول التجديد يُستحقّ في اللحظة نفسِها.
-        await accrueDueWithinTx(tx, companyId, new Date(), created.id);
+        // As in create: what fell due in the renewal's schedule is accrued at once.
+        await accrueDueWithinTx(tx, companyId, today, created.id);
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE }));
         },
@@ -2069,10 +2071,12 @@ export class ContractsService {
 
   /** Lazily flips DUE -> LATE for any installment whose due date has passed
    * — matches the mockup's `refreshInstallmentStatuses`, called on every
-   * read rather than via a background job. */
-  private async refreshInstallmentStatuses(tx: Prisma.TransactionClient, contractId?: string): Promise<void> {
+   * read rather than via a background job. Both flips count on the company's
+   * day, which is already the next day in the hours before UTC midnight. */
+  private async refreshInstallmentStatuses(tx: Prisma.TransactionClient, companyId: string, contractId?: string): Promise<void> {
+    const today = await companyToday(tx, companyId);
     await tx.installment.updateMany({
-      where: { status: 'DUE', dueDate: { lt: new Date() }, ...(contractId ? { contractId } : {}) },
+      where: { status: 'DUE', dueDate: { lt: today }, ...(contractId ? { contractId } : {}) },
       data: { status: 'LATE' },
     });
 
@@ -2081,7 +2085,7 @@ export class ContractsService {
     // job — a contract that only turns active when someone happens to look at
     // it is still correct, because nothing reads it without going through here.
     await tx.contract.updateMany({
-      where: { status: 'UPCOMING', start: { lte: new Date() }, ...(contractId ? { id: contractId } : {}) },
+      where: { status: 'UPCOMING', start: { lte: today }, ...(contractId ? { id: contractId } : {}) },
       data: { status: 'DUE' },
     });
   }
@@ -2098,8 +2102,8 @@ export class ContractsService {
    * row's `status` is the stored, freshly-refreshed value — nothing is
    * computed per row.
    */
-  private async listRefreshed(tx: Prisma.TransactionClient, query: ListContractsQueryDto) {
-    await this.refreshInstallmentStatuses(tx);
+  private async listRefreshed(tx: Prisma.TransactionClient, companyId: string, query: ListContractsQueryDto) {
+    await this.refreshInstallmentStatuses(tx, companyId);
 
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
