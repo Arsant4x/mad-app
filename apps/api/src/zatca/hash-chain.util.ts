@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ConflictException } from '@nestjs/common';
-import type { Prisma } from '@mad-app/db';
+import type { Prisma, ZatcaInvoiceType } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 /**
@@ -158,10 +158,38 @@ export function invoiceTypeFor(buyer: BuyerForInvoiceType, lines: ReadonlyArray<
   return 'simplified';
 }
 
-/** ما يلزم إيصالاً ليُعرف أيُحجب: مشتريه وسطورُه (نوعُ المستند) وحالُه لدى الهيئة. */
-export interface ReceiptGateInput {
+/** The stored type in the form the document builder and the send path use. */
+export function zatcaTypeOf(stored: ZatcaInvoiceType): 'standard' | 'simplified' {
+  return stored === 'STANDARD' ? 'standard' : 'simplified';
+}
+
+/**
+ * The transaction code (KSA-2) a signed document carries and the type its first two digits name, or null when the
+ * document carries no readable code. The backfill migration reads the same attribute with the same pattern.
+ */
+export function signedTypeOf(signedXml: string): { zatcaInvoiceType: ZatcaInvoiceType; zatcaTransactionCode: string } | null {
+  const code = /<cbc:InvoiceTypeCode name="(0[12][01]{5})"/.exec(signedXml)?.[1];
+  if (!code) return null;
+  return { zatcaInvoiceType: code.startsWith('01') ? 'STANDARD' : 'SIMPLIFIED', zatcaTransactionCode: code };
+}
+
+/** What a reader needs to name a document's type: the type stored at signing, and the buyer and lines for one not yet signed. */
+export interface DocumentForInvoiceType {
+  zatcaInvoiceType: ZatcaInvoiceType | null;
   customer: BuyerForInvoiceType;
   lines: ReadonlyArray<LineForInvoiceType>;
+}
+
+/**
+ * A signed document keeps the type it was signed as, whatever its buyer's card says later. Only a document not yet
+ * signed is derived from its buyer and lines.
+ */
+export function documentInvoiceType(doc: DocumentForInvoiceType): 'standard' | 'simplified' {
+  return doc.zatcaInvoiceType ? zatcaTypeOf(doc.zatcaInvoiceType) : invoiceTypeFor(doc.customer, doc.lines);
+}
+
+/** What a receipt needs to know whether it is held back: the document's type inputs and its state at the authority. */
+export interface ReceiptGateInput extends DocumentForInvoiceType {
   zatcaStatus: string;
 }
 
@@ -175,9 +203,10 @@ export type ReceiptClearance = { required: true; status: string; message: string
  * الفواتير. **وهي صفةُ المستند** (من `invoiceTypeFor` نفسِها) **لا صفةُ لحظة البيع** — فكلُّ مسارٍ يبني إيصالاً يسأل هنا:
  * البيعُ المباشر والمزامنةُ وإعادتُها والبيعُ المكتمل ببطاقة وقراءةُ محاولته. **وقِيس أن ثلاثةً منها كانت تُخرج رمزاً قابلاً
  * للطباعة لفاتورةٍ كاملة** قبل أن يُسأل هنا.
+ * A signed document answers with the type it was signed as (`documentInvoiceType`).
  */
 export function gatedReceiptFields(invoice: ReceiptGateInput, message: string): { receiptQr: null; stamped: false; clearance: ReceiptClearance } | null {
-  if (invoiceTypeFor(invoice.customer, invoice.lines) !== 'standard') return null;
+  if (documentInvoiceType(invoice) !== 'standard') return null;
   // ⚖️ اسمُ رمز الإيصال محايدٌ على السلك (`ق-١٤٤٨`) — والبوّابةُ وحدَها سعوديةٌ هنا.
   return { receiptQr: null, stamped: false, clearance: { required: true, status: invoice.zatcaStatus, message } };
 }

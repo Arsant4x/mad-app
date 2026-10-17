@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
-import { invoiceTypeFor, isExportInvoice, nextIcv, previousChainHash } from './hash-chain.util';
+import { invoiceTypeFor, isExportInvoice, nextIcv, previousChainHash, signedTypeOf, zatcaTypeOf } from './hash-chain.util';
 import { buildUnsignedInvoiceXml, ublCategoryOf } from './ubl/invoice-xml.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
@@ -57,6 +57,9 @@ const STALE_CLAIM_MS = 10 * 60_000;
 
 /** يُخزَّن نصاً في `zatcaMessage` كسائر الأسباب — فالواجهة تعرضه كما هو. */
 export const STORED_DOC_CORRUPT = 'تلفٌ في المستند المخزَّن: تجزئته لا تطابق ما وُقّع عليه — لم يُرسَل';
+
+/** Stored in `zatcaMessage` like the reason above: a signed document whose signed type is unknown is not sent on a guessed path. */
+export const STORED_TYPE_UNKNOWN = 'نوعُ المستند الموقَّع غيرُ معروف: لا يحمل رمزَ المعاملة، فلم يُرسَل';
 
 /**
  * ⚖️ **جوابُ الهيئة يُقرأ من رمز الحالة لا من النصّ** (`ق-٩٧١`/١).
@@ -327,12 +330,23 @@ export class ZatcaService {
         certificateBase64: decryptSecret(ctx.credential.productionCsidEnc!),
         qr: unsigned.qr,
       });
+      // The type is read back from the signed document and stored with it, so every later step follows what was signed.
+      const signedType = signedTypeOf(signedXml);
+      if (!signedType) throw new Error('KSA-2: the signed document carries no readable transaction code.');
       // يُحفظ **قبل** أي شبكة: التجزئة يحتاجها المستند التالي (PIH)، والمستند
       // والرمز يحتاجهما الإيصال الآن والإبلاغ لاحقاً — حرفاً.
       await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
         tx.invoice.update({
           where: { id: invoiceId },
-          data: { zatcaHash: invoiceHash, zatcaSignedXml: signedXml, zatcaQrPayload: qrBase64, zatcaStampedAt: new Date(), zatcaStatus: 'STAMPED', zatcaMessage: null },
+          data: {
+            zatcaHash: invoiceHash,
+            zatcaSignedXml: signedXml,
+            ...signedType,
+            zatcaQrPayload: qrBase64,
+            zatcaStampedAt: new Date(),
+            zatcaStatus: 'STAMPED',
+            zatcaMessage: null,
+          },
         }),
       );
       return { qrPayload: qrBase64 };
@@ -362,7 +376,7 @@ export class ZatcaService {
         customer: true,
         // ⚖️ بترتيبها المعلَن (`ق-١٤١٢`): `cbc:ID` يُكتب بترتيب هذه القراءة — فالمختومُ والمعروضُ والمطبوعُ ترتيبٌ واحد.
         lines: LINE_ORDER,
-        relatedInvoice: { select: { no: true } },
+        relatedInvoice: { select: { no: true, zatcaInvoiceType: true } },
         // ④A1: مراجعُ الدفعات المقدَّمة المطبَّقة — رقمُ مستندها ولحظتُه وسطرُه (فئةً ونسبةً) كما صدر.
         prepaymentsApplied: {
           select: { net: true, vat: true, prepaymentInvoice: { select: { no: true, issueDate: true, issuedAt: true, issuedOffsetMin: true, lines: { ...LINE_ORDER, select: { taxRate: true, taxCategory: true, taxExemptionReasonCode: true } } } } },
@@ -405,7 +419,9 @@ export class ZatcaService {
     // وسلفٌ محجوزٌ لم يُختم بعد يرفض الختمَ الآن فيعود الطابورُ إليه، لا يُتخطّى.
     const icv = invoice.zatcaIcv ?? (await nextIcv(tx, unit.id));
     const previousHash = invoice.zatcaPreviousHash ?? (await previousChainHash(tx, unit.id, icv));
-    const invoiceType = invoiceTypeFor(invoice.customer, invoice.lines);
+    // A credit or debit note on a signed document is signed as the same type, standard or simplified, whatever the
+    // buyer's card says now; anything else is derived from its buyer and lines at this signing.
+    const invoiceType = invoice.relatedInvoice?.zatcaInvoiceType ? zatcaTypeOf(invoice.relatedInvoice.zatcaInvoiceType) : invoiceTypeFor(invoice.customer, invoice.lines);
     // ⑤A3: علَمُ الصادرات من بلد المشتري وسطر صادراتٍ معاً؛ ومشترٍ أجنبيٌّ يحمل رقمَ تسجيلٍ سعوديّاً تناقضٌ يُرفض باسمه (BR-KSA-46).
     const exportInvoice = isExportInvoice(invoice.customer, invoice.lines);
     if (exportInvoice && invoice.customer.vatNumber?.trim()) throw new ConflictException(formatMessage(MSG.zatca_export_buyer_vat, { customer: invoice.customer.name }));
@@ -607,11 +623,18 @@ export class ZatcaService {
     const stored = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } } },
+        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, zatcaInvoiceType: true },
       }),
     );
     if (!stored) throw new NotFoundException(MSG.invoice_not_found);
     if (!stored.zatcaSignedXml || !stored.zatcaHash || !stored.zatcaUuid) throw new ConflictException(MSG.zatca_not_stamped);
+    // The path follows the type stored at signing; a signed document without one is not sent on a guessed path.
+    if (!stored.zatcaInvoiceType) {
+      this.logger.error(`ZATCA stored document for invoice ${invoiceId} has no stored type: not sent`);
+      await this.recordAttempt(companyId, invoiceId, STORED_TYPE_UNKNOWN);
+      throw new ZatcaAttemptFailedException(STORED_TYPE_UNKNOWN);
+    }
+    const invoiceType = zatcaTypeOf(stored.zatcaInvoiceType);
 
     const recomputed = invoiceHashOfSigned(stored.zatcaSignedXml);
     const signatureOk = await verifySignedInvoice(stored.zatcaSignedXml).catch(() => false);
@@ -625,7 +648,6 @@ export class ZatcaService {
       // Standard (B2B) invoices are *cleared* before being given to the buyer;
       // simplified (B2C) ones are *reported* within 24h. Sending one down the
       // other's path is rejected.
-      const invoiceType = invoiceTypeFor(stored.customer, stored.lines);
       const path = invoiceType === 'standard' ? '/invoices/clearance/single' : '/invoices/reporting/single';
       const token = decryptSecret(credential.productionCsidEnc!);
       const secret = decryptSecret(credential.productionSecretEnc!);
