@@ -11,6 +11,7 @@ import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { postWriteOffEntry } from '../journal/auto-posting.util';
 import { events } from '../shared/events/event-bus';
 import { INVENTORY_WRITTEN_OFF, type InventoryWrittenOffPayload } from '../shared/events/domain-events';
@@ -180,6 +181,9 @@ export class WriteOffsService {
           throw new ForbiddenException(formatMessage(MSG.writeoff_two_persons_required, { no: row.no }));
         }
       }
+
+      // The stock leaves on the day of the damage, so its period must be open even when the write-off costs nothing.
+      await assertPeriodOpen(tx, row.occurredAt);
 
       const qty = Number(row.qty);
       const movement = await tx.stockMovement.create({
