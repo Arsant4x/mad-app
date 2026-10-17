@@ -9,6 +9,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
+import { writePastDbGuard, type GuardedTable } from './write-past-db-guard';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (131.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(395000);
@@ -107,13 +108,16 @@ describe('Composite tenant foreign keys (e2e)', () => {
   }, 60000);
 
   /** يكتب على صفٍّ من `child` (للمنشأة أ) معرّفَ أصلٍ من المنشأة ب داخل سياق أ في معاملةٍ تُرجَع — ويُعيد رمزَ الخطأ واسمَ القيد. */
-  async function crossWrite(childTable: string, col: string, childId: string, foreignParentId: string) {
+  async function crossWrite(childTable: string, col: string, childId: string, foreignParentId: string, guarded?: GuardedTable) {
     let sqlstate: string | null = null;
     let constraint: string | null = null;
     try {
       await tenantPrisma.runInTenantContext(a.companyId, async (tx) => {
         try {
-          await tx.$executeRawUnsafe(`UPDATE "${childTable}" SET "${col}" = $1 WHERE id = $2`, foreignParentId, childId);
+          // A posted journal line is refused change by its own guard before any key is checked; the guard is lifted so the
+          // key is what is measured.
+          const write = () => tx.$executeRawUnsafe(`UPDATE "${childTable}" SET "${col}" = $1 WHERE id = $2`, foreignParentId, childId);
+          await (guarded ? writePastDbGuard(tx, guarded, write) : write());
         } catch (e) {
           const msg = String((e as Error).message);
           sqlstate = (msg.match(/Code: `(\d{5})`/) ?? [])[1] ?? null;
@@ -202,11 +206,13 @@ describe('Composite tenant foreign keys (e2e)', () => {
     const jeB = await entryOf(b, 'ب');
     expect(jeA.lines?.[0]?.id).toBeDefined();
 
-    const refused = await crossWrite('journal_lines', 'journalEntryId', jeA.lines[0].id, jeB.id);
+    const refused = await crossWrite('journal_lines', 'journalEntryId', jeA.lines[0].id, jeB.id, 'journal_lines');
     expect(refused).toEqual({ sqlstate: '23503', constraint: conname });
 
     await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
-      tx.$executeRawUnsafe(`UPDATE "journal_lines" SET "journalEntryId" = $1 WHERE id = $2`, jeA2.id, jeA.lines[0].id),
+      writePastDbGuard(tx, 'journal_lines', () =>
+        tx.$executeRawUnsafe(`UPDATE "journal_lines" SET "journalEntryId" = $1 WHERE id = $2`, jeA2.id, jeA.lines[0].id),
+      ),
     );
     const [after] = await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
       tx.$queryRawUnsafe<{ journalEntryId: string }[]>(`SELECT "journalEntryId" FROM "journal_lines" WHERE id = $1`, jeA.lines[0].id),

@@ -7,6 +7,7 @@ import { regionForNewCompany } from '../common/region/regions';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { seedProductionCredential } from '../../test/zatca-credential';
+import { writePastDbGuard } from '../../test/write-past-db-guard';
 import { GENESIS_PREVIOUS_HASH, nextIcv, previousChainHash } from './hash-chain.util';
 import * as xades from './ubl/xades.util';
 import { ZatcaAttemptFailedException, ZatcaService } from './zatca.service';
@@ -305,8 +306,9 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
 
     const err = await tenantPrisma
       .runInTenantContext(companyId, (tx) =>
-        // تُسنَد قيمةُ الأخرى بعينها — تصادمٌ مضمون أياً كان توزيع المواقع.
-        tx.invoice.update({ where: { id: invoiceIds[1] }, data: { zatcaIcv: first.zatcaIcv } }),
+        // The other row's own value, so the collision is certain. Both rows are signed and the database refuses changing a
+        // signed row, so its guard is lifted here and the unique key alone decides.
+        writePastDbGuard(tx, 'invoices', () => tx.invoice.update({ where: { id: invoiceIds[1] }, data: { zatcaIcv: first.zatcaIcv } })),
       )
       .then(() => null)
       .catch((e: Error) => e);

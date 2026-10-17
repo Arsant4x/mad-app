@@ -11,6 +11,7 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { STORED_TYPE_UNKNOWN } from '../src/zatca/zatca.service';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { writePastDbGuard } from './write-past-db-guard';
 import { seedProductionCredential } from './zatca-credential';
 import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
@@ -199,8 +200,9 @@ describe('ZATCA invoice type is fixed at signing (e2e)', () => {
     const invoice = await makeInvoice(buyer, 'Untyped sale');
     await signWithoutSending(invoice.id);
     const before = authority.requests.length;
+    // A document signed before the column existed; the database guard refuses building one now, so it is written past it.
     await tenantPrisma.runInTenantContext(company.companyId, (tx) =>
-      tx.$executeRaw`UPDATE "invoices" SET "zatcaInvoiceType" = NULL, "zatcaTransactionCode" = NULL WHERE "id" = ${invoice.id}`,
+      writePastDbGuard(tx, 'invoices', () => tx.$executeRaw`UPDATE "invoices" SET "zatcaInvoiceType" = NULL, "zatcaTransactionCode" = NULL WHERE "id" = ${invoice.id}`),
     );
 
     authority.set('clear');
@@ -232,9 +234,12 @@ describe('ZATCA invoice type is fixed at signing (e2e)', () => {
           // Nothing missing: the block returns before writing.
           await tx.$executeRawUnsafe(backfill!);
           seen.untouched = await read();
-          await tx.$executeRaw`UPDATE "invoices" SET "zatcaInvoiceType" = NULL, "zatcaTransactionCode" = NULL WHERE "id" IN (${ids[0]}, ${ids[1]}, ${ids[2]})`;
-          await tx.$executeRaw`UPDATE "invoices" SET "zatcaSignedXml" = replace("zatcaSignedXml", '<cbc:InvoiceTypeCode name="0200000">', '<cbc:InvoiceTypeCode>') WHERE "id" = ${ids[2]}`;
-          await tx.$executeRawUnsafe(backfill!);
+          // The backfill ran before the signed invoice guard existed, so it is replayed with the guard lifted as it was then.
+          await writePastDbGuard(tx, 'invoices', async () => {
+            await tx.$executeRaw`UPDATE "invoices" SET "zatcaInvoiceType" = NULL, "zatcaTransactionCode" = NULL WHERE "id" IN (${ids[0]}, ${ids[1]}, ${ids[2]})`;
+            await tx.$executeRaw`UPDATE "invoices" SET "zatcaSignedXml" = replace("zatcaSignedXml", '<cbc:InvoiceTypeCode name="0200000">', '<cbc:InvoiceTypeCode>') WHERE "id" = ${ids[2]}`;
+            await tx.$executeRawUnsafe(backfill!);
+          });
           seen.filled = await read();
           throw ROLLBACK;
         },

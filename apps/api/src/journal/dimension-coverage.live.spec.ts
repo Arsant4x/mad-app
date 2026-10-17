@@ -1,5 +1,6 @@
 import { PrismaClient } from '@mad-app/db';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+import { writePastDbGuard } from '../../test/write-past-db-guard';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -400,7 +401,8 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
           const rows = await tx.$queryRawUnsafe<{ id: string; expected: string | null; actual: string | null }[]>(union);
           const before = rows.filter((r) => r.id === lineId && r.expected !== null && r.actual !== r.expected).length;
 
-          await tx.$executeRaw`UPDATE journal_lines SET "supplierId" = ${supplierId} WHERE id = ${lineId}`;
+          // A posted line is refused change in the database; the probe lifts that guard inside its rolled back transaction.
+          await writePastDbGuard(tx, 'journal_lines', () => tx.$executeRaw`UPDATE journal_lines SET "supplierId" = ${supplierId} WHERE id = ${lineId}`);
           const after = (await tx.$queryRawUnsafe<{ id: string; expected: string | null; actual: string | null }[]>(union)).filter(
             (r) => r.id === lineId && r.expected !== null && r.actual !== r.expected,
           ).length;
