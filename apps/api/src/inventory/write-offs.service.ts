@@ -6,6 +6,7 @@ import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -113,15 +114,16 @@ export class WriteOffsService {
    * ورمزٌ مساره `DEEMED_SUPPLY` **يُرَدّ عند الباب** لا عند الاعتماد: من يسجّل
    * واقعةً ثم يُمنع من اعتمادها بعد يومين **يكتشف الحدّ في أسوأ لحظة**.
    */
-  create(companyId: string, allowedBranchIds: string[] | 'all', actorId: string, dto: CreateWriteOffDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', actorId: string, dto: CreateWriteOffDto, request?: KeyedRequest) {
     const reason = writeOffReason(dto.reasonCode);
     if (!reason) throw new BadRequestException(formatMessage(MSG.writeoff_reason_unknown, { code: dto.reasonCode }));
     if (taxPathOf(reason.code) !== 'NO_ADJUSTMENT') {
       throw new BadRequestException(formatMessage(MSG.writeoff_deemed_supply_not_built, { reason: reason.label }));
     }
 
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.inventoryWriteOff.findUnique({ where: { id }, include: WRITE_OFF_INCLUDE }), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const product = await tx.product.findUnique({ where: { id: dto.productId }, select: { id: true } });
         if (!product) throw new NotFoundException(MSG.product_not_found);
         const branchId = await resolveWarehouseBranch(tx, dto.warehouseId, dto.branchId, allowedBranchIds);
@@ -142,8 +144,8 @@ export class WriteOffsService {
           } as unknown as Prisma.InventoryWriteOffUncheckedCreateInput,
           include: WRITE_OFF_INCLUDE,
         });
-      }),
-    );
+      })),
+    ));
   }
 
   /**

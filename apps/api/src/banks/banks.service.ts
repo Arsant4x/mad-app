@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@mad-app/db';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateBankDto } from './dto/create-bank.dto';
 import { TransferBankDto } from './dto/transfer-bank.dto';
@@ -198,12 +199,16 @@ export class BanksService {
    * ⚠️ وإعادةُ المحاولة تلفّ المعاملة لا تقع داخلها: `P2002` على `(companyId, code)`
    * تُجهض المعاملة، فتُعاد كاملةً بقراءةٍ جديدة (نمطُ الدرج و`nextIcv`).
    */
-  async create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateBankDto) {
+  async create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateBankDto, request?: KeyedRequest) {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.bank.findUnique({ where: { id } }), () => this.createOnce(companyId, allowedBranchIds, dto, request));
+  }
+
+  private async createOnce(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateBankDto, request?: KeyedRequest) {
     const openingBalance = dto.openingBalance ?? 0;
 
     for (let attempt = 0; ; attempt += 1) {
       try {
-        return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        return await this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
           // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
           const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
           const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
@@ -246,7 +251,7 @@ export class BanksService {
             await tx.account.update({ where: { id: account.id }, data: { openingBalance } });
           }
           return bank;
-        });
+        }));
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 2) continue;
         throw e;

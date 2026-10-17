@@ -7,6 +7,7 @@ import { baseCurrencyTotals, computeDocumentTotals, type MoneyLine } from '../co
 import { resolveLineTaxes, type LineTax } from '../common/vat/line-tax.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { type CreditContext } from '../invoices/credit-context';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -131,11 +132,12 @@ export class QuotesService {
    *
    * ⇒ **والمصدرُ الواحد `resolveBranchId`** — وجودٌ ثم إذن.
    */
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateQuoteDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateQuoteDto, request?: KeyedRequest) {
     // نفس عقد الترقيم المتسابق للفواتير: قيد (companyId, no) الفريد يحسم،
     // وretry يعيد العدّ — اختبار التصادم المتزامن ضمن الدفعة يثبته.
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.quote.findUnique({ where: { id }, include: QUOTE_INCLUDE }), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true } });
@@ -170,8 +172,8 @@ export class QuotesService {
           } as unknown as Prisma.QuoteUncheckedCreateInput,
           include: QUOTE_INCLUDE,
         });
-      }),
-    );
+      })),
+    ));
   }
 
   update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateQuoteDto) {

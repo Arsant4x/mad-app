@@ -3,6 +3,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -27,6 +28,7 @@ export class FiscalController {
 
   @Post()
   @RequiresAction('add')
+  @IdempotencyExempt('fiscal years cannot overlap; a repeat is refused as overlapping the year it created')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateFiscalYearDto) {
     return this.fiscalService.create(tenant.companyId, dto);
   }
@@ -65,6 +67,7 @@ export class FiscalController {
    */
   @Post(':id/close')
   @RequiresAction('review')
+  @IdempotencyExempt('a fiscal year is closed once; a repeat is refused because it is already closed')
   closeYear(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.fiscalService.closeYear(tenant.companyId, id);
   }

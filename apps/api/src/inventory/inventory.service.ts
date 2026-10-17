@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { companyToday } from '../common/company-day.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { grant } from '../delegations/permission-tree';
 import { PermissionsService } from '../delegations/permissions.service';
@@ -74,7 +75,7 @@ export class InventoryService {
     });
   }
 
-  async create(tenant: TenantContext, dto: CreateStockMovementDto) {
+  async create(tenant: TenantContext, dto: CreateStockMovementDto, request?: KeyedRequest) {
     const { companyId, allowedBranchIds } = tenant;
     // ⭐ ق-١٣٧٧ — **السببُ إلزاميّ**: والمسافاتُ وحدَها ليست سبباً (الـ`DTO` يرفض الفارغ، وهذا يرفض المُفرَغ) — ويُكتب مشذَّباً.
     const reason = dto.reason?.trim();
@@ -84,7 +85,13 @@ export class InventoryService {
     if (reducesInventoryValue(dto) && !(await this.permissions.forActor(tenant)).grants.includes(grant('inventory', 'review'))) {
       throw new ForbiddenException(MSG.stock_out_needs_review);
     }
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    // A replay answers with the movement and the balance now; what it left without a layer belongs to the first answer only.
+    const replayed = async (tx: Prisma.TransactionClient, id: string) => {
+      const row = await tx.stockMovement.findUnique({ where: { id }, include: MOVEMENT_INCLUDE });
+      return row ? { ...row, resultingQty: await currentStockQty(tx, row.productId, row.warehouseId), provisional: null } : null;
+    };
+    return onceForRequest(this.tenantPrisma, companyId, request, replayed, () =>
+    this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
       const product = await tx.product.findUnique({ where: { id: dto.productId } });
       if (!product) throw new NotFoundException(MSG.product_not_found);
       // The source warehouse must be one of the caller's and gives the movement its branch. A transfer destination
@@ -192,7 +199,7 @@ export class InventoryService {
       // information to flag it if it wants to.
       const resultingQty = await currentStockQty(tx, dto.productId, dto.warehouseId);
       return { ...movement, journalEntryId: entryId, resultingQty, provisional };
-    });
+    })));
   }
 
   /**

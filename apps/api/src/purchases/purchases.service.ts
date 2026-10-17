@@ -7,6 +7,7 @@ import { companyToday } from '../common/company-day.util';
 import { resolveCurrencyWithin, resolveFollowingCurrency } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMoney, round2, roundTo } from '../common/money/rounding';
 import { baseCurrencyTotals, computeNetTotals } from '../common/money/totals';
@@ -112,7 +113,7 @@ export class PurchasesService {
     return sum(dto.lines.filter((l) => l.productId));
   }
 
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto, request?: KeyedRequest) {
     const exempt = dto.exempt ?? false;
     const { subtotal, tax, total } = computePurchaseTax(dto.subtotal, exempt);
     // الرمز يُشتقّ مرةً واحدة عند الكتابة — فلا يعود قارئٌ يطابق نصّاً عربياً.
@@ -123,8 +124,9 @@ export class PurchasesService {
     this.stockedSubtotal(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextPurchaseNumber's comment.
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE }), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
@@ -236,8 +238,8 @@ export class PurchasesService {
         // ⚖️ `ق-١٣٣٠` المنسوبُ إلى المعفى وحدَه يدخل التكلفةَ **عند الشراء نفسِه** — بعد الاستلام الضمنيّ فتجد حصّتُه طبقتَها.
         await reconcileNonDeductibleVat(tx, companyId, created.id, { date: created.date, trigger: 'PURCHASE' });
         return posted;
-      }),
-    );
+      })),
+    ));
   }
 
   /**

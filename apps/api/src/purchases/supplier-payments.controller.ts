@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
-import { IdempotencyKey } from '../common/idempotency/idempotency';
+import { IdempotencyExempt, IdempotencyKey } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -51,6 +51,7 @@ export class SupplierPaymentsController {
   /** إعادةُ توزيع سندٍ على فواتير أخرى — لا يمسّ مبلغَه ولا قيدَه. */
   @Post(':id/allocate')
   @RequiresAction('edit')
+  @IdempotencyExempt('replaces the voucher allocations with the set sent; a repeat sets the same allocations')
   allocate(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: AllocateSupplierPaymentDto) {
     return this.supplierPayments.allocate(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
@@ -58,6 +59,7 @@ export class SupplierPaymentsController {
   /** التصحيحُ الوحيد المتاح: سندٌ عاكس بقيدٍ مضادّ. */
   @Post(':id/reverse')
   @RequiresAction('record')
+  @IdempotencyExempt('a voucher is reversed once; a repeat is refused naming the reversal')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReverseSupplierPaymentDto) {
     return this.supplierPayments.reverse(tenant.companyId, tenant.allowedBranchIds, id, dto.reason, dto.date);
   }

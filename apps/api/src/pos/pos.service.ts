@@ -8,7 +8,7 @@ import { moneyEquals } from '../common/money/allocation';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { MSG } from '../common/i18n/messages';
+import { MSG, type MessageKey } from '../common/i18n/messages';
 import { computeTotals, InvoicesService } from '../invoices/invoices.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { formatMessage } from '../common/i18n/messages';
@@ -16,6 +16,7 @@ import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentReport } from '../invoices/sale-fulfilment.util';
 import { assertPostingAccounts, invoicePostingCodes } from '../journal/auto-posting.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
+import { isSameSale, type RecordedSale } from './sale-replay.util';
 import { round2, toHalalas } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { toBaseAmount } from '../common/currency/base-amount.util';
@@ -66,6 +67,12 @@ const WALK_IN_CUSTOMER = 'عميل نقدي';
 // ⚖️ والعميلُ بأعمدته العامّة (توجيه ٢٨٦) — بلا نصِّ المعرّف البديل المشفَّر ولا بصمته.
 const SALE_INCLUDE = { lines: LINE_ORDER, customer: { select: CUSTOMER_PUBLIC_SELECT }, posPayments: true } as const;
 type SaleRow = Prisma.InvoiceGetPayload<{ include: typeof SALE_INCLUDE }>;
+
+/** The sale a known sale id recorded, or a named 409 when the request asks for a different sale under that id. */
+function sameSaleOrRefuse<T extends RecordedSale>(recorded: T, request: CreatePosSaleDto, refusal: MessageKey): T {
+  if (!isSameSale(recorded, request, WALK_IN_CUSTOMER)) throw new ConflictException(refusal);
+  return recorded;
+}
 
 /** جزءُ دفعٍ واحد — نقدٌ أو بطاقة بمبلغه. */
 export interface SalePart {
@@ -398,7 +405,7 @@ export class PosService {
       idempotencyKey,
       async () => {
         const existing = await this.findByClientSaleId(tenant.companyId, idempotencyKey);
-        return existing ? this.withReceiptQr(tenant.companyId, existing) : null;
+        return existing ? this.withReceiptQr(tenant.companyId, sameSaleOrRefuse(existing, dto, MSG.idempotency_key_reused)) : null;
       },
       () => this.ringDirect(tenant, dto, { ...opts, clientSaleId: idempotencyKey }),
     );
@@ -413,7 +420,7 @@ export class PosService {
    */
   async syncSale(tenant: TenantContext, dto: SyncPosSaleDto) {
     const existing = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
-    if (existing) return this.withReceiptQr(tenant.companyId, existing);
+    if (existing) return this.withReceiptQr(tenant.companyId, sameSaleOrRefuse(existing, dto, MSG.pos_sale_id_reused));
     try {
       const sold = await this.ringDirect(tenant, dto, {
         clientSaleId: dto.clientSaleId,
@@ -436,7 +443,7 @@ export class PosService {
       // winner's row — the caller cannot tell the difference, by design.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         const winner = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
-        if (winner) return this.withReceiptQr(tenant.companyId, winner);
+        if (winner) return this.withReceiptQr(tenant.companyId, sameSaleOrRefuse(winner, dto, MSG.pos_sale_id_reused));
       }
       throw e;
     }
@@ -724,7 +731,7 @@ export class PosService {
       this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx): Promise<{ kind: 'replay'; invoice: SaleRow } | { kind: 'sold'; sold: SoldSale }> => {
         if (opts.clientSaleId) {
           const replay = await tx.invoice.findFirst({ where: { clientSaleId: opts.clientSaleId }, include: SALE_INCLUDE });
-          if (replay) return { kind: 'replay', invoice: replay };
+          if (replay) return { kind: 'replay', invoice: sameSaleOrRefuse(replay, dto, opts.viaSync ? MSG.pos_sale_id_reused : MSG.idempotency_key_reused) };
           await this.releaseUnsentAttempt(tx, opts.clientSaleId);
         }
         const prepared = await this.prepareSale(tx, tenant, dto, opts);

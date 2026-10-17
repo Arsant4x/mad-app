@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, Req,
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { Request } from 'express';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { ThrottleByClientIp } from '../common/throttle/throttler-options';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import {
@@ -51,6 +52,7 @@ export class FormPublicController {
   @Post('otp')
   @ThrottleByClientIp(5)
   @ApiCreatedResponse({ type: FormOtpIssuedResponse })
+  @IdempotencyExempt('issues a one time code for the link; it writes no document and no posting')
   requestOtp(@Param('token') token: string, @Req() req: Request) {
     return this.service.requestOtp(token, metaOf(req));
   }
@@ -59,6 +61,7 @@ export class FormPublicController {
   @HttpCode(HttpStatus.OK)
   @ThrottleByClientIp(10)
   @ApiOkResponse({ type: FormSessionResponse })
+  @IdempotencyExempt('checks the code and opens a short session; it writes no document and no posting')
   verifyOtp(@Param('token') token: string, @Body() dto: VerifyFormOtpDto, @Req() req: Request) {
     return this.service.verifyOtp(token, dto, metaOf(req));
   }
@@ -66,6 +69,7 @@ export class FormPublicController {
   @Post('nafath')
   @ThrottleByClientIp(5)
   @ApiCreatedResponse({ type: FormNafathStartResponse })
+  @IdempotencyExempt('starts a Nafath check for the link; it writes no document and no posting')
   startNafath(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Req() req: Request) {
     return this.service.startNafath(token, session, metaOf(req));
   }
@@ -89,6 +93,7 @@ export class FormPublicController {
   @UseInterceptors(FileInterceptor('drawing', { limits: { fileSize: MAX_FILE_BYTES } }))
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormSignedResponse })
+  @IdempotencyExempt('a signer signs once under the row lock; a repeat is refused because the form no longer awaits it')
   sign(
     @Param('token') token: string,
     @Headers(SESSION_HEADER) session: string | undefined,
@@ -104,6 +109,7 @@ export class FormPublicController {
   @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: MAX_FILE_BYTES } }))
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormObjectedResponse })
+  @IdempotencyExempt('an objection is recorded once; a repeat is refused because the form no longer awaits signature')
   object(
     @Param('token') token: string,
     @Headers(SESSION_HEADER) session: string | undefined,
@@ -119,6 +125,7 @@ export class FormPublicController {
   @HttpCode(HttpStatus.OK)
   @ThrottleByClientIp(10)
   @ApiOkResponse({ type: FormSubstituteDecidedResponse })
+  @IdempotencyExempt('the tenant decides on a substitute once; a repeat is refused because nothing is pending')
   decideSubstitute(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Body() dto: FormSubstituteDecisionDto, @Req() req: Request) {
     return this.service.decideSubstitute(token, session, dto.approve, metaOf(req));
   }

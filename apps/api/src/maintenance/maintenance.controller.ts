@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyExempt } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -41,6 +42,7 @@ export class MaintenanceController {
 
   @Post()
   @RequiresAction('add')
+  @IdempotencyExempt('opens a maintenance request with no number and no posting; a duplicate is cancelled')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateMaintenanceDto) {
     return this.maintenanceService.create(tenant.companyId, dto);
   }
@@ -53,12 +55,14 @@ export class MaintenanceController {
 
   @Post(':id/assign')
   @RequiresAction('edit')
+  @IdempotencyExempt('a step of the request lifecycle; a repeat is refused because no status moves to itself')
   assign(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: AssignMaintenanceDto) {
     return this.maintenanceService.assign(tenant.companyId, id, dto);
   }
 
   @Post(':id/start')
   @RequiresAction('edit')
+  @IdempotencyExempt('a step of the request lifecycle; a repeat is refused because no status moves to itself')
   start(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: StartMaintenanceDto) {
     return this.maintenanceService.start(tenant.companyId, id, dto);
   }
@@ -66,12 +70,14 @@ export class MaintenanceController {
   /** Finishes the work and posts its cost. */
   @Post(':id/complete')
   @RequiresAction('record')
+  @IdempotencyExempt('a request completes once and posts its cost once; a repeat is refused because it is already done')
   complete(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CompleteMaintenanceDto) {
     return this.maintenanceService.complete(tenant.companyId, id, dto);
   }
 
   @Post(':id/close')
   @RequiresAction('review')
+  @IdempotencyExempt('a step of the request lifecycle; a repeat is refused because no status moves to itself')
   close(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseMaintenanceDto) {
     return this.maintenanceService.close(tenant.companyId, id, dto);
   }
@@ -79,6 +85,7 @@ export class MaintenanceController {
   /** Cancelling takes the same action as cancelling a contract. */
   @Post(':id/cancel')
   @RequiresAction('delete')
+  @IdempotencyExempt('a step of the request lifecycle; a repeat is refused because no status moves to itself')
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CancelMaintenanceDto) {
     return this.maintenanceService.cancel(tenant.companyId, id, dto);
   }

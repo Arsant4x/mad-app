@@ -638,6 +638,8 @@ model Company {
   documentSequences DocumentSequence[]
   /// كلُّ رقمٍ أُخذ من العدّاد وهل استُعمل (`ق-٣٤٥`).
   documentNumberAllocations DocumentNumberAllocation[]
+  /// Idempotency keys of create requests, each with the document it wrote.
+  idempotencyRecords IdempotencyRecord[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
   purchaseLines       PurchaseLine[]
@@ -6975,6 +6977,30 @@ model DocumentNumberAllocation {
   @@unique([companyId, kind, year, number])
   @@index([companyId, usedAt])
   @@map("document_number_allocations")
+}
+
+/// One create request that carried an Idempotency-Key, written in the transaction of the document it created, so the
+/// same key with the same request answers with that document and the same key with another request is refused.
+/// The four routes that keep their key on the document row (receipt, supplier payment, rent payment, POS sale) do not
+/// write here.
+/// No parent: the record points at documents of many kinds by id, so it hangs on the company alone and goes with it.
+model IdempotencyRecord {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// The client's key, unique within the company.
+  key         String
+  /// The route that wrote it, such as invoices.create; the same key on another route is another request.
+  scope       String
+  /// sha256 of the actor and the request.
+  fingerprint String
+  /// The id the route answers with: the document, or the contract for what is recorded on one.
+  resourceId  String
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, key])
+  @@map("idempotency_records")
 }
 
 /// ═══ موافقةُ التاجر على المعالجين الفرعيين (`ق-٥٨١` · `ق-٥٨٩`) ═══

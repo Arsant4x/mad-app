@@ -5,7 +5,7 @@ import { companyToday } from '../common/company-day.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
-import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
+import { IdempotentReplay, type KeyedRequest, onceForKey, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { companyBaseCurrency, resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import {
@@ -483,15 +483,22 @@ export class ContractsService {
     };
   }
 
-  create(companyId: string, dto: CreateContractDto) {
+  /** The contract a keyed request wrote or recorded on, as its create answered it. */
+  private async replayedContract(tx: Prisma.TransactionClient, id: string) {
+    const row = await tx.contract.findUnique({ where: { id }, include: CONTRACT_INCLUDE });
+    return row ? this.withComputedFigures(row) : null;
+  }
+
+  create(companyId: string, dto: CreateContractDto, request?: KeyedRequest) {
     // Retries the whole transaction on a "no" collision from a concurrent
     // create — same reasoning as InvoicesService.create.
     // ⚠️ مهلةٌ أطول من الافتراض: عقدٌ يُدخَل بتاريخٍ مضى يستحقّ أقساطَه التي حلّت في المعاملة
     // نفسِها (ق-٩٢٧/٥) — وقيدٌ لكلِّ قسط؛ فمهلةُ الخمس ثوانٍ تُسقط ترحيلَ عقدٍ بعشرين قسطاً.
-    return retryOnUniqueConflict(() =>
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => this.replayedContract(tx, id), () =>
+    retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(
         companyId,
-        async (tx) => {
+        (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const unit = await tx.unit.findUnique({ where: { id: dto.unitId }, include: { property: true } });
@@ -582,21 +589,27 @@ export class ContractsService {
         }
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE }));
-        },
+        }),
         ACCRUAL_TX_OPTIONS,
       ),
-    );
+    ));
   }
 
   /**
    * ⚖️ **بندُ رسمٍ يُضاف لعقدٍ قائم** (السؤالان ٤٩ و٤١٣ · `ق-١٦٠٠`) — ويُطالَب في اللحظة نفسِها لما حلّ من أقساطه منذ سريانه
    * (الافتراضُ اليوم)، وما يحلّ بعدُ يلتقطه الكنسُ اليوميّ.
    */
-  addFee(companyId: string, contractId: string, dto: ContractFeeDto): Promise<CreatedContractFeeResponse> {
-    return retryOnUniqueConflict(() =>
+  addFee(companyId: string, contractId: string, dto: ContractFeeDto, request?: KeyedRequest): Promise<CreatedContractFeeResponse> {
+    // A replay counts the claims raised for the fee now, since the first answer's count is not kept.
+    const replayed = async (tx: Prisma.TransactionClient, id: string): Promise<CreatedContractFeeResponse | null> => {
+      const fee = await tx.contractFee.findUnique({ where: { id } });
+      return fee ? { ...presentFee(fee), raisedClaims: await tx.contractClaim.count({ where: { feeId: fee.id } }) } : null;
+    };
+    return onceForRequest(this.tenantPrisma, companyId, request, replayed, () =>
+    retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(
         companyId,
-        async (tx) => {
+        (tx) => recordKeyedRequest(tx, companyId, request, async () => {
           const contract = await tx.contract.findUnique({ where: { id: contractId } });
           if (!contract) throw new NotFoundException(MSG.contract_not_found);
           if (contract.status === 'CANCELLED') throw new ConflictException(MSG.contract_fee_on_cancelled);
@@ -605,10 +618,10 @@ export class ContractsService {
           });
           const raised = contract.status !== 'DRAFT' ? (await raiseDueFeesWithinTx(tx, companyId, new Date(), contractId)).raised : 0;
           return { ...presentFee(fee), raisedClaims: raised };
-        },
+        }),
         ACCRUAL_TX_OPTIONS,
       ),
-    );
+    ));
   }
 
   /**
@@ -1540,9 +1553,10 @@ export class ContractsService {
    * legitimately carry more than one (an initial payment and a top-up on
    * renewal), and each is its own cash movement with its own date.
    */
-  recordKeyMoney(companyId: string, contractId: string, dto: RecordKeyMoneyDto) {
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  recordKeyMoney(companyId: string, contractId: string, dto: RecordKeyMoneyDto, request?: KeyedRequest) {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => this.replayedContract(tx, id), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
 
@@ -1575,8 +1589,8 @@ export class ContractsService {
         });
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
-      }),
-    );
+      })),
+    ));
   }
 
   /**
@@ -1587,9 +1601,10 @@ export class ContractsService {
    * made, and holding it unposted until someone pays would leave the landlord's
    * books understating what they are owed.
    */
-  createClaim(companyId: string, contractId: string, dto: CreateClaimDto) {
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  createClaim(companyId: string, contractId: string, dto: CreateClaimDto, request?: KeyedRequest) {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => this.replayedContract(tx, id), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
 
@@ -1632,8 +1647,8 @@ export class ContractsService {
         });
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
-      }),
-    );
+      })),
+    ));
   }
 
   /** Collects a claim in cash. Partial collection isn't supported: a claim is a
@@ -1705,10 +1720,11 @@ export class ContractsService {
    * The two are separate on purpose — a contract can be signed with a deposit
    * owed but not yet paid, and only the second belongs in the ledger.
    */
-  recordDeposit(companyId: string, contractId: string, dto: RecordDepositDto) {
+  recordDeposit(companyId: string, contractId: string, dto: RecordDepositDto, request?: KeyedRequest) {
     // Retries on a journal-entry "no" collision from a concurrent posting.
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => this.replayedContract(tx, id), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
 
@@ -1753,8 +1769,8 @@ export class ContractsService {
         });
 
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
-      }),
-    );
+      })),
+    ));
   }
 
   /**

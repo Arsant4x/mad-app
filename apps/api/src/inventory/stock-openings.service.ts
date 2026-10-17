@@ -7,6 +7,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { openingEntryDate } from '../journal/opening-balance.util';
@@ -105,9 +106,12 @@ export class StockOpeningsService {
     );
   }
 
-  declare(companyId: string, allowedBranchIds: string[] | 'all', declarer: Declarer, dto: DeclareStockOpeningDto) {
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  declare(companyId: string, allowedBranchIds: string[] | 'all', declarer: Declarer, dto: DeclareStockOpeningDto, request?: KeyedRequest) {
+    // A replay answers with the declaration as stored, without the counts of provisional consumptions it settled.
+    const replayed = async (tx: Tx, id: string) => ((await tx.stockOpening.findUnique({ where: { id }, select: { id: true } })) ? this.readOne(tx, id) : null);
+    return onceForRequest(this.tenantPrisma, companyId, request, replayed, () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         if (!dto.lines?.length) throw new BadRequestException(MSG.stock_opening_lines_required);
 
         const openingDate = await this.resolveOpeningDate(tx, companyId, dto.openingDate);
@@ -227,8 +231,8 @@ export class StockOpeningsService {
         }
 
         return this.readOne(tx, opening.id, { provisionalSettled: settledCount, provisionalCostDelta: settledDelta });
-      }),
-    );
+      })),
+    ));
   }
 
   /**

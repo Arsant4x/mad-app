@@ -6,7 +6,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { round2, formatMoney } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
-import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
+import { IdempotentReplay, type KeyedRequest, onceForKey, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import {
   allocatedByDocument,
   allocatedFor,
@@ -669,9 +669,14 @@ export class PaymentsService {
    * البيع لتحديد الدرج الذي يخرج منه الردّ — مفتاحٌ محفوظٌ لا قائمة، ولو حُجبت
    * لخرج الردُّ من الصندوق العامّ فاتُّهم الكاشير بفرق.
    */
-  refund(companyId: string, allowedBranchIds: string[] | 'all', dto: RefundDto) {
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  refund(companyId: string, allowedBranchIds: string[] | 'all', dto: RefundDto, request?: KeyedRequest) {
+    const replayed = async (tx: Prisma.TransactionClient, id: string) => {
+      const row = await tx.payment.findUnique({ where: { id }, include: PAYMENT_INCLUDE });
+      return row ? withAllocatedTotals(row) : null;
+    };
+    return onceForRequest(this.tenantPrisma, companyId, request, replayed, () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
         const note = await tx.invoice.findUnique({
           where: { id: dto.creditNoteId },
           include: {
@@ -782,8 +787,8 @@ export class PaymentsService {
         });
 
         return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE }));
-      }),
-    );
+      })),
+    ));
   }
 
   /**

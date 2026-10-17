@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuditCreatedIdAt } from '../audit/audit-entity-from-result.decorator';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload, TenantContext } from '../auth/types';
@@ -34,8 +35,8 @@ export class QuotesController {
 
   @Post()
   @RequiresAction('add')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateQuoteDto) {
-    return this.quotesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateQuoteDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.quotesService.create(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'quotes.create', tenant, dto));
   }
 
   @Patch(':id')
@@ -69,6 +70,7 @@ export class QuoteConversionController {
   @Post(':id/convert')
   @RequiresAction('add')
   @AuditCreatedIdAt('invoice.id')
+  @IdempotencyExempt('a quote converts once; a repeat is refused naming the invoice it became')
   async convert(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: JwtPayload,

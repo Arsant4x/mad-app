@@ -446,6 +446,8 @@ export const MSG = {
   rent_discount_on_tenant_credit: 'contracts.rent_discount_on_tenant_credit',
   idempotency_key_invalid: 'common.idempotency_key_invalid',
   idempotency_key_reused: 'common.idempotency_key_reused',
+  idempotency_key_document_gone: 'common.idempotency_key_document_gone',
+  pos_sale_id_reused: 'pos.sale_id_reused',
   rent_accrual_period_locked: 'contracts.rent_accrual_period_locked',
 
   // reservations
@@ -1777,6 +1779,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.idempotency_key_reused]: {
     ar: 'هذا المفتاحُ (Idempotency-Key) استُعمل لطلبٍ آخر — لم يُكتب مستندٌ جديد؛ أعد المحاولة بمفتاحٍ جديد إن كان طلباً آخر',
     en: 'This Idempotency-Key was already used for a different request — no new document was written; retry with a new key if this is another request',
+  },
+  [MSG.idempotency_key_document_gone]: {
+    ar: 'هذا الطلبُ نُفّذ من قبل بمفتاحه (Idempotency-Key) والمستندُ الذي كتبه لم يعد موجوداً، فلم يُكتب مستندٌ جديد. أعد المحاولة بمفتاحٍ جديد إن كان طلباً آخر',
+    en: 'This request was already processed under its Idempotency-Key and the document it wrote no longer exists, so no new document was written. Retry with a new key if this is another request',
+  },
+  [MSG.pos_sale_id_reused]: {
+    ar: 'رقمُ البيع من الجهاز (clientSaleId) سُجّل من قبل لبيعٍ آخر، فلم يُسجَّل بيعٌ جديد. أرسل البيعَ برقمٍ جديد إن كان بيعاً آخر',
+    en: 'This sale id (clientSaleId) was already recorded for a different sale, so no new sale was recorded. Send it with a new id if this is another sale',
   },
   [MSG.rent_accrual_period_locked]: {
     ar: 'لا يمكن قبض هذه الدفعة: استحقاقُ القسط يقع في فترةٍ مقفلة — افتح الفترة أو قيّد الاستحقاق بقيدٍ عكسيّ في فترةٍ مفتوحة',

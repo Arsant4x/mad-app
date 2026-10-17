@@ -15,6 +15,7 @@ import {
   issueReplacement,
   listInvoices,
 } from '../../api/invoices';
+import { newRequestKey } from '../../api/idempotency';
 import { submitInvoiceToZatca } from '../../api/zatca';
 import { useAuth } from '../../auth/AuthContext';
 import { today } from '../../lib/format';
@@ -51,6 +52,9 @@ export function InvoicesPage() {
   const [replacementFor, setReplacementFor] = useState<Invoice | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // One key per opened builder and per opened note dialog: a retry of the same save writes no second document.
+  const [builderKey, setBuilderKey] = useState(newRequestKey);
+  const [noteKey, setNoteKey] = useState(newRequestKey);
 
   async function reload() {
     // listBranches already returns only what this user may see, so it doubles
@@ -99,7 +103,7 @@ export function InvoicesPage() {
     const invoice = creditNoteFor;
     setCreditNoteFor(null);
     try {
-      await issueCreditNote(invoice.id, { reason, issueDate: today() });
+      await issueCreditNote(invoice.id, { reason, issueDate: today() }, noteKey);
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_credit_note')));
@@ -115,7 +119,7 @@ export function InvoicesPage() {
     const invoice = debitNoteFor;
     setDebitNoteFor(null);
     try {
-      await issueDebitNote(invoice.id, { reason, issueDate: today(), lines });
+      await issueDebitNote(invoice.id, { reason, issueDate: today(), lines }, noteKey);
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_debit_note')));
@@ -191,7 +195,7 @@ export function InvoicesPage() {
     setSaveError(null);
     setOverridable(null);
     try {
-      await createInvoice(payload);
+      await createInvoice(payload, builderKey);
     } catch (e) {
       const body = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setSaveError(Array.isArray(body?.message) ? body.message.join(' — ') : (body?.message ?? t('invoices.page.err_save')));
@@ -199,6 +203,7 @@ export function InvoicesPage() {
       if (apiErrorCode(e) === CREDIT_LIMIT_EXCEEDED) setOverridable(data);
       return;
     }
+    setBuilderKey(newRequestKey());
     setView({ mode: 'list' });
     await reload();
   }
@@ -240,10 +245,19 @@ export function InvoicesPage() {
     <>
       <InvoiceListView
         invoices={invoices}
-        onNew={() => setView({ mode: 'builder' })}
+        onNew={() => {
+          setBuilderKey(newRequestKey());
+          setView({ mode: 'builder' });
+        }}
         onSubmitToZatca={(invoice) => setPendingSubmit(invoice)}
-        onIssueCreditNote={(invoice) => setCreditNoteFor(invoice)}
-        onIssueDebitNote={(invoice) => setDebitNoteFor(invoice)}
+        onIssueCreditNote={(invoice) => {
+          setNoteKey(newRequestKey());
+          setCreditNoteFor(invoice);
+        }}
+        onIssueDebitNote={(invoice) => {
+          setNoteKey(newRequestKey());
+          setDebitNoteFor(invoice);
+        }}
         onIssueReplacement={(invoice) => setReplacementFor(invoice)}
         onDownloadClearedXml={handleDownloadClearedXml}
         canSubmitToZatca={user?.actorType === 'COMPANY'}

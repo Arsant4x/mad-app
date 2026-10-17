@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { branchFilter } from '../branches/branch-scope.util';
 import { Prisma } from '@mad-app/db';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { companyToday } from '../common/company-day.util';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
@@ -79,7 +80,7 @@ export class JournalService {
     });
   }
 
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateJournalEntryDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateJournalEntryDto, request?: KeyedRequest) {
     // ⚖️ `ق-١٥٨٥` (بحكم صاحب المشروع): القيدُ اليدويّ بعملة الأساس وحدَها، فحقلا العملة والسعر يُرفضان برسالة قبل أيّ كتابة؛
     // وكانا يُقبلان في الـDTO (يرثهما من `CurrencyFieldsDto`) ثم يُسقطان صامتين فيُخزَّن القيدُ بسعر ١ أيّاً كان المرسَل.
     if (dto.currency !== undefined || dto.exchangeRate !== undefined) throw new BadRequestException(MSG.journal_currency_fields_rejected);
@@ -87,8 +88,9 @@ export class JournalService {
     assertManualEntryLines(lines);
     // Retries the whole transaction on a "no" collision from a concurrent
     // manual entry — same reasoning as InvoicesService.create.
-    return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
+    return onceForRequest(this.tenantPrisma, companyId, request, (tx, id) => tx.journalEntry.findUnique({ where: { id }, include: { lines: { include: { account: true } } } }), () =>
+    retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () =>
         createJournalEntry(tx, {
           companyId,
           // كل مستند مالي يحمل فرعه (احتياجات §2) — كان يُقبل ثم يُسقط صمتاً.
@@ -98,8 +100,8 @@ export class JournalService {
           auto: false,
           lines,
         }),
-      ),
-    );
+      )),
+    ));
   }
 
   /**

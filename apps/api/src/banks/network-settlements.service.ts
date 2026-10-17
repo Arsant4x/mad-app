@@ -6,6 +6,7 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { money } from '../common/money/text';
+import { type KeyedRequest, onceForRequest, recordKeyedRequest } from '../common/idempotency/idempotency';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postNetworkSettlementEntry, postNetworkSettlementVoidEntry } from '../journal/auto-posting.util';
 import { getOrCreateInputVatAccount } from '../journal/inventory-accounts.util';
@@ -150,8 +151,16 @@ export class NetworkSettlementsService {
     companyId: string,
     allowedBranchIds: string[] | 'all',
     dto: { bankId: string; date: string; periodFrom: string; periodTo: string; feeAmount: number; feeVatAmount: number; branchId?: string; memo?: string; receiptIds?: string[] },
+    request?: KeyedRequest,
   ) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    const replayed = async (tx: Prisma.TransactionClient, id: string) => {
+      const row = await tx.networkSettlement.findUnique({ where: { id }, include: { bank: { select: { id: true, name: true } }, _count: { select: { receipts: true } } } });
+      if (!row) return null;
+      const entry = row.journalEntryId ? await tx.journalEntry.findUnique({ where: { id: row.journalEntryId }, select: { no: true } }) : null;
+      return { ...this.present(row), entryNo: entry?.no ?? '' };
+    };
+    return onceForRequest(this.tenantPrisma, companyId, request, replayed, () =>
+    this.tenantPrisma.runInTenantContext(companyId, (tx) => recordKeyedRequest(tx, companyId, request, async () => {
       const bank = await tx.bank.findUnique({ where: { id: dto.bankId }, select: { id: true, name: true, accountId: true, branchId: true, currency: true, deletedAt: true } });
       if (!bank || bank.deletedAt) throw new NotFoundException(MSG.bank_not_found);
       // الشبكةُ بالعملة الأساسية: بنكٌ بعملةٍ أخرى يحتاج سعرَ يومٍ وفرقَ صرفٍ لم يُبنيا هنا — حدٌّ معلَن لا افتراض.
@@ -228,7 +237,7 @@ export class NetworkSettlementsService {
         throw new ConflictException(formatMessage(MSG.network_settlement_receipt_not_open, { count: String(claimed.length - count) }));
       }
       return { ...this.present({ ...created, _count: { receipts: claimed.length } }), entryNo: entry.no };
-    });
+    })));
   }
 
   /**

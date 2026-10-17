@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
-import { IdempotencyKey } from '../common/idempotency/idempotency';
+import { IdempotencyExempt, IdempotencyKey, keyedRequest } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -51,13 +51,14 @@ export class PaymentsController {
   /** سندُ ردٍّ لمرتجع (`SPEC 30.8`): مستقلٌّ مربوطٌ بالإشعار الدائن — والقابل للردّ يحسبه الخادم. */
   @Post('refund')
   @RequiresAction('record')
-  refund(@CurrentTenant() tenant: TenantContext, @Body() dto: RefundDto) {
-    return this.paymentsService.refund(tenant.companyId, tenant.allowedBranchIds, dto);
+  refund(@CurrentTenant() tenant: TenantContext, @Body() dto: RefundDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.paymentsService.refund(tenant.companyId, tenant.allowedBranchIds, dto, keyedRequest(idempotencyKey, 'payments.refund', tenant, dto));
   }
 
   /** إعادة توزيع دفعة على فواتير أخرى — لا يمسّ مبلغها ولا قيدها. */
   @Post(':id/allocate')
   @RequiresAction('edit')
+  @IdempotencyExempt('replaces the voucher allocations with the set sent; a repeat sets the same allocations')
   allocate(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: AllocateDto) {
     return this.paymentsService.allocate(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
@@ -65,6 +66,7 @@ export class PaymentsController {
   /** التصحيح الوحيد المتاح: دفعة عكسية بقيدٍ مضاد. */
   @Post(':id/reverse')
   @RequiresAction('record')
+  @IdempotencyExempt('a voucher is reversed once; a repeat is refused naming the reversal')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReversePaymentDto) {
     return this.paymentsService.reverse(tenant.companyId, tenant.allowedBranchIds, id, dto.reason, dto.date);
   }
