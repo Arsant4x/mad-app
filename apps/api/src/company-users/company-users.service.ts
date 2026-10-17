@@ -127,6 +127,10 @@ export class CompanyUsersService {
           },
         },
         include: { companyUser: { include: COMPANY_USER_INCLUDE } },
+      }).catch((e: unknown) => {
+        // A concurrent create of the same username can pass the check above; the unique index refuses the second.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
+        throw e;
       });
 
       if (dto.branchIds?.length) {

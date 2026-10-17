@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { Prisma } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { createDefaultChart } from '../accounts/default-chart';
@@ -76,14 +77,14 @@ export async function createCompanyAccount(
   input: CreateCompanyAccountInput,
 ): Promise<{ companyId: string; identityId: string }> {
   assertPasswordPolicy(input.password, { username: input.username, email: input.email });
-  const clash = await prisma.loginIdentity.findUnique({ where: { username: input.username } });
-  if (clash) {
-    throw new ConflictException(
+  const usernameTaken = () =>
+    new ConflictException(
       input.publicChannel
         ? MSG.register_username_unavailable
         : formatMessage(MSG.username_taken, { username: input.username }),
     );
-  }
+  const clash = await prisma.loginIdentity.findUnique({ where: { username: input.username } });
+  if (clash) throw usernameTaken();
 
   const born = new Date();
   // يُحلّ قبل المعاملة: إقليمٌ غيرُ مدعوم أو غيرُ معلَنٍ حين يلزم يُردّ `400` قبل أن يُكتب صفّ.
@@ -118,6 +119,10 @@ export async function createCompanyAccount(
         },
       },
       include: { company: { select: { id: true } } },
+    }).catch((e: unknown) => {
+      // A concurrent create of the same username can pass the check above; the unique index refuses the second.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw usernameTaken();
+      throw e;
     });
 
     const companyId = created.company!.id;
