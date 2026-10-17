@@ -413,6 +413,8 @@
       "upcoming_installments": "Upcoming due installments",
       "cancel_them": "Cancel them",
       "keep_them": "Keep them due",
+      "keep_hint": "Kept installments are recorded at the cancellation as owed by the tenant under other income — not rent revenue.",
+      "settlement_cancels_installments": "A settlement worked out from the upcoming installments charges the tenant for them, so they are cancelled rather than kept due.",
       "settlement": "Early vacating settlement",
       "amount": "Amount",
       "installment_count": "Number of installments",

@@ -30,7 +30,9 @@ import {
   reverseVoidedInstallmentsWithinTx,
   settleUnpaidUnearnedWithinTx,
   treatmentOf,
+  unbilledKeptInstallmentsWithinTx,
   unearnedDetailWithinTx,
+  VOIDED_ON_CANCEL,
 } from '../journal/rent-accrual.util';
 import { closeDeferredWithinTx, recognizeDueWithinTx } from './rent-recognition.service';
 import { activeReservationForUnit, expireStaleReservations, lockUnitForBooking } from '../reservations/reservations.service';
@@ -660,6 +662,10 @@ export class ContractsService {
   }
 
   cancel(companyId: string, id: string, dto: CancelContractDto) {
+    // A settlement worked out from the upcoming installments charges them already; keeping them due as well charges twice.
+    if (dto.installmentDisposition === 'keep' && (dto.settlementBasis === 'installments' || dto.settlementBasis === 'all')) {
+      throw new BadRequestException(MSG.settlement_from_installments_needs_cancel);
+    }
     // Retries on a journal-entry "no" collision when a settlement is posted.
     // ⚠️ ومهلةُ الدفعة كالإنشاء: الإلغاءُ يعترف بما قُدِّم حتى تاريخه ويعكس المُسقَط — قيدٌ لكلِّ
     // شهرٍ ولكلِّ قسطٍ مُسقَط، وعقدٌ طويل يتجاوز بها الخمسَ ثوانٍ.
@@ -677,6 +683,12 @@ export class ContractsService {
         const cancelDate = new Date(dto.cancelDate);
         const accrualContract = await tx.contract.findUniqueOrThrow({ where: { id }, select: ACCRUAL_CONTRACT_SELECT });
 
+        // A cancelled contract is not swept again, so what falls due before the cancel date (a date still to come
+        // included) is billed now, with its fees, and the recognition below reads it.
+        const lastServedDay = new Date(cancelDate.getTime() - 86_400_000);
+        await accrueDueWithinTx(tx, companyId, lastServedDay, id);
+        await raiseDueFeesWithinTx(tx, companyId, lastServedDay, id);
+
         // Worked out **before** the installments are touched: 'all' and
         // 'installments' read the very rows that `installmentDisposition:
         // 'cancel'` is about to void, and voiding them first would settle at
@@ -690,6 +702,9 @@ export class ContractsService {
         // منه شيء ويُسقَط — تُردّ ذمّتُه وضريبتُه وإيرادُه كإشعارٍ دائن، **قبل** أن يُقرأ
         // الالتزامُ الباقي فلا يُسأل عن وجهةِ ما لم يعد التزاماً.
         if (dto.installmentDisposition === 'cancel') await reverseVoidedInstallmentsWithinTx(tx, companyId, accrualContract, cancelDate);
+        // Kept installments stay owed, as compensation for a period the tenant does not occupy: what is not billed yet
+        // goes to other income now, never to rent revenue later. Read before the rent received for them is settled.
+        const keptUnbilled = dto.installmentDisposition === 'keep' ? await unbilledKeptInstallmentsWithinTx(tx, accrualContract, cancelDate) : 0;
 
         const unearnedDetail = await unearnedDetailWithinTx(tx, id);
         const unearned = unearnedDetail.total;
@@ -725,6 +740,17 @@ export class ContractsService {
                 baseAmount: toBaseAmount(settlementAmount, Number(existing.exchangeRate)),
               })
             : null;
+        if (keptUnbilled > 0) {
+          await postContractSettlementEntry(tx, companyId, {
+            unitId: existing.unitId,
+            customerId: existing.customerId,
+            contractNo: existing.no,
+            tenant: existing.tenant,
+            date: cancelDate,
+            baseAmount: toBaseAmount(keptUnbilled, Number(existing.exchangeRate)),
+            keptInstallments: true,
+          });
+        }
 
         const data: Prisma.ContractUncheckedUpdateInput = {
           status: 'CANCELLED',
@@ -747,10 +773,15 @@ export class ContractsService {
 
         if (dto.installmentDisposition === 'cancel') {
           await tx.installment.updateMany({
-            where: { contractId: id, status: { in: ['DUE', 'LATE'] }, dueDate: { gte: cancelDate } },
+            where: { contractId: id, status: { in: VOIDED_ON_CANCEL }, dueDate: { gte: cancelDate } },
             data: { status: 'CANCELLED' },
           });
         }
+        // Nothing from the cancel date on is billed again, whether cancelled or kept.
+        await tx.installment.updateMany({
+          where: { contractId: id, dueDate: { gte: cancelDate }, accrualCompletedAt: null },
+          data: { accrualCompletedAt: new Date() },
+        });
 
         // إقفالُ الالتزام الباقي — **بعد تعديل الأقساط**، فالمبلغُ مقروءٌ قبلها
         // ولا تغيّره حالةُ قسطٍ لم يُقبض منه شيء.

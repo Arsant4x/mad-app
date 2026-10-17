@@ -30,8 +30,9 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 export async function raiseDueFeesWithinTx(tx: Prisma.TransactionClient, companyId: string, asOf: Date, contractId?: string): Promise<FeeSweepResult> {
   const result: FeeSweepResult = { raised: 0, blockedByPeriodLock: 0 };
+  // A cancelled contract is settled by its cancellation, which raises the fees of what fell due before the cancel date.
   const fees = await tx.contractFee.findMany({
-    where: { ...(contractId ? { contractId } : {}), effectiveFrom: { lte: asOf }, contract: { status: { not: 'DRAFT' } } },
+    where: { ...(contractId ? { contractId } : {}), effectiveFrom: { lte: asOf }, contract: { status: { notIn: ['DRAFT', 'CANCELLED'] } } },
     include: {
       contract: { select: { id: true, no: true, tenant: true, unitId: true, customerId: true, currency: true, exchangeRate: true } },
       claims: { select: { installmentId: true } },

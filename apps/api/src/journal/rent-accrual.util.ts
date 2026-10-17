@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma, RentAccrualKind } from '@mad-app/db';
+import { InstallmentStatus, Prisma, RentAccrualKind } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import {
@@ -263,12 +263,13 @@ export async function accrueDueWithinTx(tx: Prisma.TransactionClient, companyId:
   // استعلامٌ واحد: ما لم يُختم (`accrualCompletedAt IS NULL`) وحلّ استحقاقُه أو قُبضت عليه دفعة —
   // لا مسحاً على كل قسط، ولا استعلاماً لكلِّ عقد.
   // ⚖️ وعقدٌ مؤجّرُه المالك خارجُه بالتصميم (السؤال ٥٧٧): إيجارُه أمانةٌ للمالك لا ذمّةٌ ولا إيرادٌ للمنشأة.
+  // A cancelled contract is settled by its cancellation, which bills what fell due before the cancel date.
   const installments = await tx.installment.findMany({
     where: {
       accrualBasis: 'ACCRUAL',
       accrualCompletedAt: null,
       status: { not: 'CANCELLED' },
-      contract: { status: { not: 'DRAFT' }, lessor: { not: 'OWNER' }, ...(contractId ? { id: contractId } : {}) },
+      contract: { status: { notIn: ['DRAFT', 'CANCELLED'] }, lessor: { not: 'OWNER' }, ...(contractId ? { id: contractId } : {}) },
       OR: [{ dueDate: { lte: asOf } }, { payments: { some: {} } }],
     },
     select: { ...ACCRUAL_INSTALLMENT_SELECT, contract: { select: ACCRUAL_CONTRACT_SELECT } },
@@ -576,26 +577,68 @@ export async function discountAccrualWithinTx(
   return reduceAccrualWithinTx(tx, companyId, contract, treatment, installment, { ...discount, kind: 'DISCOUNT', reasonLabel: 'خصم عند القبض' });
 }
 
+/** The installments a cancellation cancels: unpaid or partly paid, due on or after the cancel date. */
+export const VOIDED_ON_CANCEL: InstallmentStatus[] = ['DUE', 'LATE', 'PARTIAL'];
+
 /**
- * **عكسُ استحقاق قسطٍ أُسقط عند الإلغاء — كاملاً** (`ق-٩٢٥/②`): ما لم يُقبض منه شيء وسقط
- * لا يدين به المستأجر، فتُردّ ذمّتُه وضريبتُه وإيرادُه — نظيرُ الإشعار الدائن.
+ * Reverses what a cancellation voids (a credit note's counterpart): the billed part of each installment it cancels that
+ * the tenant has not paid. A partly paid installment keeps the billing of what was paid, which follows the chosen
+ * destination of rent received for a period not served. Returns how many installments were reversed.
  */
 export async function reverseVoidedInstallmentsWithinTx(tx: Prisma.TransactionClient, companyId: string, contract: AccrualContract, cancelDate: Date): Promise<number> {
   const treatment = treatmentOf(contract);
   if (!treatment) return 0;
   const voided = await tx.installment.findMany({
-    where: { contractId: contract.id, accrualBasis: 'ACCRUAL', status: { in: ['DUE', 'LATE'] }, dueDate: { gte: cancelDate }, baseAccruedGross: { gt: 0 } },
-    select: { id: true, baseAccruedGross: true, baseAccruedNet: true, baseAccruedTax: true, baseRecognized: true },
+    where: { contractId: contract.id, accrualBasis: 'ACCRUAL', status: { in: VOIDED_ON_CANCEL }, dueDate: { gte: cancelDate }, baseAccruedGross: { gt: 0 } },
+    select: {
+      id: true,
+      baseAccruedGross: true,
+      baseAccruedNet: true,
+      baseAccruedTax: true,
+      baseRecognized: true,
+      payments: { select: { netAmount: true, baseNetAmount: true, currency: true } },
+    },
   });
+  const rate = Number(contract.exchangeRate) || 1;
+  let reversed = 0;
   for (const i of voided) {
+    const paid = i.payments.reduce((s, p) => s + (p.currency === contract.currency ? Number(p.netAmount) : Number(p.baseNetAmount) / rate), 0);
+    const unpaid = round2(Number(i.baseAccruedGross) / rate - paid);
+    if (unpaid <= 0) continue;
     await reduceAccrualWithinTx(tx, companyId, contract, treatment, i, {
       date: cancelDate,
-      gross: Number(i.baseAccruedGross) / (Number(contract.exchangeRate) || 1),
+      gross: unpaid,
       kind: 'REVERSAL',
       reasonLabel: 'إسقاطُ قسطٍ لم يُقبض عند الإلغاء',
     });
+    reversed += 1;
   }
-  return voided.length;
+  return reversed;
+}
+
+/**
+ * What a cancellation that keeps the installments due still owes for them and the rent engine has not billed: for each
+ * installment from the cancel date on, the share of its amount not billed yet, in the contract's currency. It is
+ * compensation for a period the tenant does not occupy, so the cancellation records it as other income, not rent. A
+ * contract that never accrues (unclassified, or leased out by the owner) is not billed here either.
+ */
+export async function unbilledKeptInstallmentsWithinTx(tx: Prisma.TransactionClient, contract: AccrualContract, cancelDate: Date): Promise<number> {
+  const treatment = treatmentOf(contract);
+  if (!treatment || contract.lessor === 'OWNER') return 0;
+  const kept = await tx.installment.findMany({
+    where: { contractId: contract.id, accrualBasis: 'ACCRUAL', accrualCompletedAt: null, status: { in: VOIDED_ON_CANCEL }, dueDate: { gte: cancelDate } },
+    select: { amount: true, accruals: { select: { kind: true, amountGross: true } } },
+  });
+  let total = 0;
+  for (const i of kept) {
+    const amount = Number(i.amount);
+    const gross = rentAmountsOf(amount, treatment).gross;
+    if (gross <= 0) continue;
+    const billed = i.accruals.filter((a) => POSITIVE_KINDS.includes(a.kind)).reduce((s, a) => s + Number(a.amountGross), 0);
+    const unbilled = Math.max(0, gross - billed);
+    total = round2(total + round2((amount * unbilled) / gross));
+  }
+  return total;
 }
 
 export interface UnearnedDetail {

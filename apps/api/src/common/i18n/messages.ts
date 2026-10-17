@@ -420,6 +420,7 @@ export const MSG = {
   /** إعلامُ المستأجر بحفظ صور النموذج قبل توقيعه (`ق-١٦٠٠` · السؤال ٢٤٣). */
   handover_item_not_found: 'contracts.handover_item_not_found',
   settlement_lines_mismatch: 'contracts.settlement_lines_mismatch',
+  settlement_from_installments_needs_cancel: 'contracts.settlement_from_installments_needs_cancel',
   unearned_disposition_required: 'contracts.unearned_disposition_required',
   bulk_units_collision: 'units.bulk_collision',
   claim_not_found: 'claims.not_found',
@@ -1938,6 +1939,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.support_grant_not_yours]: { ar: 'إذن الدعم الفعّال لهذه المنشأة مُنح لمدير آخر — لا يُدخَل بإذن غيرك', en: 'The active support consent for this company was granted to another admin — you cannot enter on their consent' },
   [MSG.handover_item_not_found]: { ar: 'بند النموذج غير موجود في هذا النموذج', en: 'Checklist item not found on this handover' },
   [MSG.settlement_lines_mismatch]: { ar: 'مجموع بنود التسوية لا يساوي مبلغ التسوية', en: 'Settlement lines do not add up to the settlement amount' },
+  [MSG.settlement_from_installments_needs_cancel]: {
+    ar: 'التسوية بالأقساط القادمة تحتسبها على المستأجر، فلا تُبقى مستحقّةً معها: اختر إلغاء الأقساط القادمة',
+    en: 'A settlement worked out from the upcoming installments already charges the tenant for them, so they cannot also be kept due: choose to cancel the upcoming installments',
+  },
   [MSG.unearned_disposition_required]: {
     ar: 'بقي {amount} مستحقّاً أو مقبوضاً عن مدّة لم تُقدَّم — حدّد وجهته: يُردّ للمستأجر (ولا يدين بما لم يُقبض) أم يُحتجَز دخلاً بشرط العقد',
     en: 'An amount of {amount} — accrued or collected — covers a period not served: choose its destination: refunded to the tenant (and not owed where unpaid), or kept as income under the contract',

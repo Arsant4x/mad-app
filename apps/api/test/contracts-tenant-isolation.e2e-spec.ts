@@ -169,7 +169,8 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const cancelled = await request(app.getHttpServer())
       .post(`/contracts/${contract.body.id}/cancel`)
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ cancelDate: '2030-01-15', cancelReason: 'اختبار', installmentDisposition: 'cancel' })
+      // January is billed by the cancellation, and its days after the 15th need a destination.
+      .send({ cancelDate: '2030-01-15', cancelReason: 'اختبار', installmentDisposition: 'cancel', unearnedDisposition: 'income' })
       .expect(201);
 
     expect(cancelled.body.status).toBe('CANCELLED');
