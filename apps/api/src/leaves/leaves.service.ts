@@ -36,6 +36,36 @@ function inclusiveDays(start: Date, end: Date): number {
   return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
 }
 
+/**
+ * Refuses leave that would take the employee past the type's entitlement for the year. Approved leave is what is
+ * spent, counted on the year the leave starts in exactly as `balance()` counts it, so the refusal and the balance
+ * screen agree. A type without a fixed entitlement (`annualDays = 0`) has no limit.
+ */
+async function assertWithinEntitlement(
+  tx: Prisma.TransactionClient,
+  leave: { id?: string; employeeId: string; startDate: Date; days: number },
+  leaveType: { id: string; name: string; annualDays: number },
+): Promise<void> {
+  if (leaveType.annualDays <= 0) return;
+  const year = leave.startDate.getUTCFullYear();
+  const spent = await tx.leaveRequest.aggregate({
+    where: {
+      employeeId: leave.employeeId,
+      leaveTypeId: leaveType.id,
+      status: 'APPROVED',
+      startDate: { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) },
+      ...(leave.id ? { id: { not: leave.id } } : {}),
+    },
+    _sum: { days: true },
+  });
+  const remaining = leaveType.annualDays - (spent._sum.days ?? 0);
+  if (leave.days > remaining) {
+    throw new BadRequestException(
+      formatMessage(MSG.leave_balance_exceeded, { days: leave.days, type: leaveType.name, year, remaining: Math.max(remaining, 0), entitlement: leaveType.annualDays }),
+    );
+  }
+}
+
 @Injectable()
 export class LeavesService {
   constructor(
@@ -137,7 +167,7 @@ export class LeavesService {
       // 🔴 وبفروع الفاعل (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): موظّفُ فرعٍ آخر غيرُ موجودٍ له، كالقرار على طلبه (`ق-١٤٤٠`).
       const employee = await tx.employee.findFirst({ where: { id: dto.employeeId, ...branchFilter(allowedBranchIds) }, select: { id: true } });
       if (!employee) throw new NotFoundException(MSG.employee_not_found);
-      const leaveType = await tx.leaveType.findUnique({ where: { id: dto.leaveTypeId }, select: { id: true } });
+      const leaveType = await tx.leaveType.findUnique({ where: { id: dto.leaveTypeId }, select: { id: true, name: true, annualDays: true } });
       if (!leaveType) throw new NotFoundException(MSG.leave_type_not_found);
 
       // Can't be on two leaves at once: any pending-or-approved request whose
@@ -152,13 +182,16 @@ export class LeavesService {
       });
       if (overlap) throw new ConflictException(MSG.leave_overlap);
 
+      const days = inclusiveDays(start, end);
+      await assertWithinEntitlement(tx, { employeeId: dto.employeeId, startDate: start, days }, leaveType);
+
       return tx.leaveRequest.create({
         data: {
           employeeId: dto.employeeId,
           leaveTypeId: dto.leaveTypeId,
           startDate: start,
           endDate: end,
-          days: inclusiveDays(start, end),
+          days,
           reason: dto.reason,
           status: 'PENDING',
           // ⭐ **من قدّم — بهويّة الفاعل**: هو الطرفُ الذي يُقارَن به المقرِّر،
@@ -172,23 +205,14 @@ export class LeavesService {
   }
 
   /**
-   * ⭐ **الاعتماد أو الرفض — ومعه الفصلُ بين من قدّم ومن قرّر** (`ق-٦٢١`).
+   * Approve or reject, keeping who filed apart from who decides.
    *
-   * والمعلَّقُ وحدَه يُبَتّ فيه، فنداءٌ مكرَّرٌ أو سباقٌ لا يقلب محسوماً.
+   * Only a pending request is decided, and the write itself is conditioned on PENDING, so a repeated call or two
+   * decisions at once cannot overturn one already made. The employee row is locked first, so approvals for the same
+   * employee check the remaining entitlement one after another and cannot spend the same days twice.
    *
-   * ## ما كان ناقصاً — والفصلُ لا الأثر
-   *
-   * `AuditInterceptor` عامٌّ ويكتب المعتمِدَ في كلّ حال، **فالأثرُ كان قائماً**.
-   * **والناقصُ كان الفصل**: لا حقلَ على الصفّ يُقارَن به، **فلا حارسَ يمنع ولا
-   * شاشةَ تعرض «اعتمده فلان» بلا نبش السجلّ بالمعرّف**.
-   *
-   * ## ⚠️ ولماذا لا يُقارَن المقرِّرُ بـ`employeeId`
-   *
-   * **`Employee` لا يرتبط بهويّة دخولٍ بأيّ حقل** — لا `CompanyUser` ولا
-   * `LoginIdentity` (مقيسٌ من المخطط: يشير إليه `Company` و`Branch`
-   * و`LeaveRequest` و`AttendanceRecord` فحسب). ⇒ **فمقارنةُ `decidedById`
-   * بـ`employeeId` مقارنةُ فضاءَي هويّةٍ مختلفَين، تمرّ دائماً ولا تعني شيئاً**.
-   * **فالمقارنةُ على `requestedById`** — نظيرِ `recordedById` في الشطب.
+   * A decision is a self approval when the actor filed the request, or when the actor is the login account linked
+   * to the employee on leave: comparing the actor with `employeeId` itself would compare two different id spaces.
    *
    * ## ⚖️ والمنعُ إعدادٌ لا أصل — بعددٍ لا بترجيح
    *
@@ -207,18 +231,27 @@ export class LeavesService {
       if (!existing) throw new NotFoundException(MSG.leave_request_not_found);
       if (existing.status !== 'PENDING') throw new ConflictException(MSG.leave_request_not_pending);
 
-      // ⚠️ **والفارغُ غيرُ مقصود**: صفٌّ سُجّل قبل هذا الحقل لا يحمل قائلاً،
-      //    **وفراغُه «غيرُ معلوم» فلا يُقارَن** — لا «ليس هو».
-      const selfApproved = existing.requestedById !== null && existing.requestedById === actor.id;
+      const [employee] = await tx.$queryRaw<{ companyUserId: string | null }[]>`
+        SELECT "companyUserId" FROM "employees" WHERE "id" = ${existing.employeeId} FOR UPDATE`;
+
+      // A row filed before requestedById existed has no filer: unknown, so it is not compared.
+      const filedBySelf = existing.requestedById !== null && existing.requestedById === actor.id;
+      const ownLeave = actor.actorType === 'COMPANY_USER' && employee?.companyUserId === actor.id;
+      const selfApproved = filedBySelf || ownLeave;
       if (selfApproved) {
         const company = await tx.company.findUnique({ where: { id: companyId }, select: { leaveApprovalRequiresTwoPersons: true } });
         if (company?.leaveApprovalRequiresTwoPersons) {
-          throw new ForbiddenException(formatMessage(MSG.leave_two_persons_required, { employee: existing.employee.fullName }));
+          const message = ownLeave ? MSG.leave_two_persons_own_leave : MSG.leave_two_persons_required;
+          throw new ForbiddenException(formatMessage(message, { employee: existing.employee.fullName }));
         }
       }
 
-      const saved = await tx.leaveRequest.update({
-        where: { id },
+      if (status === 'APPROVED') {
+        await assertWithinEntitlement(tx, { id: existing.id, employeeId: existing.employeeId, startDate: existing.startDate, days: existing.days }, existing.leaveType);
+      }
+
+      const decided = await tx.leaveRequest.updateMany({
+        where: { id, status: 'PENDING' },
         data: {
           status,
           decidedAt: new Date(),
@@ -226,8 +259,9 @@ export class LeavesService {
           decidedById: actor.id,
           decidedByName: actor.name,
         },
-        include: REQUEST_INCLUDE,
       });
+      if (decided.count === 0) throw new ConflictException(MSG.leave_request_not_pending);
+      const saved = await tx.leaveRequest.findUniqueOrThrow({ where: { id }, include: REQUEST_INCLUDE });
 
       /**
        * ⭐ **والفعلُ باسمه داخلَ المعاملة لا بعدها** — على سابقة الشطب نصّاً:

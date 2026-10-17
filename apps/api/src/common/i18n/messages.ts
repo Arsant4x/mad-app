@@ -222,8 +222,13 @@ export const MSG = {
   leave_dates_invalid: 'leaves.dates_invalid',
   leave_overlap: 'leaves.overlap',
   leave_two_persons_required: 'leaves.two_persons_required',
+  leave_two_persons_own_leave: 'leaves.two_persons_own_leave',
+  leave_balance_exceeded: 'leaves.balance_exceeded',
   attendance_not_found: 'attendance.not_found',
   attendance_already_recorded: 'attendance.already_recorded',
+  attendance_checkout_before_checkin: 'attendance.checkout_before_checkin',
+  attendance_time_in_future: 'attendance.time_in_future',
+  attendance_date_in_future: 'attendance.date_in_future',
   sub_owner_only: 'subscription.owner_only',
   bank_not_found: 'banks.not_found',
   bank_code_range_full: 'banks.code_range_full',
@@ -1245,6 +1250,26 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.leave_two_persons_required]: {
     ar: 'المنشأة تشترط شخصين على اعتماد الإجازة — فمن قدّم طلب {employee} لا يعتمده. اطلب اعتماد صاحب صلاحية آخر، أو أطفئ الاشتراط من إعدادات المنشأة',
     en: 'This company requires two people to approve leave — whoever filed {employee}’s request cannot approve it. Ask another authorised user to approve, or turn the requirement off in company settings',
+  },
+  [MSG.leave_two_persons_own_leave]: {
+    ar: 'المنشأة تشترط شخصين على اعتماد الإجازة، و{employee} لا يبتّ في إجازته بنفسه ولو قدّمها غيره. اطلب اعتماد صاحب صلاحية آخر، أو أطفئ الاشتراط من إعدادات المنشأة',
+    en: 'This company requires two people to approve leave, and {employee} cannot decide their own leave even when someone else filed it. Ask another authorised user to approve, or turn the requirement off in company settings',
+  },
+  [MSG.leave_balance_exceeded]: {
+    ar: 'الطلب {days} يوماً ويتجاوز ما بقي من «{type}» لسنة {year}: بقي {remaining} يوماً من {entitlement}',
+    en: 'The request is for {days} days, more than is left of {type} for {year}: {remaining} of {entitlement} days left',
+  },
+  [MSG.attendance_checkout_before_checkin]: {
+    ar: 'وقت الانصراف {checkOut} أسبق من وقت الحضور {checkIn} في اليوم نفسه',
+    en: 'Check out {checkOut} is earlier than check in {checkIn} on the same day',
+  },
+  [MSG.attendance_time_in_future]: {
+    ar: 'الوقت {time} يوم {date} لم يأتِ بعد. يُسجَّل الحضور والانصراف عند وقوعهما',
+    en: '{time} on {date} has not come yet. Check in and check out are recorded when they happen',
+  },
+  [MSG.attendance_date_in_future]: {
+    ar: 'اليوم {date} لم يأتِ بعد، والحضور يُسجَّل ليومٍ وقع. والغياب المعروف مسبقاً يُسجَّل إجازة',
+    en: '{date} has not come yet, and attendance is recorded for a day that has happened. A known absence ahead is recorded as leave',
   },
   [MSG.sub_owner_only]: { ar: 'إدارة الاشتراك متاحة لمالك المنشأة فقط', en: 'Only the company owner can manage the subscription' },
   [MSG.bank_not_found]: { ar: 'الحساب البنكي غير موجود', en: 'Bank account not found' },
