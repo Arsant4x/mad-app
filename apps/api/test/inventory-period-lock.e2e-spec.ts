@@ -22,6 +22,7 @@ describe('Inventory movements respect the period lock without a journal entry (e
   let tenantPrisma: TenantPrismaService;
   let moves: IsolatedCompany | undefined;
   let openings: IsolatedCompany | undefined;
+  let voids: IsolatedCompany | undefined;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const YEAR = 2093;
   const CLOSED = `03/${YEAR}`;
@@ -83,6 +84,7 @@ describe('Inventory movements respect the period lock without a journal entry (e
   afterAll(async () => {
     await removeIsolatedCompany(app, moves);
     await removeIsolatedCompany(app, openings);
+    await removeIsolatedCompany(app, voids);
     await app.close();
   });
 
@@ -94,14 +96,17 @@ describe('Inventory movements respect the period lock without a journal entry (e
     await move({ productId: costedProduct, type: 'TRANSFER', toWarehouseId: warehouseB, qty: 2, date: `${YEAR}-04-10` }).expect(201);
   });
 
-  it('refuses a zero cost receipt and a zero cost issue dated in a closed period', async () => {
+  it('refuses a zero cost receipt dated in a closed period and accepts it in an open one', async () => {
     expectPeriodClosed(await move({ productId: freeProduct, type: 'IN', qty: 3, unitCost: 0, date: `${YEAR}-03-12` }), CLOSED);
-    expectPeriodClosed(await move({ productId: freeProduct, type: 'OUT', qty: 1, date: `${YEAR}-03-13` }), CLOSED);
     expect(await movementsOn(freeProduct, `${YEAR}-03-12`)).toBe(0);
-    expect(await movementsOn(freeProduct, `${YEAR}-03-13`)).toBe(0);
 
     const open = await move({ productId: freeProduct, type: 'IN', qty: 3, unitCost: 0, date: `${YEAR}-04-12` }).expect(201);
     expect(open.body.journalEntryId).toBeNull();
+  });
+
+  it('refuses a zero cost issue dated in a closed period', async () => {
+    expectPeriodClosed(await move({ productId: freeProduct, type: 'OUT', qty: 1, date: `${YEAR}-03-13` }), CLOSED);
+    expect(await movementsOn(freeProduct, `${YEAR}-03-13`)).toBe(0);
   });
 
   it('refuses approving a zero cost write-off dated in a closed period, and approves it in an open one', async () => {
@@ -132,27 +137,37 @@ describe('Inventory movements respect the period lock without a journal entry (e
     expectPeriodClosed(reversed, `${today.slice(5, 7)}/${today.slice(0, 4)}`);
   });
 
-  it('refuses a zero cost opening declaration dated in a closed period and voiding its line while today is closed', async () => {
-    openings = await registerIsolatedCompany(app, 'inv-period-openings');
-    await as(openings)(http().post('/fiscal-years')).send({ name: `Year ${YEAR}`, start: `${YEAR}-01-01`, end: `${YEAR}-12-31` }).expect(201);
-    await closePeriod(openings, `${YEAR}-03-01`);
-    const warehouse = await newWarehouse(openings, 'Opening');
-    const product = await newProduct(openings, 'Opening');
+  /** A company with its own opening date, so each opening case is measured on its own. */
+  async function openingCompany(c: IsolatedCompany) {
+    await as(c)(http().post('/fiscal-years')).send({ name: `Year ${YEAR}`, start: `${YEAR}-01-01`, end: `${YEAR}-12-31` }).expect(201);
+    await closePeriod(c, `${YEAR}-03-01`);
+    const warehouse = await newWarehouse(c, 'Opening');
+    const product = await newProduct(c, 'Opening');
     const declare = (openingDate: string) =>
-      as(openings)(http().post('/inventory/opening')).send({ openingDate, lines: [{ productId: product, warehouseId: warehouse, qty: 4, unitCost: 0, acquiredAt: `${YEAR}-02-20` }] });
+      as(c)(http().post('/inventory/opening')).send({ openingDate, lines: [{ productId: product, warehouseId: warehouse, qty: 4, unitCost: 0, acquiredAt: `${YEAR}-02-20` }] });
+    return { c, warehouse, declare };
+  }
 
-    expectPeriodClosed(await declare(`${YEAR}-03-01`), CLOSED);
-    const left = await tenantPrisma.runInTenantContext(openings.companyId, (tx) => tx.stockOpening.count());
-    expect(left).toBe(0);
+  it('refuses a zero cost opening declaration dated in a closed period and accepts it in an open one', async () => {
+    openings = await registerIsolatedCompany(app, 'inv-period-openings');
+    const o = await openingCompany(openings);
+    expectPeriodClosed(await o.declare(`${YEAR}-03-01`), CLOSED);
+    expect(await tenantPrisma.runInTenantContext(o.c.companyId, (tx) => tx.stockOpening.count())).toBe(0);
 
-    const declared = (await declare(`${YEAR}-04-01`).expect(201)).body as { id: string; lines: { id: string }[] };
+    await o.declare(`${YEAR}-04-01`).expect(201);
+  });
+
+  it('refuses voiding a zero cost opening line while the current period is closed', async () => {
+    voids = await registerIsolatedCompany(app, 'inv-period-voids');
+    const o = await openingCompany(voids);
+    const declared = (await o.declare(`${YEAR}-04-01`).expect(201)).body as { id: string; lines: { id: string }[] };
     // A costed receipt today makes sure today's fiscal year exists before its period is closed.
-    const scratch = await newProduct(openings, 'Scratch');
+    const scratch = await newProduct(o.c, 'Scratch');
     const today = companyDay();
-    await as(openings)(http().post('/inventory/movements')).send({ productId: scratch, warehouseId: warehouse, type: 'IN', qty: 1, unitCost: 1, date: today, reason: 'period lock test' }).expect(201);
-    await closePeriod(openings, today);
+    await as(o.c)(http().post('/inventory/movements')).send({ productId: scratch, warehouseId: o.warehouse, type: 'IN', qty: 1, unitCost: 1, date: today, reason: 'period lock test' }).expect(201);
+    await closePeriod(o.c, today);
 
-    const voided = await as(openings)(http().post(`/inventory/opening/${declared.id}/lines/${declared.lines[0].id}/void`)).send({});
+    const voided = await as(o.c)(http().post(`/inventory/opening/${declared.id}/lines/${declared.lines[0].id}/void`)).send({});
     expectPeriodClosed(voided, `${today.slice(5, 7)}/${today.slice(0, 4)}`);
   });
 });
