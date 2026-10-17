@@ -48,13 +48,13 @@ describe('Network settlement fee VAT in the VAT declaration (e2e)', () => {
     await app.init();
     taxable = await registerIsolatedCompany(app, 'netfee-taxable');
     mixed = await registerIsolatedCompany(app, 'netfee-mixed');
-  }, 90000);
+  });
 
   afterAll(async () => {
     await removeIsolatedCompany(app, taxable);
     await removeIsolatedCompany(app, mixed);
     await app.close();
-  }, 60000);
+  });
 
   it('an all-taxable company declares the fee and its VAT in box 7 of the settlement quarter, and the void reverses them in its own quarter', async () => {
     const auth = as(taxable);
