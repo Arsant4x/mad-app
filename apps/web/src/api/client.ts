@@ -117,16 +117,18 @@ function postRefresh(): Promise<RefreshResult | null> {
  * response has rotated the cookie, so it carries the new token. Without the Web
  * Locks API, or when the lock cannot be taken, it refreshes without one.
  */
-function refreshAcrossTabs(): Promise<RefreshResult | null> {
+async function refreshAcrossTabs(): Promise<RefreshResult | null> {
   const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
   if (!locks?.request) return postRefresh();
   let ran = false;
-  return locks
-    .request(REFRESH_LOCK, () => {
+  try {
+    return await locks.request(REFRESH_LOCK, () => {
       ran = true;
       return postRefresh();
-    })
-    .catch(() => (ran ? null : postRefresh()));
+    });
+  } catch {
+    return ran ? null : postRefresh();
+  }
 }
 
 /**
