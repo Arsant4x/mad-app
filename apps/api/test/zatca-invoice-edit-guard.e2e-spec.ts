@@ -9,6 +9,7 @@ import * as x509 from '@peculiar/x509';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { writePastDbGuard } from './write-past-db-guard';
 import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (56.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
@@ -175,16 +176,8 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    // Chained test rows can't go through the API delete (that refusal is the
-    // delete guard's own test) — strip the link, then delete normally so the
-    // journal entries are reversed too.
-    await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.updateMany({
-        where: { id: { in: createdInvoiceIds } },
-        data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
-      }),
-    );
-    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    // An issued invoice cannot be deleted through the API, so the test removes its rows directly in the tenant context. A
+    // signed row cannot be unsigned in the database, and it does not need to be: the cleanup deletes it as it is.
     await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
     await authority.close();
@@ -267,10 +260,10 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     const first = await getInvoice(a);
     const b = await makeRejectedInvoice();
 
-    // كان الخَلَفُ المتسلسل هو ما يقفل المردودةَ وحدَه — والآن الردُّ نفسُه يقفلها (ق-٩٥٨)؛
-    // يبقى الشكلُ هنا كي يُثبَت أن الحكم واحدٌ في الحالين.
+    // The chain link is fabricated so the verdict is shown to be the same with and without a successor. B is signed and the
+    // database refuses changing a signed row, so the link is written past its guard.
     await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.update({ where: { id: b }, data: { zatcaPreviousHash: first!.zatcaHash } }),
+      writePastDbGuard(tx, 'invoices', () => tx.invoice.update({ where: { id: b }, data: { zatcaPreviousHash: first!.zatcaHash } })),
     );
 
     const res = await patch(a, { lines: [{ description: 'بند متأخر', quantity: 1, unitPrice: 300, taxRate: 15 }] }).expect(409);

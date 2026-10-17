@@ -128,18 +128,8 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
   }, 30000);
 
   afterAll(async () => {
-    // The chain guard refuses deleting a document with an assigned ICV/hash
-    // (see InvoicesService.remove). These test rows were never really at the
-    // authority, so every chain field is stripped first and the API then
-    // deletes normally — which also reverses the auto-posted journal entries.
-    // Cleanup must not depend on the guard's absence.
-    await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.updateMany({
-        where: { id: { in: createdInvoiceIds } },
-        data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
-      }),
-    );
-    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    // An issued invoice cannot be deleted through the API, so the test removes its rows directly in the tenant context,
+    // reversing their journal entries. A signed row cannot be unsigned in the database, and it does not need to be.
     await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     for (const id of createdCompanyUserIds) {
       await request(app.getHttpServer()).delete(`/company-users/${id}`).set('Authorization', `Bearer ${token}`);
