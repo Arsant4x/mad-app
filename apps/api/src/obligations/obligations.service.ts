@@ -508,6 +508,30 @@ export class ObligationsService {
     return { documentsCount, untrackedCount, baseAmount };
   }
 
+  /**
+   * Network settlement commissions whose VAT the ledger debits to input VAT, shaped as mixed purchase inputs:
+   * a settlement counts on its own date, and a voided one counts again with a negative sign on its void entry date.
+   * Company wide by design: the return is filed for the company under its one VAT number, so every branch's settlements count.
+   */
+  private async networkFeeInputs(tx: Prisma.TransactionClient, from: Date, to: Date) {
+    const select = { feeAmount: true, feeVatAmount: true } as const;
+    const [posted, voided] = await Promise.all([
+      tx.networkSettlement.findMany({ where: { date: { gte: from, lte: to }, feeVatAmount: { gt: 0 } }, select }),
+      tx.networkSettlement.findMany({ where: { status: 'VOID', feeVatAmount: { gt: 0 }, voidJournalEntry: { is: { date: { gte: from, lte: to } } } }, select }),
+    ]);
+    const asInput = (s: { feeAmount: Prisma.Decimal; feeVatAmount: Prisma.Decimal }, voidSign: number) => ({
+      subtotal: s.feeAmount,
+      taxAmount: s.feeVatAmount,
+      exempt: false,
+      excludeFromVat: false,
+      docType: 'PURCHASE' as const,
+      inputVatUse: 'MIXED' as const,
+      nonDeductibleTracked: false,
+      voidSign,
+    });
+    return [...posted.map((s) => asInput(s, 1)), ...voided.map((s) => asInput(s, -1))];
+  }
+
   private async finishClosing(tx: Prisma.TransactionClient, id: string, applied: { documentsCount: number; untrackedCount: number; baseAmount: number }) {
     const row = await tx.vatReturnClosing.update({
       where: { id },
@@ -550,7 +574,11 @@ export class ObligationsService {
     const actualRatio = proportionalRatio(yearTaxable, yearExempt);
     if (actualRatio === null) return null;
 
-    const yearApportionedBase = round2(purchases.reduce((s, p) => s + adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * Number(p.taxAmount), 0));
+    const networkFees = await this.networkFeeInputs(tx, from, to);
+    const yearApportionedBase = round2(
+      purchases.reduce((s, p) => s + adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * Number(p.taxAmount), 0) +
+        networkFees.reduce((s, f) => s + f.voidSign * Number(f.taxAmount), 0),
+    );
     const settled = annualSettlement(appliedRatio, actualRatio, yearApportionedBase);
     return {
       year,
@@ -691,7 +719,9 @@ export class ObligationsService {
       const declarablePurchases = purchases.filter((p) => !p.excludeFromVat);
       const excludedPurchases = purchases.filter((p) => p.excludeFromVat);
 
-      const taxablePurchases = declarablePurchases.filter((p) => !p.exempt);
+      // The acquirer's commission VAT is posted to input VAT, so it enters box 7 as a general overhead input.
+      const networkFees = await this.networkFeeInputs(tx, from, to);
+      const taxablePurchases = [...declarablePurchases.filter((p) => !p.exempt), ...networkFees];
       const exemptPurchases = declarablePurchases.filter((p) => p.exempt);
       const purchasesStandard = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
       const purchasesStandardVat = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0));
