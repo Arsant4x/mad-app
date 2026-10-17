@@ -3,42 +3,30 @@ import { money } from '../money/text';
 import { type ResolvedVatPeriod, type VatPeriodType } from './vat-period.util';
 
 /**
- * ⑥A3 (`ق-١٣٢٥`) — **تصحيحُ إقرارٍ سابق من خلال إقرارٍ لاحق** (اللائحةُ التنفيذية م٦٣).
+ * Correcting an earlier VAT return through a later one (Implementing Regulation, Article 63).
  *
- * **النصُّ بفقراته** (`CORRECTION OF RETURNS`):
- *   ف١ · «which has resulted in the amount of Tax payable to the Authority being
- *        **understated**, that Person must **notify the Authority within twenty (20) days**
- *        … by filing a submission to correct the Tax Return **save to the extent the third
- *        Paragraph** of this Article applies».
- *   ف٢ · «being **overstated**, the Taxable Person **may correct that error by adjusting the
- *        Tax in any Tax Return filed subsequent** to the discovery of such error».
- *   ف٣ · «if the understatement of Net Tax … is **less than five thousand (5,000) SAR**, the
- *        Taxable Person may correct that error by adjusting the Net Tax **in its next Tax Return**».
- *   ف٤ · «No correction … relating to an **overstatement** … may be made **after a period of
- *        five (5) years** has passed from the end of the calendar year in which the Tax Period
- *        takes place».
+ * - An understatement must be notified to ZATCA within 20 days by correcting the original
+ *   return, unless it is below the limit, in which case it is corrected in the return of the
+ *   period of discovery (Corrections section).
+ * - An overstatement may be corrected in any later return, but not after five years from the
+ *   end of the calendar year of the corrected period.
  *
- * ⚠️ **والفرقُ بين الفقرتين ليس تفصيلاً**: نقصٌ يبلغ خمسةَ آلافٍ **لا يُبتلع في إقرارٍ تالٍ**
- * بل يوجب إشعارَ الهيئة خلال عشرين يوماً. فنظامٌ يقبله في خانة التصحيحات **يجعل التاجر
- * يظنّ أنه امتثل وهو لم يُشعر** — وهو أسوأُ من رفضٍ يقول له ما يفعل.
+ * The limit is 15,000 SAR as amended by Board resolution 01-06-24: ZATCA Guideline for
+ * Amendments to the VAT Implementing Regulation (April 2025) example 25, and ZATCA Guideline
+ * for Tax Invoicing and Records (May 2026) section 10.4. The older English edition (2021)
+ * still reads 5,000.
  */
 
-/** حدُّ ما يجوز استدراكُه في الإقرار التالي بدل إشعار الهيئة (م٦٣/٣). */
-export const CORRECTION_UNDERSTATEMENT_LIMIT = 5000;
+/** Below this understatement the correction goes into a later return instead of a notice. */
+export const CORRECTION_UNDERSTATEMENT_LIMIT = 15000;
 
-/** مدّةُ سقوط تصحيح الزيادة — من **نهاية السنة التقويمية** لتلك الفترة (م٦٣/٤). */
+/** Years after the end of the calendar year of the period that an overstatement stays correctable. */
 export const CORRECTION_OVERSTATEMENT_YEARS = 5;
 
 /**
- * **رسالةُ «تغيّر بعد التقديم» — من الحدّ نفسِه وبالاتجاه** (م٦٣).
- *
- * ⚠️ **العطلُ الذي أنشأها** (قِيس 2026-09-23): كانت نصّاً مكتوباً يقول للتاجر «نقصٌ **دون 15,000 ريال** يجوز إدراجُه
- * في الإقرار التالي» — **والنصُّ المقروء «less than five thousand (5,000) SAR»**، والحدُّ في الشيفرة `5000`
- * (`CORRECTION_UNDERSTATEMENT_LIMIT`)؛ وكانت توجب «التصحيحَ خلال عشرين يوماً» على كلِّ تغيّر، **والعشرون للنقص وحدَه**
- * (ف١) والزيادةُ تُصحَّح في أيّ إقرارٍ لاحق (ف٢). فتاجرٌ بنقصٍ بين الحدّين **يظنّ أنه أُعفي من الإشعار وهو ملزَم**.
- *
- * فالرقمُ يُقرأ من الثابت نفسِه الذي يحكم به `judgeCorrection`، **والاتجاهُ من الفرق**: الموجبُ نقصٌ في الضريبة
- * المستحقّة عمّا قُدِّم، والسالبُ زيادة.
+ * Note shown when a return changed after it was filed. The figure comes from the same constant
+ * judgeCorrection uses, and the direction from the difference: positive is an understatement
+ * of the tax due against what was filed, negative an overstatement.
  */
 export function filedChangeNote(filedNet: number, currentNet: number): string {
   const diff = round2(currentNet - filedNet);
