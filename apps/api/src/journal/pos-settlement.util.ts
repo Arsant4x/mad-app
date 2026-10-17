@@ -1,4 +1,5 @@
 import { Prisma } from '@mad-app/db';
+import { CASH_IN_TRANSIT_CODE } from '../accounts/code-bands';
 import { round2 } from '../common/money/rounding';
 import { createJournalEntry, PostingLine } from './journal-posting.util';
 
@@ -53,8 +54,8 @@ export async function getOrCreateAccountByCode(
   });
 }
 
-/** «نقدٌ في الطريق» (ق-١٢٦١ ج — ⑦A3): بين الأدراج (1010–1099) والذمم (1200) — رمزٌ مشتقٌّ من موضعه، «أو ما يُقرَّر». */
-export const CASH_IN_TRANSIT_CODE = '1190';
+/** Cash in transit: the code lives with the code bands, which reserve it inside the first bank band. */
+export { CASH_IN_TRANSIT_CODE };
 export const CASH_IN_TRANSIT_NAME = 'نقد في الطريق';
 /**
  * عمولاتُ شبكة المدفوعات (ق-١٢٦١ ج — ⑦A2): حسابٌ مستقلّ لا `5300` — كتلف `5800` وعجز `5900`: «كم تأخذ الشبكةُ من

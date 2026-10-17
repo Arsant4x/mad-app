@@ -31,7 +31,15 @@ import { Prisma } from '@mad-app/db';
 export interface CodeBand {
   min: number;
   max: number;
+  /** Fixed codes inside the band: never issued and never counted as used, capacity or remaining. */
+  reserved?: number[];
 }
+
+/**
+ * Cash in transit: a fixed code that already sits inside the first bank band, so the band reserves it.
+ * Defined here, not in the journal utilities, so this file keeps no imports that could form a cycle.
+ */
+export const CASH_IN_TRANSIT_CODE = '1190';
 
 export interface CodeBandGroup {
   /** مفتاحٌ ثابت تقرؤه الواجهة. */
@@ -42,7 +50,7 @@ export interface CodeBandGroup {
 }
 
 export const BANK_BANDS: CodeBand[] = [
-  { min: 1100, max: 1199 },
+  { min: 1100, max: 1199, reserved: [Number(CASH_IN_TRANSIT_CODE)] },
   // النطاق الثاني (ق-٢٩٥) — يبدأ بعد `1600` (تقبيل وحقوق انتفاع) وينتهي دون
   // `2000` (بداية الخصوم في الدليل الافتراضي).
   { min: 1601, max: 1999 },
@@ -89,30 +97,36 @@ export const CODE_BAND_GROUPS: CodeBandGroup[] = [
   { key: 'drawer', name: 'حسابات الأدراج', bands: DRAWER_BANDS },
 ];
 
-/** الرموزُ الصحيحةُ الواقعة في أيٍّ من نطاقات المجموعة. */
+const isReserved = (n: number, b: CodeBand) => (b.reserved ?? []).includes(n);
+
+/** Reserved codes of the band that lie strictly above `after`. */
+const reservedAbove = (b: CodeBand, after: number) => (b.reserved ?? []).filter((r) => r > after && r <= b.max).length;
+
+/** Integer codes inside one of the group's bands, without the bands' reserved codes. */
 function numericCodes(codes: string[], bands: CodeBand[]): number[] {
   return codes
     .map((c) => Number(c))
-    .filter((n) => Number.isInteger(n) && bands.some((b) => n >= b.min && n <= b.max));
+    .filter((n) => Number.isInteger(n) && bands.some((b) => n >= b.min && n <= b.max && !isReserved(n, b)));
 }
 
 /**
- * الرمزُ التالي — **`MAX+1` داخل النطاق، ثم انتقالٌ إلى الذي يليه**.
- * يعود `null` حين تنفد النطاقاتُ كلُّها.
+ * The next code: `MAX+1` inside a band, skipping its reserved codes, then on to the next band.
+ * Returns `null` when every band is full.
  */
 export function nextCodeInBands(codes: string[], bands: CodeBand[]): number | null {
   const used = numericCodes(codes, bands);
   for (const band of bands) {
     const inBand = used.filter((n) => n >= band.min && n <= band.max);
-    const candidate = (inBand.length ? Math.max(...inBand) : band.min - 1) + 1;
+    let candidate = (inBand.length ? Math.max(...inBand) : band.min - 1) + 1;
+    while (candidate <= band.max && isReserved(candidate, band)) candidate += 1;
     if (candidate <= band.max) return candidate;
   }
   return null;
 }
 
-/** السعةُ الكلّية للمجموعة — مجموعُ خانات نطاقاتها. */
+/** Total issuable slots of the group: the bands' widths without their reserved codes. */
 export function bandCapacity(bands: CodeBand[]): number {
-  return bands.reduce((sum, b) => sum + (b.max - b.min + 1), 0);
+  return bands.reduce((sum, b) => sum + (b.max - b.min + 1) - reservedAbove(b, b.min - 1), 0);
 }
 
 /**
@@ -127,7 +141,7 @@ export function bandRemaining(codes: string[], bands: CodeBand[]): number {
   return bands.reduce((sum, b) => {
     const inBand = used.filter((n) => n >= b.min && n <= b.max);
     const highest = inBand.length ? Math.max(...inBand) : b.min - 1;
-    return sum + (b.max - highest);
+    return sum + (b.max - highest) - reservedAbove(b, highest);
   }, 0);
 }
 
