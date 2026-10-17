@@ -49,6 +49,7 @@
     "notes": "ملاحظات",
     "allocate_title": "توزيع السند على الفواتير المفتوحة",
     "auto_allocate": "توزيع تلقائي (الأقدم أولاً)",
+    "other_currency_excluded": "فواتير مفتوحة لم تظهر هنا لأنها بعملة غير {{currency}} عملة السند: {{n}}",
     "col_invoice": "الفاتورة",
     "col_total": "الإجمالي",
     "col_remaining": "المتبقي",

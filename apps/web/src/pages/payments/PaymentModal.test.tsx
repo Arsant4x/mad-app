@@ -6,6 +6,8 @@ import * as payments from '../../api/payments';
 import { listCustomers } from '../../api/customers';
 import { listBranches } from '../../api/branches';
 import { listBanks } from '../../api/banks';
+import type { Currency } from '../../api/currencies';
+import { StaticCurrencies } from '../../components/currency/CurrencyContext';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (20.0 ث).
 //    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
@@ -15,6 +17,18 @@ vi.mock('../../api/payments');
 vi.mock('../../api/customers', () => ({ listCustomers: vi.fn() }));
 vi.mock('../../api/branches', () => ({ listBranches: vi.fn() }));
 vi.mock('../../api/banks', () => ({ listBanks: vi.fn() }));
+
+const currency = (code: string, isBase = false): Currency => ({ id: code, code, name: code, symbol: null, isBase, rate: '1' });
+const companyCurrencies = [currency('SAR', true), currency('USD')];
+
+// The modal reads the base currency from the signed-in shell, as in the app.
+function renderModal(onSaved: () => Promise<void>) {
+  return render(
+    <StaticCurrencies currencies={companyCurrencies}>
+      <PaymentModal onCancel={() => {}} onSaved={onSaved} />
+    </StaticCurrencies>,
+  );
+}
 
 /** ④A1 — فائضُ سند القبض فوق المخصَّص يُعلَن مصيرُه في الشاشة ويُرسَل كما أُعلن؛ ولا يُفترض. */
 describe('سندُ القبض — مصيرُ الفائض غير المخصَّص (④A1)', () => {
@@ -31,7 +45,7 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
 
   it('فائضٌ بلا إعلانٍ يُوقَف قبل الإرسال؛ والمعلَنُ دفعةً مقدَّمة يُرسَل بعلَمه', async () => {
     const onSaved = vi.fn().mockResolvedValue(undefined);
-    render(<PaymentModal onCancel={() => {}} onSaved={onSaved} />);
+    renderModal(onSaved);
     await screen.findByRole('option', { name: 'عميل الدفعة' });
     await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'c1');
     fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '1150' } });
@@ -60,7 +74,7 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     vi.mocked(payments.listOpenInvoices).mockResolvedValue([
       { id: 'i1', no: 'INV-2026-0001', issueDate: '2026-06-01', dueDate: '2026-06-30', total: '400.00', currency: 'SAR', status: 'DUE', allocated: '0.00', remaining: '400.00' },
     ]);
-    render(<PaymentModal onCancel={() => {}} onSaved={vi.fn().mockResolvedValue(undefined)} />);
+    renderModal(vi.fn().mockResolvedValue(undefined));
     await screen.findByRole('option', { name: 'عميل الدفعة' });
     await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'c1');
     await screen.findByText('INV-2026-0001');
@@ -79,7 +93,7 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     ]);
     // الأولى تنقطع (لا جوابَ يصل)، والثانيةُ تنجح — والمفتاحُ واحد، فالخادمُ يعيد السندَ إن كانت الأولى كتبته.
     vi.mocked(payments.createPayment).mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce({} as payments.Payment);
-    render(<PaymentModal onCancel={() => {}} onSaved={vi.fn().mockResolvedValue(undefined)} />);
+    renderModal(vi.fn().mockResolvedValue(undefined));
     await screen.findByRole('option', { name: 'عميل الدفعة' });
     await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'c1');
     await screen.findByText('INV-2026-0002');
@@ -92,5 +106,38 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     expect(typeof first[1]).toBe('string');
     expect(String(first[1]).length).toBeGreaterThanOrEqual(8);
     expect(second[1]).toBe(first[1]);
+  });
+});
+
+describe('Receipt voucher modal: allocation in the voucher currency only', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(listCustomers).mockResolvedValue([
+      { archived: false, id: 'c1', name: 'عميل الدفعة', kind: 'NATURAL', otherIdScheme: null, otherIdOnFile: false, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00' },
+    ]);
+    vi.mocked(listBranches).mockResolvedValue([]);
+    vi.mocked(listBanks).mockResolvedValue([]);
+    // The server orders by issue date, so the older USD invoice comes first.
+    vi.mocked(payments.listOpenInvoices).mockResolvedValue([
+      { id: 'i-usd', no: 'INV-2026-0101', issueDate: '2026-04-01', dueDate: '2026-04-30', total: '200.00', currency: 'USD', status: 'DUE', allocated: '0.00', remaining: '200.00' },
+      { id: 'i-sar', no: 'INV-2026-0102', issueDate: '2026-05-01', dueDate: '2026-05-31', total: '300.00', currency: 'SAR', status: 'DUE', allocated: '0.00', remaining: '300.00' },
+    ]);
+    vi.mocked(payments.createPayment).mockResolvedValue({} as payments.Payment);
+  });
+
+  it('lists and auto allocates only the invoices in the base currency, and says how many were left out', async () => {
+    renderModal(vi.fn().mockResolvedValue(undefined));
+    await screen.findByRole('option', { name: 'عميل الدفعة' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'c1');
+    await screen.findByText('INV-2026-0102');
+    expect(screen.queryByText('INV-2026-0101')).toBeNull();
+    expect(screen.getByTestId('other-currency-excluded')).toHaveTextContent('1');
+    expect(screen.getByTestId('other-currency-excluded')).toHaveTextContent('SAR');
+
+    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '300' } });
+    await userEvent.click(screen.getByText('توزيع تلقائي (الأقدم أولاً)'));
+    await userEvent.click(screen.getByText('تسجيل السند'));
+    expect(vi.mocked(payments.createPayment)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(payments.createPayment).mock.calls[0][0].allocations).toEqual([{ invoiceId: 'i-sar', amount: 300 }]);
   });
 });

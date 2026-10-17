@@ -5,6 +5,7 @@ import { listBranches, type Branch } from '../../api/branches';
 import type { Purchase } from '../../api/purchases';
 import { createSupplierPayment, listOpenPurchases, type OpenPurchase, type SupplierPaymentInputMethod } from '../../api/supplierPayments';
 import { newRequestKey } from '../../api/idempotency';
+import { useCurrency } from '../../components/currency/CurrencyContext';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 
@@ -43,7 +44,18 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
     listOpenPurchases(purchase.supplierId).then(setOpen);
   }, [purchase.supplierId]);
 
-  const allocatedSum = useMemo(() => Object.values(alloc).reduce((s, v) => s + (parseFloat(v) || 0), 0), [alloc]);
+  // The voucher is in the base currency (this modal has no currency picker), and the server refuses
+  // allocating it to a purchase in another currency, so only base currency purchases are offered.
+  const baseCurrency = useCurrency()?.code;
+  const allocatable = useMemo(() => (baseCurrency ? open.filter((p) => p.currency === baseCurrency) : []), [open, baseCurrency]);
+  const excludedCount = baseCurrency ? open.length - allocatable.length : 0;
+  // The purchase the modal was opened from starts allocated, and drops out if it is in another currency.
+  const allocEntries = useMemo(() => {
+    const ids = new Set(allocatable.map((p) => p.id));
+    return Object.entries(alloc).filter(([id]) => ids.has(id));
+  }, [alloc, allocatable]);
+
+  const allocatedSum = useMemo(() => allocEntries.reduce((s, [, v]) => s + (parseFloat(v) || 0), 0), [allocEntries]);
   const paymentAmount = parseFloat(amount) || 0;
   const unallocated = round2(paymentAmount - allocatedSum);
 
@@ -51,7 +63,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
   function autoAllocate() {
     let left = paymentAmount;
     const next: Record<string, string> = {};
-    for (const p of open) {
+    for (const p of allocatable) {
       if (left <= 0) break;
       const take = Math.min(left, num0(p.remaining));
       if (take > 0) {
@@ -87,7 +99,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
         bankId: bankId || undefined,
         reference: reference.trim() || undefined,
         notes: notes.trim() || undefined,
-        allocations: Object.entries(alloc)
+        allocations: allocEntries
           .map(([purchaseId, v]) => ({ purchaseId, amount: parseFloat(v) || 0 }))
           .filter((a) => a.amount > 0),
       }, requestKey);
@@ -171,6 +183,11 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
             {t('suppliers.payment.auto_allocate')}
           </button>
         </div>
+        {excludedCount > 0 && (
+          <p className="hint" data-testid="other-currency-excluded">
+            {t('suppliers.payment.other_currency_excluded', { n: excludedCount, currency: baseCurrency })}
+          </p>
+        )}
         <table>
           <thead>
             <tr>
@@ -182,14 +199,14 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
             </tr>
           </thead>
           <tbody>
-            {open.length === 0 && (
+            {allocatable.length === 0 && excludedCount === 0 && (
               <tr>
                 <td colSpan={5}>
                   <div className="empty-state">{t('suppliers.payment.empty')}</div>
                 </td>
               </tr>
             )}
-            {open.map((p) => (
+            {allocatable.map((p) => (
               <tr key={p.id}>
                 <td className="num">{p.no}</td>
                 <td className="num">{dfmt(p.date)}</td>
