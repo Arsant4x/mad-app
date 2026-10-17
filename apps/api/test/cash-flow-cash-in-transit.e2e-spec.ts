@@ -52,7 +52,7 @@ describe('Cash flow treats cash in transit as cash (e2e)', () => {
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
     await app.close();
-  }, 60000);
+  });
 
   it('[SPEC 10.3] an unconfirmed drawer deposit stays in cash and is not an operating outflow', async () => {
     const res = await auth(http().post('/banks/cash-deposits')).send({ drawerId, bankId, amount: 400, date: '2026-06-30' }).expect(201);
