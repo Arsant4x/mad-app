@@ -25,7 +25,8 @@ describe('نطاقاتُ الترقيم وسقفُها (ق-٢٩٥)', () => {
 
   it('⭐ والباقي يُقاس بأعلى ما صدر لا بعدد الأحياء — وهي العلّة كلُّها', () => {
     // فجوةٌ من ٤٩ خانة بين 1100 و1150 **لا تُحسب**: المولّد لا يعود إليها.
-    expect(bandRemaining(['1100', '1150'], BANK_BANDS)).toBe(1199 - 1150 + 399);
+    // The reserved cash in transit code 1190 above 1150 is not a free slot either.
+    expect(bandRemaining(['1100', '1150'], BANK_BANDS)).toBe(1199 - 1150 - 1 + 399);
     // نطاقٌ نفد ⟵ ما بقي هو النطاق الثاني كاملاً.
     expect(bandRemaining(range(1100, 1199), BANK_BANDS)).toBe(399);
     // ولا شيء صدر ⟵ السعةُ كاملة.
