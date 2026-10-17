@@ -9,6 +9,7 @@ import {
   type ContractAttachment,
 } from '../../api/contracts';
 import { ACCEPTED_FILE_TYPES, MAX_FILE_BYTES } from '../../api/files';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -28,6 +29,9 @@ function humanSize(bytes: number): string {
  */
 export function AttachmentsSection({ contractId }: { contractId: string }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAttach = can('contracts', 'add');
+  const canDelete = can('contracts', 'delete');
   const [items, setItems] = useState<ContractAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -91,12 +95,14 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{t('contracts.attachments.title', { n: items.length })}</span>
-        <>
-          <input ref={inputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={onPick} style={{ display: 'none' }} />
-          <button className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? t('contracts.attachments.uploading') : t('contracts.attachments.attach')}
-          </button>
-        </>
+        {canAttach && (
+          <>
+            <input ref={inputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={onPick} style={{ display: 'none' }} />
+            <button className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
+              {busy ? t('contracts.attachments.uploading') : t('contracts.attachments.attach')}
+            </button>
+          </>
+        )}
       </div>
 
       <p className="hint" style={{ marginBottom: 6 }}>{t('contracts.attachments.hint')}</p>
@@ -140,7 +146,7 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
                 <td className="num">{humanSize(att.size)}</td>
                 <td className="num">{dfmt(att.uploadedAt)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  {confirmingId === att.id ? (
+                  {!canDelete ? null : confirmingId === att.id ? (
                     <>
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => remove(att)}>
                         {t('contracts.attachments.confirm_delete')}

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createHandover, deleteHandover, signHandover, updateHandover, type Contract, type ContractHandover, type HandoverItemInput, type HandoverType, type ItemCondition, listHandoverPhotos, uploadHandoverPhoto, openHandoverPhoto, deleteHandoverPhoto, type HandoverPhoto } from '../../api/contracts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, today } from '../../lib/format';
 import i18n from '../../i18n';
 import { formatDateTime } from '../../i18n/format';
@@ -47,6 +48,12 @@ const SUGGESTED_ITEMS = [
  */
 export function HandoversSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // A new form or photo adds, a draft edit edits, signing reviews, removing a draft or photo deletes.
+  const canAdd = can('contracts', 'add');
+  const canEdit = can('contracts', 'edit');
+  const canSign = can('contracts', 'review');
+  const canDelete = can('contracts', 'delete');
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [signingId, setSigningId] = useState<string | null>(null);
@@ -152,7 +159,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{t('contracts.handovers.title', { n: contract.handovers.length })}</span>
-        {contract.status !== 'CANCELLED' && !editing && (
+        {canAdd && contract.status !== 'CANCELLED' && !editing && (
           <button
             className="btn btn-ghost"
             onClick={() => {
@@ -301,23 +308,29 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
             </div>
             {h.status === 'DRAFT' && !editing && (
               <div style={{ display: 'flex', gap: 4 }}>
-                <button className="btn btn-ghost" onClick={() => loadForEdit(h)}>
-                  {t('contracts.handovers.edit')}
-                </button>
+                {canEdit && (
+                  <button className="btn btn-ghost" onClick={() => loadForEdit(h)}>
+                    {t('contracts.handovers.edit')}
+                  </button>
+                )}
                 <button className="btn btn-ghost" onClick={() => togglePhotos(h.id)}>
                   {t('contracts.handovers.photos')}
                 </button>
-                <button className="btn btn-ghost" onClick={() => toggleSigning(h)}>
-                  {t('contracts.handovers.sign')}
-                </button>
-                <button
-                  className="btn btn-ghost"
-                  style={{ color: 'var(--rose)' }}
-                  disabled={busy}
-                  onClick={() => run(() => deleteHandover(contract.id, h.id))}
-                >
-                  {t('contracts.handovers.delete')}
-                </button>
+                {canSign && (
+                  <button className="btn btn-ghost" onClick={() => toggleSigning(h)}>
+                    {t('contracts.handovers.sign')}
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ color: 'var(--rose)' }}
+                    disabled={busy}
+                    onClick={() => run(() => deleteHandover(contract.id, h.id))}
+                  >
+                    {t('contracts.handovers.delete')}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -343,7 +356,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
             <div className="card" style={{ background: '#faf9f5', marginTop: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <b>{t('contracts.handovers.photos_title')}</b>
-                {h.status !== 'SIGNED' && (
+                {canAdd && h.status !== 'SIGNED' && (
                   <>
                     <select value={photoItemId} onChange={(e) => setPhotoItemId(e.target.value)} style={{ maxWidth: 200 }}>
                       <option value="">{t('contracts.handovers.whole_form')}</option>
@@ -378,7 +391,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                   <button className="btn btn-ghost btn-sm" onClick={() => void openHandoverPhoto(ph.id)}>
                     {t('contracts.handovers.view')}
                   </button>
-                  {h.status !== 'SIGNED' && (
+                  {canDelete && h.status !== 'SIGNED' && (
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={async () => {
@@ -399,7 +412,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
             </div>
           )}
 
-          {signingId === h.id && (
+          {canSign && signingId === h.id && (
             <div style={{ marginTop: 8 }}>
               <div className="field">
                 <label>{t('contracts.handovers.signer_name')}</label>

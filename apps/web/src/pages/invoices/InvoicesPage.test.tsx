@@ -20,6 +20,7 @@ vi.mock('../../api/customers', () => ({ listCustomers: vi.fn(() => Promise.resol
 vi.mock('../../api/branches', () => ({ listBranches: vi.fn(() => Promise.resolve([])) }));
 vi.mock('../../api/zatca', () => ({ submitInvoiceToZatca: vi.fn() }));
 vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ user: { actorType: 'COMPANY' } }) }));
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 vi.mock('./InvoiceListView', () => ({ InvoiceListView: ({ onNew }: { onNew: () => void }) => <button onClick={onNew}>open builder</button> }));
 vi.mock('./InvoiceBuilderView', () => ({
   InvoiceBuilderView: ({ onSave }: { onSave: (d: typeof draft) => void }) => <button onClick={() => onSave(draft)}>save invoice</button>,

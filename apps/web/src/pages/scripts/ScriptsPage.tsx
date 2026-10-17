@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { createScript, deleteScript, listScripts, setScriptArchived, updateScript, type MessageScript, type ScriptAudience, type ScriptInput } from '../../api/scripts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { ScriptModal } from './ScriptModal';
@@ -16,6 +17,10 @@ const audienceMeta = (t: TFunction): Record<ScriptAudience, { label: string; tag
 
 export function ScriptsPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('scripts', 'add');
+  const canEdit = can('scripts', 'edit');
+  const canDelete = can('scripts', 'delete');
   const AUDIENCE_META = audienceMeta(t);
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,9 +83,11 @@ export function ScriptsPage() {
           <div className="page-sub">{t('scripts.subtitle')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('scripts.new_button')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('scripts.new_button')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -135,9 +142,9 @@ export function ScriptsPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: t('scripts.menu.edit'), onClick: () => setModal({ mode: 'edit', script: s }) },
-                      { label: s.archived ? t('scripts.menu.unarchive') : t('scripts.menu.archive'), onClick: () => setScriptArchived(s.id, !s.archived).then(reload) },
-                      { label: t('scripts.menu.delete'), onClick: () => setPendingDelete(s), danger: true },
+                      canEdit && { label: t('scripts.menu.edit'), onClick: () => setModal({ mode: 'edit', script: s }) },
+                      canEdit && { label: s.archived ? t('scripts.menu.unarchive') : t('scripts.menu.archive'), onClick: () => setScriptArchived(s.id, !s.archived).then(reload) },
+                      canDelete && { label: t('scripts.menu.delete'), onClick: () => setPendingDelete(s), danger: true },
                     ]}
                   />
                 </td>

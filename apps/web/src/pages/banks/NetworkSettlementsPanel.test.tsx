@@ -9,6 +9,8 @@ import * as banks from '../../api/banks';
 vi.setConfig({ testTimeout: 43_000 });
 
 vi.mock('../../api/banks');
+// Every action held: this file measures the panel, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 const bankRows: banks.Bank[] = [{ archived: false, id: 'b1', branchId: null, kind: 'BANK_ACCOUNT', name: 'بنك الشبكة', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' }];
 

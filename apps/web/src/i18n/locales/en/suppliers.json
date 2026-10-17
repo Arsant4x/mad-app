@@ -139,6 +139,7 @@
       "OTHER": "Other expenses"
     },
     "months_required": "Enter the number of amortization months (at least one).",
+    "supplier_existing": "Choose an existing supplier. Adding a new supplier needs the permission to add on the suppliers screen.",
     "title_edit": "Edit purchase invoice",
     "title_new": "Record purchase invoice / commitment",
     "supplier": "Supplier / party",

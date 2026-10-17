@@ -2,6 +2,7 @@ import { badgeOf } from '../../lib/statusBadge';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract, type DeclaredChargeTaxTreatment, listClaimAttachments, uploadClaimAttachment, claimAttachmentDownloadUrl, deleteClaimAttachment, type ClaimAttachment } from '../../api/contracts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 import { CHARGE_TREATMENT_LABEL, CLAIM_TREATMENT_OPTIONS } from './chargeTaxMeta';
@@ -35,6 +36,12 @@ const KINDS = (Object.keys(KIND_LABEL) as ClaimKind[]).filter((k): k is ManualCl
  */
 export function ClaimsSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Raising a claim or attaching a file adds, collecting records, waiving reviews, removing a file deletes.
+  const canAdd = can('contracts', 'add');
+  const canCollect = can('contracts', 'record');
+  const canWaive = can('contracts', 'review');
+  const canDelete = can('contracts', 'delete');
   const [adding, setAdding] = useState(false);
   const [waivingId, setWaivingId] = useState<string | null>(null);
   const [waiveReason, setWaiveReason] = useState('');
@@ -104,7 +111,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
         <span>
           {t('contracts.claims.title', { n: contract.claims.length })}{outstanding > 0 && <span className="hint">{t('contracts.claims.outstanding', { amount: fmt(contract.claimsOutstanding ?? 0) })}</span>}
         </span>
-        {contract.status !== 'CANCELLED' && (
+        {canAdd && contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
             {adding ? t('contracts.claims.cancel') : t('contracts.claims.add')}
           </button>
@@ -113,7 +120,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
 
       {error && <p className="error-text">{error}</p>}
 
-      {adding && (
+      {canAdd && adding && (
         <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
@@ -231,19 +238,23 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
               <td>
                 {c.status === 'OPEN' && (
                   <>
-                    <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => payClaim(contract.id, c.id, today()))}>
-                      {t('contracts.claims.collect')}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => {
-                        setWaivingId(waivingId === c.id ? null : c.id);
-                        setWaiveReason('');
-                        setError(null);
-                      }}
-                    >
-                      {t('contracts.claims.waive')}
-                    </button>
+                    {canCollect && (
+                      <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => payClaim(contract.id, c.id, today()))}>
+                        {t('contracts.claims.collect')}
+                      </button>
+                    )}
+                    {canWaive && (
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setWaivingId(waivingId === c.id ? null : c.id);
+                          setWaiveReason('');
+                          setError(null);
+                        }}
+                      >
+                        {t('contracts.claims.waive')}
+                      </button>
+                    )}
                   </>
                 )}
                 <button className="btn btn-ghost" onClick={() => openAttachments(c.id)}>
@@ -255,7 +266,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
         </tbody>
       </table>
 
-      {waivingId && (
+      {canWaive && waivingId && (
         <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
           <div className="field">
             <label>{t('contracts.claims.waive_reason')}</label>
@@ -287,10 +298,12 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
         <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <b>{t('contracts.claims.attachments_title')}</b>
-            <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', marginInlineStart: 'auto' }}>
-              {uploading ? t('contracts.claims.uploading') : t('contracts.claims.attach')}
-              <input ref={fileRef} type="file" style={{ display: 'none' }} disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} />
-            </label>
+            {canAdd && (
+              <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', marginInlineStart: 'auto' }}>
+                {uploading ? t('contracts.claims.uploading') : t('contracts.claims.attach')}
+                <input ref={fileRef} type="file" style={{ display: 'none' }} disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} />
+              </label>
+            )}
           </div>
           {/* Claim attachments go to the regular store and there is no store for tenant IDs (regulation 2289 art. 28/14), so the limit is stated where the upload happens. */}
           <p className="warn-text" style={{ margin: '8px 0' }}>{t('contracts.claims.id_warning')}</p>
@@ -302,20 +315,22 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
               <button className="btn btn-ghost btn-sm" onClick={async () => window.open((await claimAttachmentDownloadUrl(a.id)).url, '_blank')}>
                 {t('contracts.claims.download')}
               </button>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={async () => {
-                  try {
-                    await deleteClaimAttachment(a.id);
-                    setAttachments(await listClaimAttachments(attachFor));
-                  } catch (e) {
-                    const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-                    setError(d?.message ?? t('contracts.claims.delete_failed'));
-                  }
-                }}
-              >
-                {t('contracts.claims.delete')}
-              </button>
+              {canDelete && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={async () => {
+                    try {
+                      await deleteClaimAttachment(a.id);
+                      setAttachments(await listClaimAttachments(attachFor));
+                    } catch (e) {
+                      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+                      setError(d?.message ?? t('contracts.claims.delete_failed'));
+                    }
+                  }}
+                >
+                  {t('contracts.claims.delete')}
+                </button>
+              )}
             </div>
           ))}
         </div>

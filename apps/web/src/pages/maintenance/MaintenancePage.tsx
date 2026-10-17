@@ -44,8 +44,11 @@ const OPEN_STATUSES: MaintenanceStatus[] = ['REPORTED', 'ASSIGNED', 'IN_PROGRESS
 export function MaintenancePage() {
   const { t } = useTranslation();
   const { can } = usePermissions();
-  // Assign and start need edit, cancel needs delete: the server refuses them otherwise.
+  // A new request adds, assign and start edit, complete records, close reviews, cancel deletes: the server refuses them otherwise.
+  const canAdd = can('maintenance', 'add');
   const canEdit = can('maintenance', 'edit');
+  const canComplete = can('maintenance', 'record');
+  const canClose = can('maintenance', 'review');
   const canCancel = can('maintenance', 'delete');
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -123,16 +126,18 @@ export function MaintenancePage() {
           <div className="page-sub">{t('maintenance.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setAdding((v) => !v)} disabled={properties.length === 0}>
-            {adding ? t('maintenance.page.cancel') : t('maintenance.page.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setAdding((v) => !v)} disabled={properties.length === 0}>
+              {adding ? t('maintenance.page.cancel') : t('maintenance.page.new')}
+            </button>
+          )}
         </div>
       </div>
 
       {properties.length === 0 && <div className="empty-state">{t('maintenance.page.no_properties')}</div>}
       {error && <p className="error-text">{error}</p>}
 
-      {adding && (
+      {canAdd && adding && (
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
@@ -297,12 +302,12 @@ export function MaintenancePage() {
                         {t('maintenance.page.action_start')}
                       </button>
                     )}
-                    {r.status === 'IN_PROGRESS' && (
+                    {canComplete && r.status === 'IN_PROGRESS' && (
                       <button className="btn btn-ghost" onClick={() => openAction(r.id, 'complete')}>
                         {t('maintenance.page.action_complete')}
                       </button>
                     )}
-                    {r.status === 'DONE' && (
+                    {canClose && r.status === 'DONE' && (
                       <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => closeMaintenance(r.id, today()))}>
                         {t('maintenance.page.action_close')}
                       </button>

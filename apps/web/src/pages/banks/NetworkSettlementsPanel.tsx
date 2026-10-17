@@ -10,6 +10,7 @@ import {
   type NetworkSettlementList,
   type OpenNetworkReceipts,
 } from '../../api/banks';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { fmt, today } from '../../lib/format';
 import { round2 } from '../../lib/money';
 import i18n from '../../i18n';
@@ -27,6 +28,8 @@ const STATUS_LABEL: Record<NetworkSettlement['status'], { key: string; cls: stri
 
 export function NetworkSettlementsPanel({ banks, onClose }: { banks: Bank[]; onClose: () => void }) {
   const { t } = useTranslation();
+  // A settlement and its void both need record on banks; without it the panel only reads.
+  const canRecord = usePermissions().can('banks', 'record');
   const [data, setData] = useState<NetworkSettlementList | null>(null);
   const [open, setOpen] = useState<OpenNetworkReceipts | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +133,7 @@ export function NetworkSettlementsPanel({ banks, onClose }: { banks: Bank[]; onC
           </div>
         )}
 
+        {canRecord && (
         <div className="card">
           <strong>{t('banks.settlements.new')}</strong>
           <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
@@ -186,6 +190,7 @@ export function NetworkSettlementsPanel({ banks, onClose }: { banks: Bank[]; onC
             </div>
           )}
         </div>
+        )}
 
         {data && (
           <div className="card" style={{ padding: 0, marginTop: 12 }}>
@@ -230,7 +235,7 @@ export function NetworkSettlementsPanel({ banks, onClose }: { banks: Bank[]; onC
                       <span className={STATUS_LABEL[s.status].cls}>{t(STATUS_LABEL[s.status].key)}</span>
                     </td>
                     <td>
-                      {s.status === 'POSTED' && (
+                      {canRecord && s.status === 'POSTED' && (
                         <button className="btn link" onClick={() => voidOne(s)}>
                           {t('banks.void_reverse')}
                         </button>

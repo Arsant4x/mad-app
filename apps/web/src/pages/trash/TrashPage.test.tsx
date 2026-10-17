@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrashPage } from './TrashPage';
 
 vi.mock('../../api/trash', () => ({ listTrash: vi.fn(), purgeFromTrash: vi.fn(), restoreFromTrash: vi.fn() }));
+// Every action held: this file measures the retained record, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 import { listTrash } from '../../api/trash';
 

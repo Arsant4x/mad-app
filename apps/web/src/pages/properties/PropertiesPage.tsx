@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createProperty, deleteProperty, listProperties, setPropertyArchived, updateProperty, type Property, type PropertyInput } from '../../api/properties';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { listUnits, type Unit } from '../../api/units';
@@ -26,6 +27,10 @@ const ownershipLabel = (): Record<string, string> => ({
 
 export function PropertiesPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('properties', 'add');
+  const canEdit = can('properties', 'edit');
+  const canDelete = can('properties', 'delete');
   const [properties, setProperties] = useState<Property[]>([]);
   // Units drive the map pin colours, so they are fetched alongside.
   const [units, setUnits] = useState<Unit[]>([]);
@@ -91,9 +96,11 @@ export function PropertiesPage() {
           <div className="page-sub">{t('properties.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('properties.page.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('properties.page.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -153,10 +160,10 @@ export function PropertiesPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: t('properties.page.action_edit'), onClick: () => setModal({ mode: 'edit', property: p }) },
-                      { label: p.archived ? t('properties.page.action_unarchive') : t('properties.page.action_archive'), onClick: () => setPropertyArchived(p.id, !p.archived).then(reload) },
+                      canEdit && { label: t('properties.page.action_edit'), onClick: () => setModal({ mode: 'edit', property: p }) },
+                      canEdit && { label: p.archived ? t('properties.page.action_unarchive') : t('properties.page.action_archive'), onClick: () => setPropertyArchived(p.id, !p.archived).then(reload) },
                       '-',
-                      { label: t('properties.page.action_delete'), onClick: () => setPendingDelete(p), danger: true },
+                      canDelete && { label: t('properties.page.action_delete'), onClick: () => setPendingDelete(p), danger: true },
                     ]}
                   />
                 </td>

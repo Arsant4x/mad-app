@@ -10,6 +10,7 @@ import {
   type PurchaseAttachment,
 } from '../../api/purchases';
 import { ACCEPTED_FILE_TYPES, MAX_FILE_BYTES } from '../../api/files';
+import { usePermissions } from '../../auth/PermissionsContext';
 import i18n from '../../i18n';
 import { dfmt } from '../../lib/format';
 
@@ -27,6 +28,9 @@ function humanSize(bytes: number): string {
  */
 export function PurchaseAttachmentsModal({ purchase, onClose }: { purchase: Purchase; onClose: () => void }) {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAttach = can('suppliers', 'add');
+  const canDelete = can('suppliers', 'delete');
   const [items, setItems] = useState<PurchaseAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -98,10 +102,14 @@ export function PurchaseAttachmentsModal({ purchase, onClose }: { purchase: Purc
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <p className="hint" style={{ margin: 0 }}>{t('suppliers.attachments.hint')}</p>
-          <input ref={inputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={onPick} style={{ display: 'none' }} />
-          <button className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? t('suppliers.attachments.uploading') : t('suppliers.attachments.attach')}
-          </button>
+          {canAttach && (
+            <>
+              <input ref={inputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={onPick} style={{ display: 'none' }} />
+              <button className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
+                {busy ? t('suppliers.attachments.uploading') : t('suppliers.attachments.attach')}
+              </button>
+            </>
+          )}
         </div>
 
         {error && <p className="error-text">{error}</p>}
@@ -134,7 +142,7 @@ export function PurchaseAttachmentsModal({ purchase, onClose }: { purchase: Purc
                   <td className="num">{humanSize(att.size)}</td>
                   <td className="num">{dfmt(att.uploadedAt)}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {confirmingId === att.id ? (
+                    {!canDelete ? null : confirmingId === att.id ? (
                       <>
                         <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => remove(att)}>
                           {t('suppliers.attachments.confirm_delete')}

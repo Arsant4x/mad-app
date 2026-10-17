@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listPayments, reversePayment, type Payment } from '../../api/payments';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt, fmt } from '../../lib/format';
 import { num0 } from '../../lib/money';
@@ -15,6 +16,8 @@ import { PaymentModal } from './PaymentModal';
  */
 export function PaymentsPage() {
   const { t } = useTranslation();
+  // A voucher and its reversal both need record on payments.
+  const canRecord = usePermissions().can('payments', 'record');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -61,9 +64,11 @@ export function PaymentsPage() {
           <div className="page-sub">{t('payments.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            {t('payments.page.add')}
-          </button>
+          {canRecord && (
+            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+              {t('payments.page.add')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -132,7 +137,7 @@ export function PaymentsPage() {
                     )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {!isReversal && !p.prepaymentInvoice && (
+                    {canRecord && !isReversal && !p.prepaymentInvoice && (
                       <button className="btn btn-ghost btn-sm" onClick={() => setReversing(p)}>
                         {t('payments.page.reverse')}
                       </button>
@@ -145,7 +150,7 @@ export function PaymentsPage() {
         </table>
       </div>
 
-      {creating && (
+      {canRecord && creating && (
         <PaymentModal
           onCancel={() => setCreating(false)}
           onSaved={async () => {

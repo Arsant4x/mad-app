@@ -6,6 +6,8 @@ vi.mock('../../api/contracts', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   createClaim: vi.fn(),
 }));
+// Every action held: this file measures the tax treatment, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 import { createClaim } from '../../api/contracts';
 import { ClaimsSection } from './ClaimsSection';

@@ -11,6 +11,7 @@ import {
   type ClosureArchive,
   type DeletionRequest,
 } from '../../api/deletionRequests';
+import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
 import i18n from '../../i18n';
@@ -34,6 +35,9 @@ const KIND_KEY: Record<DeletionRequest['kind'], string> = {
  */
 export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
   const { t } = useTranslation();
+  // The requests are the owner's; an employee of a closed company reads the state and signs out.
+  const { user } = useAuth();
+  const isOwner = user?.actorType === 'COMPANY';
   const [account, setAccount] = useState<AccountClosureState | null>(null);
   const [req, setReq] = useState<DeletionRequest | null>(null);
   const [archive, setArchive] = useState<ClosureArchive | null>(null);
@@ -114,11 +118,14 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
             <span className="badge due">
               {t('subscription.closed.pending_badge', { kind: t(KIND_KEY[pending.kind]), date: dfmt(pending.createdAt) })}
             </span>
-            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(pending.id), t('subscription.common.err_withdraw'))}>
-              {t('subscription.common.withdraw')}
-            </button>
+            {isOwner && (
+              <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(pending.id), t('subscription.common.err_withdraw'))}>
+                {t('subscription.common.withdraw')}
+              </button>
+            )}
           </>
         ) : (
+          isOwner && (
           <>
             {windowOpen && (
               <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => requestReopening(), t('subscription.common.err_submit'))}>
@@ -131,6 +138,7 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
               </button>
             )}
           </>
+          )
         )}
         <button className="btn btn-ghost btn-sm" onClick={onLogout}>
           {t('subscription.common.logout')}
@@ -138,7 +146,7 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
       </div>
       {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
 
-      {confirmErase && (
+      {isOwner && confirmErase && (
         <ConfirmModal
           title={t('subscription.closed.erase_confirm_title')}
           body={t('subscription.closed.erase_confirm_body')}

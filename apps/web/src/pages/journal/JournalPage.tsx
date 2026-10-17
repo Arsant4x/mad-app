@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listAccounts, type Account } from '../../api/accounts';
 import { createJournalEntry, listJournalEntries, reverseJournalEntry, type CreateJournalEntryInput, type JournalEntry } from '../../api/journal';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { JournalBuilderView } from './JournalBuilderView';
 import { JournalListView } from './JournalListView';
@@ -13,6 +14,8 @@ const PAGE_SIZE = 25;
 
 export function JournalPage() {
   const { t } = useTranslation();
+  // A manual entry and its reversal both need record on the journal.
+  const canRecord = usePermissions().can('journal', 'record');
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -77,7 +80,7 @@ export function JournalPage() {
 
   if (loading) return null;
 
-  if (view.mode === 'builder') {
+  if (view.mode === 'builder' && canRecord) {
     return (
       <JournalBuilderView
         accounts={accounts}
@@ -98,10 +101,10 @@ export function JournalPage() {
         pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))}
         total={total}
         onPage={(p) => void reloadPage(p, search)}
-        onNew={() => void openBuilder()}
-        onReverse={(entry) => setPendingReverse(entry)}
+        onNew={canRecord ? () => void openBuilder() : undefined}
+        onReverse={canRecord ? (entry) => setPendingReverse(entry) : undefined}
       />
-      {pendingReverse && (
+      {canRecord && pendingReverse && (
         <ConfirmModal
           title={t('journal.reverse.title')}
           body={reverseError ?? t('journal.reverse.body', { no: pendingReverse.no })}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { createPurchase, deletePurchase, issueSupplierCreditNote, issueSupplierDebitNote, listPurchases, updatePurchase, type Purchase, type SupplierNoteInput } from '../../api/purchases';
 import { createSupplier, deleteSupplier, listSuppliers, setSupplierArchived, updateSupplier, type Supplier, type SupplierInput } from '../../api/suppliers';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -25,6 +26,12 @@ const PURCHASE_SORT_OPTIONS: { key: PurchaseSortKey; labelKey: string }[] = [
 
 export function SuppliersPage() {
   const { t } = useTranslation();
+  // Suppliers, purchases and notes add, edit and delete on the suppliers screen; a payment voucher records.
+  const { can } = usePermissions();
+  const canAdd = can('suppliers', 'add');
+  const canEdit = can('suppliers', 'edit');
+  const canDelete = can('suppliers', 'delete');
+  const canPay = can('suppliers', 'record');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -153,9 +160,11 @@ export function SuppliersPage() {
           <div className="page-sub">{t('suppliers.page.subtitle')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setSupplierModal({ mode: 'create' })}>
-            {t('suppliers.page.new_supplier')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setSupplierModal({ mode: 'create' })}>
+              {t('suppliers.page.new_supplier')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -203,10 +212,10 @@ export function SuppliersPage() {
                   <RowMenu
                     actions={[
                       { label: t('suppliers.page.action_view'), onClick: () => setDetailFor(s) },
-                      { label: t('suppliers.page.action_edit'), onClick: () => setSupplierModal({ mode: 'edit', supplier: s }) },
-                      { label: s.archived ? t('suppliers.page.action_unarchive') : t('suppliers.page.action_archive'), onClick: () => setSupplierArchived(s.id, !s.archived).then(reload) },
+                      canEdit && { label: t('suppliers.page.action_edit'), onClick: () => setSupplierModal({ mode: 'edit', supplier: s }) },
+                      canEdit && { label: s.archived ? t('suppliers.page.action_unarchive') : t('suppliers.page.action_archive'), onClick: () => setSupplierArchived(s.id, !s.archived).then(reload) },
                       '-',
-                      { label: t('suppliers.page.action_delete'), onClick: () => setPendingDeleteSupplier(s), danger: true },
+                      canDelete && { label: t('suppliers.page.action_delete'), onClick: () => setPendingDeleteSupplier(s), danger: true },
                     ]}
                   />
                 </td>
@@ -230,15 +239,17 @@ export function SuppliersPage() {
             <button className="menu-btn" title={t('suppliers.page.reverse_sort')} onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
               {sortDir === 'asc' ? '⬆' : '⬇'}
             </button>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => {
-                if (!suppliers.length) return;
-                setPurchaseModal({ mode: 'create' });
-              }}
-            >
-              {t('suppliers.page.new_purchase')}
-            </button>
+            {canAdd && (
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => {
+                  if (!suppliers.length) return;
+                  setPurchaseModal({ mode: 'create' });
+                }}
+              >
+                {t('suppliers.page.new_purchase')}
+              </button>
+            )}
           </div>
         </div>
         <table>
@@ -311,17 +322,17 @@ export function SuppliersPage() {
                           ? [{ label: t('suppliers.page.action_documents'), onClick: () => setAttachmentsFor(p) }]
                           : p.docType === 'PURCHASE'
                           ? [
-                              ...(p.status !== 'PAID' ? [{ label: t('suppliers.page.action_payment'), onClick: () => setPayingPurchase(p) }] : []),
-                              { label: t('suppliers.page.action_credit'), onClick: () => setNoteFor({ purchase: p, side: 'credit' }) },
-                              { label: t('suppliers.page.action_debit'), onClick: () => setNoteFor({ purchase: p, side: 'debit' }) },
-                              { label: t('suppliers.page.action_edit'), onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
+                              canPay && p.status !== 'PAID' && { label: t('suppliers.page.action_payment'), onClick: () => setPayingPurchase(p) },
+                              canAdd && { label: t('suppliers.page.action_credit'), onClick: () => setNoteFor({ purchase: p, side: 'credit' }) },
+                              canAdd && { label: t('suppliers.page.action_debit'), onClick: () => setNoteFor({ purchase: p, side: 'debit' }) },
+                              canEdit && { label: t('suppliers.page.action_edit'), onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
                               { label: t('suppliers.page.action_documents'), onClick: () => setAttachmentsFor(p) },
                               '-',
-                              { label: t('suppliers.page.action_delete'), onClick: () => setPendingDeletePurchase(p), danger: true },
+                              canDelete && { label: t('suppliers.page.action_delete'), onClick: () => setPendingDeletePurchase(p), danger: true },
                             ]
                           : [
-                              ...(p.docType === 'SUPPLIER_DEBIT_NOTE' && p.status !== 'PAID' ? [{ label: t('suppliers.page.action_payment'), onClick: () => setPayingPurchase(p) }] : []),
-                              {
+                              canPay && p.docType === 'SUPPLIER_DEBIT_NOTE' && p.status !== 'PAID' && { label: t('suppliers.page.action_payment'), onClick: () => setPayingPurchase(p) },
+                              canAdd && {
                                 label: p.docType === 'SUPPLIER_CREDIT_NOTE' ? t('suppliers.page.action_fix_debit') : t('suppliers.page.action_fix_credit'),
                                 onClick: () => setNoteFor({ purchase: p, side: p.docType === 'SUPPLIER_CREDIT_NOTE' ? 'debit' : 'credit' }),
                               },
@@ -363,13 +374,13 @@ export function SuppliersPage() {
           editing={purchaseModal.mode === 'edit' ? purchaseModal.purchase : null}
           onCancel={() => setPurchaseModal(null)}
           onSave={handleSavePurchase}
-          onCreateSupplier={handleCreateSupplierQuick}
+          onCreateSupplier={canAdd ? handleCreateSupplierQuick : undefined}
         />
       )}
 
       {attachmentsFor && <PurchaseAttachmentsModal purchase={attachmentsFor} onClose={() => setAttachmentsFor(null)} />}
 
-      {payingPurchase && <SupplierPaymentModal purchase={payingPurchase} onCancel={() => setPayingPurchase(null)} onSaved={afterPaymentSaved} />}
+      {canPay && payingPurchase && <SupplierPaymentModal purchase={payingPurchase} onCancel={() => setPayingPurchase(null)} onSaved={afterPaymentSaved} />}
 
       {noteFor && <SupplierNoteModal purchase={noteFor.purchase} side={noteFor.side} onCancel={() => setNoteFor(null)} onConfirm={handleIssueSupplierNote} />}
 

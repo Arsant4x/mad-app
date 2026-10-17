@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { addContractFee, endContractFee, type Contract } from '../../api/contracts';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt, today } from '../../lib/format';
 
 /**
@@ -13,6 +14,8 @@ import { dfmt, fmt, today } from '../../lib/format';
  */
 export function FeesSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
   const { t } = useTranslation();
+  // Adding and ending a fee line both edit the contract.
+  const canEdit = usePermissions().can('contracts', 'edit');
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
@@ -39,14 +42,14 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{t('contracts.fees.title', { n: fees.length })}</span>
-        {contract.status !== 'CANCELLED' && (
+        {canEdit && contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
             {adding ? t('contracts.fees.cancel') : t('contracts.fees.add')}
           </button>
         )}
       </div>
       {error && <p className="error-text">{error}</p>}
-      {adding && (
+      {canEdit && adding && (
         <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
@@ -103,7 +106,7 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
                   {f.endedAt ? t('contracts.fees.until', { date: dfmt(f.endedAt) }) : ''}
                 </td>
                 <td>
-                  {!f.endedAt && contract.status !== 'CANCELLED' && (
+                  {canEdit && !f.endedAt && contract.status !== 'CANCELLED' && (
                     <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => endContractFee(contract.id, f.id, { endedAt: today() }))}>
                       {t('contracts.fees.end')}
                     </button>

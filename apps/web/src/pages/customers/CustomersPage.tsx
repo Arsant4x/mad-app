@@ -13,6 +13,7 @@ import {
   type CustomerUpdateInput,
 } from '../../api/customers';
 import { listInvoices, type Invoice } from '../../api/invoices';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -23,6 +24,10 @@ import i18n from '../../i18n';
 
 export function CustomersPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('customers', 'add');
+  const canEdit = can('customers', 'edit');
+  const canDelete = can('customers', 'delete');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,9 +105,11 @@ export function CustomersPage() {
           <div className="page-sub">{t('customers.page.subtitle')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('customers.page.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('customers.page.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,7 +155,7 @@ export function CustomersPage() {
                     {c.name} {t('customers.view_icon')}{c.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('customers.page.archived')}</span>}
                   </td>
                   <td>
-                    {c.kind === 'LEGACY_UNDECLARED' ? (
+                    {c.kind === 'LEGACY_UNDECLARED' && canEdit ? (
                       // An undeclared old customer cannot be issued a document; declaring is one click from here, never a server default.
                       <button className="btn link" data-testid="declare-kind" onClick={() => void openEdit(c)}>
                         {t('customers.page.declare_kind')}
@@ -168,10 +175,10 @@ export function CustomersPage() {
                     <RowMenu
                       actions={[
                         { label: t('customers.page.action.details'), onClick: () => setDetailFor(c) },
-                        { label: t('customers.page.action.edit'), onClick: () => void openEdit(c) },
-                        { label: c.archived ? t('customers.page.action.unarchive') : t('customers.page.action.archive'), onClick: () => setCustomerArchived(c.id, !c.archived).then(reload) },
+                        canEdit && { label: t('customers.page.action.edit'), onClick: () => void openEdit(c) },
+                        canEdit && { label: c.archived ? t('customers.page.action.unarchive') : t('customers.page.action.archive'), onClick: () => setCustomerArchived(c.id, !c.archived).then(reload) },
                         '-',
-                        { label: t('customers.page.action.delete'), onClick: () => setPendingDelete(c), danger: true },
+                        canDelete && { label: t('customers.page.action.delete'), onClick: () => setPendingDelete(c), danger: true },
                       ]}
                     />
                   </td>

@@ -75,7 +75,8 @@ export function PurchaseModal({
   editing: Purchase | null;
   onCancel: () => void;
   onSave: (data: PurchaseFormData) => Promise<void>;
-  onCreateSupplier: (name: string) => Promise<Supplier>;
+  /** Absent when the actor may not add suppliers; the purchase then takes an existing supplier only. */
+  onCreateSupplier?: (name: string) => Promise<Supplier>;
 }) {
   const { t } = useTranslation();
   const [supplierInput, setSupplierInput] = useState(editing?.supplier.name ?? '');
@@ -126,7 +127,13 @@ export function PurchaseModal({
     setSaving(true);
     try {
       let supplier = suppliers.find((s) => s.name === name);
-      if (!supplier) supplier = await onCreateSupplier(name);
+      if (!supplier) {
+        if (!onCreateSupplier) {
+          setError(t('suppliers.purchase_form.supplier_existing'));
+          return;
+        }
+        supplier = await onCreateSupplier(name);
+      }
       await onSave({
         supplierId: supplier.id,
         date,

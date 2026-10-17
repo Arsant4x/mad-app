@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createProduct, deleteProduct, listProducts, setProductArchived, updateProduct, type Product, type ProductInput } from '../../api/products';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -10,6 +11,10 @@ import { ProductModal } from './ProductModal';
 
 export function ProductsPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  const canAdd = can('products', 'add');
+  const canEdit = can('products', 'edit');
+  const canDelete = can('products', 'delete');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -82,9 +87,11 @@ export function ProductsPage() {
           <div className="page-sub">{t('products.list.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('products.list.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('products.list.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -189,10 +196,10 @@ export function ProductsPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: t('products.list.edit'), onClick: () => setModal({ mode: 'edit', product: p }) },
-                      { label: p.archived ? t('products.list.unarchive') : t('products.list.archive'), onClick: () => setProductArchived(p.id, !p.archived).then(reload) },
+                      canEdit && { label: t('products.list.edit'), onClick: () => setModal({ mode: 'edit', product: p }) },
+                      canEdit && { label: p.archived ? t('products.list.unarchive') : t('products.list.archive'), onClick: () => setProductArchived(p.id, !p.archived).then(reload) },
                       '-',
-                      { label: t('products.list.delete'), onClick: () => setPendingDelete(p), danger: true },
+                      canDelete && { label: t('products.list.delete'), onClick: () => setPendingDelete(p), danger: true },
                     ]}
                   />
                 </td>

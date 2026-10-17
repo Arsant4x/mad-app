@@ -31,6 +31,7 @@ export function InvoiceListView({
   onIssueReplacement,
   onDownloadClearedXml,
   canSubmitToZatca,
+  canIssue,
   submittingId,
 }: {
   invoices: Invoice[];
@@ -43,6 +44,8 @@ export function InvoiceListView({
   /** Delivery of a standard invoice as the XML cleared by the authority; offered only where that copy was saved. */
   onDownloadClearedXml: (invoice: Invoice) => void;
   canSubmitToZatca: boolean;
+  /** A new invoice, a note and a replacement are each a new document, refused without add on invoices. */
+  canIssue: boolean;
   /** The invoice currently being sent, so its row can say so — submission is a
    * network round-trip to the authority, not an instant local change. */
   submittingId: string | null;
@@ -81,9 +84,11 @@ export function InvoiceListView({
           <div className="page-sub">{t('invoices.list.subtitle')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={onNew}>
-            {t('invoices.list.new')}
-          </button>
+          {canIssue && (
+            <button className="btn btn-primary" onClick={onNew}>
+              {t('invoices.list.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -230,7 +235,9 @@ export function InvoiceListView({
                       // A note is corrected by the opposite note. A rejected invoice is closed
                       // and untouched: its only remedy is a new replacement, and one that
                       // already has a replacement offers no action.
-                      ...(inv.zatcaStatus === 'REJECTED'
+                      ...(!canIssue
+                        ? []
+                        : inv.zatcaStatus === 'REJECTED'
                         ? inv.docType === 'INVOICE' && !inv.replacedBy
                           ? [{ label: t('invoices.list.action.replacement'), onClick: () => onIssueReplacement(inv) }]
                           : []

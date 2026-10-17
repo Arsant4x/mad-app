@@ -26,8 +26,11 @@ const statusMeta = (): Record<UnitStatus, { label: string; badgeClass: string }>
 export function UnitsPage() {
   const { t } = useTranslation();
   const { can } = usePermissions();
-  // Cancelling a reservation needs delete on properties; the server refuses it otherwise.
-  const canCancelReservation = can('properties', 'delete');
+  // Units follow the properties screen: a unit or reservation adds, a change edits, a removal or cancelled reservation deletes.
+  const canAdd = can('properties', 'add');
+  const canEdit = can('properties', 'edit');
+  const canDelete = can('properties', 'delete');
+  const canCancelReservation = canDelete;
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -125,12 +128,16 @@ export function UnitsPage() {
           <div className="page-sub">{t('units.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-ghost" onClick={() => setBulkOpen(true)} disabled={properties.length === 0}>
-            {t('units.page.bulk')}
-          </button>
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
-            {t('units.page.new')}
-          </button>
+          {canAdd && (
+            <>
+              <button className="btn btn-ghost" onClick={() => setBulkOpen(true)} disabled={properties.length === 0}>
+                {t('units.page.bulk')}
+              </button>
+              <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
+                {t('units.page.new')}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -205,13 +212,13 @@ export function UnitsPage() {
                       <td>
                         <RowMenu
                           actions={[
-                            { label: t('units.page.action_edit'), onClick: () => setModal({ mode: 'edit', unit: u }) },
-                            ...(u.status === 'vacant' ? [{ label: t('units.page.action_reserve'), onClick: () => setReservingUnit(u) }] : []),
-                            ...(activeRsv && canCancelReservation ? [{ label: t('units.page.action_cancel_reservation'), onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) }] : []),
-                            { label: u.underMaintenance ? t('units.page.action_end_maintenance') : t('units.page.action_start_maintenance'), onClick: () => toggleMaintenance(u) },
-                            { label: u.archived ? t('units.page.action_unarchive') : t('units.page.action_archive'), onClick: () => setUnitArchived(u.id, !u.archived).then(reload) },
+                            canEdit && { label: t('units.page.action_edit'), onClick: () => setModal({ mode: 'edit', unit: u }) },
+                            canAdd && u.status === 'vacant' && { label: t('units.page.action_reserve'), onClick: () => setReservingUnit(u) },
+                            canCancelReservation && activeRsv && { label: t('units.page.action_cancel_reservation'), onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) },
+                            canEdit && { label: u.underMaintenance ? t('units.page.action_end_maintenance') : t('units.page.action_start_maintenance'), onClick: () => toggleMaintenance(u) },
+                            canEdit && { label: u.archived ? t('units.page.action_unarchive') : t('units.page.action_archive'), onClick: () => setUnitArchived(u.id, !u.archived).then(reload) },
                             '-',
-                            { label: t('units.page.action_delete'), onClick: () => setPendingDelete(u), danger: true },
+                            canDelete && { label: t('units.page.action_delete'), onClick: () => setPendingDelete(u), danger: true },
                           ]}
                         />
                       </td>

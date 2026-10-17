@@ -27,6 +27,8 @@ vi.mock('../../api/contracts', () => ({
   downloadContractAttachment: vi.fn(),
   uploadContractAttachment: vi.fn(),
 }));
+// Every action held: this file measures the warning, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 const { listContractAttachments } = await import('../../api/contracts');
 const { AttachmentsSection } = await import('./AttachmentsSection');

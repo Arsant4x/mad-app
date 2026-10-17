@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { listBanks, type Bank } from '../../api/banks';
 import { createTransaction, deleteTransaction, listTransactions, updateTransaction, type BankTx, type TransactionInput } from '../../api/transactions';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Pager } from '../../components/Pager';
 import { RowMenu } from '../../components/RowMenu';
@@ -14,6 +15,11 @@ const PAGE_SIZE = 25;
 
 export function TransactionsPage() {
   const { t } = useTranslation();
+  // A new line records, a change edits, a removal deletes.
+  const { can } = usePermissions();
+  const canRecord = can('transactions', 'record');
+  const canEdit = can('transactions', 'edit');
+  const canDelete = can('transactions', 'delete');
   const [transactions, setTransactions] = useState<BankTx[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -93,9 +99,11 @@ export function TransactionsPage() {
           <div className="page-sub">{t('transactions.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={openCreate}>
-            {t('transactions.page.add')}
-          </button>
+          {canRecord && (
+            <button className="btn btn-primary" onClick={openCreate}>
+              {t('transactions.page.add')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -147,9 +155,9 @@ export function TransactionsPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: t('transactions.page.edit'), onClick: () => setModal({ mode: 'edit', tx: x }) },
+                      canEdit && { label: t('transactions.page.edit'), onClick: () => setModal({ mode: 'edit', tx: x }) },
                       '-',
-                      { label: t('transactions.page.delete'), onClick: () => setPendingDelete(x), danger: true },
+                      canDelete && { label: t('transactions.page.delete'), onClick: () => setPendingDelete(x), danger: true },
                     ]}
                   />
                 </td>

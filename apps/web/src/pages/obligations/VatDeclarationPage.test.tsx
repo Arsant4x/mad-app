@@ -9,6 +9,8 @@ import * as api from '../../api/obligations';
 vi.setConfig({ testTimeout: 12_000 });
 
 vi.mock('../../api/obligations');
+// Every action held: this file measures the declared limits, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 const declaration = (limits: api.VatDeclaration['limits']): api.VatDeclaration => ({
   year: 2026,

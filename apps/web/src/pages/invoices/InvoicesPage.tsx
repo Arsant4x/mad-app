@@ -18,6 +18,7 @@ import {
 import { newRequestKey } from '../../api/idempotency';
 import { submitInvoiceToZatca } from '../../api/zatca';
 import { useAuth } from '../../auth/AuthContext';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { today } from '../../lib/format';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { CreditNoteModal } from './CreditNoteModal';
@@ -32,6 +33,10 @@ export function InvoicesPage() {
   const { t } = useTranslation();
   const location = useLocation();
   const { user } = useAuth();
+  const { can } = usePermissions();
+  const canIssue = can('invoice', 'add');
+  // A customer created from the builder goes through the customers route, so it follows that screen's add.
+  const canAddCustomer = can('customers', 'add');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -210,7 +215,7 @@ export function InvoicesPage() {
 
   if (loading) return null;
 
-  if (view.mode === 'builder') {
+  if (view.mode === 'builder' && canIssue) {
     return (
       <>
         <InvoiceBuilderView
@@ -220,7 +225,7 @@ export function InvoicesPage() {
           nextNumberHint={`INV-${new Date().getFullYear()}-${String(invoices.filter((i) => i.docType === 'INVOICE').length + 1).padStart(4, '0')}`}
           onCancel={() => setView({ mode: 'list' })}
           onSave={handleSave}
-          onCreateCustomer={handleCreateCustomer}
+          onCreateCustomer={canAddCustomer ? handleCreateCustomer : undefined}
         />
         {saveError && !overridable && (
           <ConfirmModal title={t('invoices.page.save_failed_title')} body={saveError} confirmLabel={t('invoices.page.ok')} hideCancel onCancel={() => setSaveError(null)} onConfirm={() => setSaveError(null)} />
@@ -261,11 +266,12 @@ export function InvoicesPage() {
         onIssueReplacement={(invoice) => setReplacementFor(invoice)}
         onDownloadClearedXml={handleDownloadClearedXml}
         canSubmitToZatca={user?.actorType === 'COMPANY'}
+        canIssue={canIssue}
         submittingId={submittingId}
       />
-      {creditNoteFor && <CreditNoteModal invoice={creditNoteFor} onCancel={() => setCreditNoteFor(null)} onConfirm={handleIssueCreditNote} />}
-      {debitNoteFor && <DebitNoteModal invoice={debitNoteFor} onCancel={() => setDebitNoteFor(null)} onConfirm={handleIssueDebitNote} />}
-      {replacementFor && (
+      {canIssue && creditNoteFor && <CreditNoteModal invoice={creditNoteFor} onCancel={() => setCreditNoteFor(null)} onConfirm={handleIssueCreditNote} />}
+      {canIssue && debitNoteFor && <DebitNoteModal invoice={debitNoteFor} onCancel={() => setDebitNoteFor(null)} onConfirm={handleIssueDebitNote} />}
+      {canIssue && replacementFor && (
         <ConfirmModal
           title={t('invoices.page.replacement_title')}
           body={t('invoices.page.replacement_body', {

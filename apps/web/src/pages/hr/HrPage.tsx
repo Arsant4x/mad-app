@@ -18,6 +18,7 @@ import {
   type LeaveType,
 } from '../../api/leaves';
 import { deleteAttendance, listAttendance, recordAttendance, updateAttendance, type AttendanceRecord, type AttendanceStatus } from '../../api/attendance';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, today } from '../../lib/format';
@@ -44,6 +45,13 @@ function apiError(e: unknown, fallback: string): string {
  */
 export function HrPage() {
   const { t } = useTranslation();
+  const { can } = usePermissions();
+  // Each control follows the action its route checks on the employees screen.
+  const canAdd = can('employees', 'add');
+  const canEdit = can('employees', 'edit');
+  const canDelete = can('employees', 'delete');
+  const canRecord = can('employees', 'record');
+  const canReview = can('employees', 'review');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -215,13 +223,15 @@ export function HrPage() {
           <div className="card-title">{t('hr.attendance.title')}</div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="date" value={attDate} onChange={(e) => setAttDate(e.target.value)} style={{ width: 'auto' }} />
-            <button className="btn btn-ghost btn-sm" onClick={() => setAttAdding((v) => !v)}>
-              {attAdding ? t('hr.common.cancel') : t('hr.attendance.add')}
-            </button>
+            {canRecord && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setAttAdding((v) => !v)}>
+                {attAdding ? t('hr.common.cancel') : t('hr.attendance.add')}
+              </button>
+            )}
           </div>
         </div>
 
-        {attAdding && (
+        {canRecord && attAdding && (
           <div style={{ background: 'var(--paper)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <div className="two-col">
               <div className="field">
@@ -273,10 +283,12 @@ export function HrPage() {
                   <td className="num">{rec.checkOut ?? '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {/* The current clock time belongs to today only; a past day would get the wrong time. */}
-                    {attDate === today() && rec.status === 'PRESENT' && !rec.checkOut && (
+                    {canEdit && attDate === today() && rec.status === 'PRESENT' && !rec.checkOut && (
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => checkOutNow(rec)}>{t('hr.attendance.check_out_now')}</button>
                     )}{' '}
-                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(async () => { await deleteAttendance(rec.id); await reloadAttendance(); }, t('hr.err_delete'))}>{t('hr.common.delete')}</button>
+                    {canDelete && (
+                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(async () => { await deleteAttendance(rec.id); await reloadAttendance(); }, t('hr.err_delete'))}>{t('hr.common.delete')}</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -293,9 +305,11 @@ export function HrPage() {
             <button className="btn btn-ghost btn-sm" onClick={() => setManagingTypes((v) => !v)}>
               {managingTypes ? t('hr.types.hide') : t('hr.types.show')}
             </button>
-            <button className="btn btn-ghost btn-sm" disabled={types.length === 0} onClick={() => setAdding((v) => !v)}>
-              {adding ? t('hr.common.cancel') : t('hr.requests.add')}
-            </button>
+            {canAdd && (
+              <button className="btn btn-ghost btn-sm" disabled={types.length === 0} onClick={() => setAdding((v) => !v)}>
+                {adding ? t('hr.common.cancel') : t('hr.requests.add')}
+              </button>
+            )}
           </div>
         </div>
 
@@ -303,23 +317,27 @@ export function HrPage() {
 
         {managingTypes && (
           <div style={{ background: 'var(--paper)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <div className="two-col">
-              <div className="field">
-                <label>{t('hr.types.name')}</label>
-                <input value={typeName} onChange={(e) => setTypeName(e.target.value)} placeholder={t('hr.types.name_placeholder')} />
-              </div>
-              <div className="field">
-                <label>{t('hr.types.annual_days')}</label>
-                <input className="num" value={typeDays} onChange={(e) => setTypeDays(e.target.value)} placeholder={t('hr.types.annual_days_placeholder')} />
-              </div>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
-              <input type="checkbox" style={{ width: 'auto' }} checked={typePaid} onChange={(e) => setTypePaid(e.target.checked)} /> {t('hr.types.paid_label')}
-            </label>
-            <p className="hint" style={{ marginBottom: 8 }}>{t('hr.types.entitlement_hint')}</p>
-            <button className="btn btn-primary btn-sm" disabled={busy} onClick={submitType}>
-              {t('hr.types.add')}
-            </button>
+            {canAdd && (
+              <>
+                <div className="two-col">
+                  <div className="field">
+                    <label>{t('hr.types.name')}</label>
+                    <input value={typeName} onChange={(e) => setTypeName(e.target.value)} placeholder={t('hr.types.name_placeholder')} />
+                  </div>
+                  <div className="field">
+                    <label>{t('hr.types.annual_days')}</label>
+                    <input className="num" value={typeDays} onChange={(e) => setTypeDays(e.target.value)} placeholder={t('hr.types.annual_days_placeholder')} />
+                  </div>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 8 }}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={typePaid} onChange={(e) => setTypePaid(e.target.checked)} /> {t('hr.types.paid_label')}
+                </label>
+                <p className="hint" style={{ marginBottom: 8 }}>{t('hr.types.entitlement_hint')}</p>
+                <button className="btn btn-primary btn-sm" disabled={busy} onClick={submitType}>
+                  {t('hr.types.add')}
+                </button>
+              </>
+            )}
 
             {types.length > 0 && (
               <table style={{ marginTop: 10 }}>
@@ -338,9 +356,11 @@ export function HrPage() {
                       <td className="num">{lt.annualDays > 0 ? t('hr.common.days', { n: lt.annualDays }) : t('hr.common.no_limit')}</td>
                       <td>{lt.paid ? t('hr.types.yes') : t('hr.types.no')}</td>
                       <td>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setPendingDelete({ kind: 'type', id: lt.id, label: lt.name })}>
-                          {t('hr.common.delete')}
-                        </button>
+                        {canDelete && (
+                          <button className="btn btn-ghost btn-sm" onClick={() => setPendingDelete({ kind: 'type', id: lt.id, label: lt.name })}>
+                            {t('hr.common.delete')}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -350,7 +370,7 @@ export function HrPage() {
           </div>
         )}
 
-        {adding && (
+        {canAdd && adding && (
           <div style={{ background: 'var(--paper)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <div className="two-col">
               <div className="field">
@@ -443,10 +463,10 @@ export function HrPage() {
                     {r.status === 'PENDING' && (
                       <RowMenu
                         actions={[
-                          { label: t('hr.requests.approve'), onClick: () => run(() => approveLeaveRequest(r.id), t('hr.requests.err_approve')) },
-                          { label: t('hr.requests.reject'), onClick: () => run(() => rejectLeaveRequest(r.id), t('hr.requests.err_reject')) },
+                          canReview && { label: t('hr.requests.approve'), onClick: () => run(() => approveLeaveRequest(r.id), t('hr.requests.err_approve')) },
+                          canReview && { label: t('hr.requests.reject'), onClick: () => run(() => rejectLeaveRequest(r.id), t('hr.requests.err_reject')) },
                           '-',
-                          { label: t('hr.requests.delete'), danger: true, onClick: () => setPendingDelete({ kind: 'request', id: r.id, label: t('hr.requests.delete_label') }) },
+                          canDelete && { label: t('hr.requests.delete'), danger: true, onClick: () => setPendingDelete({ kind: 'request', id: r.id, label: t('hr.requests.delete_label') }) },
                         ]}
                       />
                     )}

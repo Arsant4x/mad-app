@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { convertQuote, deleteQuote, listQuotes, type DerivedQuoteStatus, type Quote } from '../../api/quotes';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -24,6 +25,12 @@ const STATUS_META: Record<DerivedQuoteStatus, { label: string; badgeClass: strin
 export function QuotesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { can } = usePermissions();
+  const canAdd = can('quotes', 'add');
+  const canEdit = can('quotes', 'edit');
+  const canDelete = can('quotes', 'delete');
+  // Converting issues an invoice, so it follows add on the invoices screen.
+  const canConvert = can('invoice', 'add');
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -95,9 +102,11 @@ export function QuotesPage() {
           <div className="page-sub">{t('quotes.page.sub')}</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            {t('quotes.page.new')}
-          </button>
+          {canAdd && (
+            <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
+              {t('quotes.page.new')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -154,16 +163,16 @@ export function QuotesPage() {
                         {blockReason}
                       </button>
                     ) : (
-                      <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConverting(q)}>
-                        {t('quotes.page.convert')}
-                      </button>
+                      canConvert && (
+                        <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConverting(q)}>
+                          {t('quotes.page.convert')}
+                        </button>
+                      )
                     )}
                     <RowMenu
                       actions={[
-                        ...(q.derivedStatus === 'DRAFT' || q.derivedStatus === 'SENT'
-                          ? [{ label: t('quotes.page.edit'), onClick: () => setModal({ mode: 'edit', quote: q }) }]
-                          : []),
-                        { label: t('quotes.page.delete'), onClick: () => setPendingDelete(q), danger: true },
+                        canEdit && (q.derivedStatus === 'DRAFT' || q.derivedStatus === 'SENT') && { label: t('quotes.page.edit'), onClick: () => setModal({ mode: 'edit', quote: q }) },
+                        canDelete && { label: t('quotes.page.delete'), onClick: () => setPendingDelete(q), danger: true },
                       ]}
                     />
                   </td>

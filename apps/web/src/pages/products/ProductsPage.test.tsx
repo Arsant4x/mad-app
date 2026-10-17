@@ -9,6 +9,8 @@ vi.mock('../../api/products', async (orig) => ({
   listProducts: vi.fn(),
   deleteProduct: vi.fn(),
 }));
+// Every action held: this file measures the refusal message, not the grant.
+vi.mock('../../auth/PermissionsContext', async () => (await import('../../test/grants')).allGrantedModule());
 
 import { deleteProduct, listProducts } from '../../api/products';
 

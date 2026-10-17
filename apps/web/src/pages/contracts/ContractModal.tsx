@@ -40,7 +40,8 @@ export function ContractModal({
   customers: Customer[];
   onCancel: () => void;
   onSave: (data: CreateContractInput) => Promise<void>;
-  onCreateCustomer: (data: CustomerInput) => Promise<Customer>;
+  /** Absent when the actor may not add customers; the new customer form is then not offered. */
+  onCreateCustomer?: (data: CustomerInput) => Promise<Customer>;
 }) {
   const { t } = useTranslation();
   const propertyById = new Map(properties.map((p) => [p.id, p]));
@@ -96,6 +97,7 @@ export function ContractModal({
    * the request with `allowSameName`.
    */
   async function createCustomerInline(allowSameName = false) {
+    if (!onCreateCustomer) return;
     const name = newName.trim();
     if (!name) {
       setCustomerError(i18n.t('err_customer_name_required'));
@@ -211,12 +213,12 @@ export function ContractModal({
               </option>
             ))}
           </select>
-          {!newCustomerOpen && (
+          {onCreateCustomer && !newCustomerOpen && (
             <button type="button" className="btn btn-ghost" style={{ marginTop: 6 }} onClick={() => setNewCustomerOpen(true)}>
               {t('contracts.modal.new_customer')}
             </button>
           )}
-          {newCustomerOpen && (
+          {onCreateCustomer && newCustomerOpen && (
             <div className="two-col" style={{ marginTop: 8 }}>
               <div className="field">
                 <label>{t('contracts.modal.new_customer_name')}</label>

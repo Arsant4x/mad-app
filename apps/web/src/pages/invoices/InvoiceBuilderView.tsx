@@ -63,7 +63,8 @@ export function InvoiceBuilderView({
   nextNumberHint: string;
   onCancel: () => void;
   onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[]; prepaymentInvoiceIds?: string[] }) => Promise<void>;
-  onCreateCustomer: (name: string, kind: NewCustomerKind) => Promise<Customer>;
+  /** Absent when the actor may not add customers; the invoice is then issued to an existing customer only. */
+  onCreateCustomer?: (name: string, kind: NewCustomerKind) => Promise<Customer>;
 }) {
   const { t } = useTranslation();
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
@@ -143,6 +144,11 @@ export function InvoiceBuilderView({
     try {
       let customer = customers.find((c) => c.name === name);
       if (!customer) {
+        if (!onCreateCustomer) {
+          setError(t('invoices.builder.err_customer_existing'));
+          setSaving(false);
+          return;
+        }
         if (!newCustomerKind) {
           setError(t('invoices.builder.err_new_customer_kind'));
           setSaving(false);
@@ -193,7 +199,7 @@ export function InvoiceBuilderView({
                     <option key={c.id} value={c.name} />
                   ))}
                 </datalist>
-                {customerInput.trim() && !customers.some((c) => c.name === customerInput.trim()) && (
+                {onCreateCustomer && customerInput.trim() && !customers.some((c) => c.name === customerInput.trim()) && (
                   <select aria-label={t('invoices.builder.new_customer_kind_label')} value={newCustomerKind} onChange={(e) => setNewCustomerKind(e.target.value as NewCustomerKind | '')} style={{ marginTop: 6 }}>
                     <option value="">{t('invoices.builder.new_customer_kind_prompt')}</option>
                     <option value="NATURAL">{t('invoices.builder.kind_natural')}</option>

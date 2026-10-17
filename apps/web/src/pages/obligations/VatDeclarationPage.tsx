@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { declareVatRatio, getVatDeclaration, getVatRatio, markVatFiled, settleVatRatio, unmarkVatFiled, type VatDeclaration, type VatPeriodQuery, type VatPeriodType, type VatRatioView } from '../../api/obligations';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { dfmt, fmt } from '../../lib/format';
 import { num0, pct, sumMoney } from '../../lib/money';
 
@@ -13,6 +14,10 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, labe
 export function VatDeclarationPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { can } = usePermissions();
+  // Declaring a ratio and marking the return filed record; settling the ratio reviews.
+  const canRecord = can('obligations', 'record');
+  const canSettle = can('obligations', 'review');
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [quarter, setQuarter] = useState(Math.floor(new Date().getMonth() / 3) + 1);
@@ -199,14 +204,18 @@ export function VatDeclarationPage() {
                   )}
                 </p>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <div className="field" style={{ maxWidth: 200, marginBottom: 0 }}>
-                    <label>{t('obligations.vat.ratio_applied')}</label>
-                    <input data-testid="vat-ratio-input" className="num" value={ratioInput} onChange={(e) => setRatioInput(e.target.value)} placeholder="0.75" />
-                  </div>
-                  <button className="btn btn-primary" data-testid="vat-ratio-save" disabled={ratioBusy || ratioInput.trim() === ''} onClick={saveRatio}>
-                    {ratioView.declared ? t('obligations.vat.ratio_update') : t('obligations.vat.ratio_declare')}
-                  </button>
-                  {declaration.proportional.settlement && !declaration.proportional.settlement.settledAt && (
+                  {canRecord && (
+                    <>
+                      <div className="field" style={{ maxWidth: 200, marginBottom: 0 }}>
+                        <label>{t('obligations.vat.ratio_applied')}</label>
+                        <input data-testid="vat-ratio-input" className="num" value={ratioInput} onChange={(e) => setRatioInput(e.target.value)} placeholder="0.75" />
+                      </div>
+                      <button className="btn btn-primary" data-testid="vat-ratio-save" disabled={ratioBusy || ratioInput.trim() === ''} onClick={saveRatio}>
+                        {ratioView.declared ? t('obligations.vat.ratio_update') : t('obligations.vat.ratio_declare')}
+                      </button>
+                    </>
+                  )}
+                  {canSettle && declaration.proportional.settlement && !declaration.proportional.settlement.settledAt && (
                     <button className="btn btn-ghost" data-testid="vat-ratio-settle" disabled={ratioBusy} onClick={confirmSettlement}>
                       {t('obligations.vat.ratio_settle')}
                     </button>
@@ -494,9 +503,11 @@ export function VatDeclarationPage() {
                   {declaration.filedNote}
                 </p>
               )}
-              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={toggleFiled} disabled={marking}>
-                {declaration.filed ? t('obligations.vat.unmark_filed') : t('obligations.vat.mark_filed')}
-              </button>
+              {canRecord && (
+                <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={toggleFiled} disabled={marking}>
+                  {declaration.filed ? t('obligations.vat.unmark_filed') : t('obligations.vat.mark_filed')}
+                </button>
+              )}
             </div>
           </>
         )}
