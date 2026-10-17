@@ -12,7 +12,8 @@ import { assertPostingAccounts } from '../journal/auto-posting.util';
 import { CASH_ACCOUNT_CODE } from '../journal/pos-settlement.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePosPaymentAttemptDto, ResolvePaymentAttemptWithEvidenceDto } from './dto/pos.dto';
-import { PosService, PreparedSale, SoldSale } from './pos.service';
+import { PosService, PreparedSale, sameSaleOrRefuse, SoldSale } from './pos.service';
+import type { RecordedSale } from './sale-replay.util';
 
 /**
  * **لقطةُ البيع في المحاولة** — الإصدارُ أوّلاً كي يُقرأ شكلُها إن تغيّر. منها وحدَها تُنشأ الفاتورة عند الإتمام،
@@ -30,6 +31,26 @@ const IN_FLIGHT: PosPaymentAttemptStatus[] = ['CHARGING', 'UNKNOWN', 'APPROVED']
 const OPEN: PosPaymentAttemptStatus[] = ['CREATED', ...IN_FLIGHT];
 
 type Tx = Prisma.TransactionClient;
+
+/** The sale an attempt's snapshot holds, in the shape the sale replay check compares with a request. */
+async function snapshotSale(tx: Tx, attempt: PosPaymentAttempt): Promise<RecordedSale> {
+  const { prepared } = attempt.sale as unknown as SaleSnapshot;
+  const customerId = prepared.invoiceDto.customerId;
+  const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { name: true } });
+  return {
+    customerId,
+    customer,
+    paymentMethod: prepared.paymentMethod,
+    lines: prepared.invoiceDto.lines.map((l) => ({ productId: l.productId ?? null, quantity: l.quantity, discount: l.discount ?? 0 })),
+    posPayments: prepared.parts,
+  };
+}
+
+/** The attempt a known sale id recorded, or the sale path's named 409 when the request asks for a different sale under that id. */
+async function sameAttemptOrRefuse(tx: Tx, attempt: PosPaymentAttempt, dto: CreatePosPaymentAttemptDto): Promise<PosPaymentAttempt> {
+  sameSaleOrRefuse(await snapshotSale(tx, attempt), dto, MSG.pos_sale_id_reused);
+  return attempt;
+}
 
 /**
  * ⭐ **محاولةُ دفع البطاقة — الشحنُ خارج المعاملة، والفاتورةُ بعد القبول** (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`).
@@ -65,7 +86,7 @@ export class PosPaymentAttemptsService {
     try {
       return await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
         const existing = await tx.posPaymentAttempt.findFirst({ where: { clientSaleId: dto.clientSaleId } });
-        if (existing) return present(existing);
+        if (existing) return present(await sameAttemptOrRefuse(tx, existing, dto));
         const recorded = await tx.invoice.findFirst({ where: { clientSaleId: dto.clientSaleId }, select: { id: true } });
         if (recorded) throw new ConflictException(MSG.pos_attempt_sale_recorded);
 
@@ -105,9 +126,12 @@ export class PosPaymentAttemptsService {
         return present(created);
       });
     } catch (e) {
-      // طلبان متزامنان بالمعرّف نفسِه: الخاسرُ يقرأ محاولةَ الرابح — ولا يفرّق المستدعي بينهما.
+      // Two concurrent requests with one sale id: the loser reads the winner's attempt, compared with its own request.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        const winner = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => tx.posPaymentAttempt.findFirst({ where: { clientSaleId: dto.clientSaleId } }));
+        const winner = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+          const found = await tx.posPaymentAttempt.findFirst({ where: { clientSaleId: dto.clientSaleId } });
+          return found ? sameAttemptOrRefuse(tx, found, dto) : null;
+        });
         if (winner) return present(winner);
       }
       throw e;

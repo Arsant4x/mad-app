@@ -69,7 +69,7 @@ const SALE_INCLUDE = { lines: LINE_ORDER, customer: { select: CUSTOMER_PUBLIC_SE
 type SaleRow = Prisma.InvoiceGetPayload<{ include: typeof SALE_INCLUDE }>;
 
 /** The sale a known sale id recorded, or a named 409 when the request asks for a different sale under that id. */
-function sameSaleOrRefuse<T extends RecordedSale>(recorded: T, request: CreatePosSaleDto, refusal: MessageKey): T {
+export function sameSaleOrRefuse<T extends RecordedSale>(recorded: T, request: CreatePosSaleDto, refusal: MessageKey): T {
   if (!isSameSale(recorded, request, WALK_IN_CUSTOMER)) throw new ConflictException(refusal);
   return recorded;
 }
