@@ -511,6 +511,9 @@ export class InvoicesService {
     // والبدلُ عن مردودة ذمّةٌ تنتقل لا تزيد (`ق-٩٥٨`) — حدُّه `credit-context.ts`.
     if (credit.settlement === 'REPLACEMENT') return null;
 
+    // Serialize invoices for a customer with a limit, so a concurrent invoice is counted in this exposure read.
+    await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${args.customerId} AND "creditLimit" > 0 FOR UPDATE`;
+
     const check = await checkCreditLimit(tx, {
       customerId: args.customerId,
       asOf: args.issueDate,
