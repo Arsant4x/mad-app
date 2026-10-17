@@ -19,7 +19,7 @@ const contract = {
 } as unknown as Contract;
 
 describe('Upcoming installments in the cancellation form', () => {
-  it('a settlement of all that is left cancels the installments, even after keeping them was picked', async () => {
+  it.each(['all', 'installments'])('a settlement from %s cancels the installments, even after keeping them was picked', async (settlementBasis) => {
     const onSubmit = vi.fn(async (_dto: CancelContractInput) => {});
     render(<CancelForm contract={contract} onCancel={() => {}} onSubmit={onSubmit} />);
     const [disposition, basis] = screen.getAllByRole('combobox') as HTMLSelectElement[];
@@ -27,14 +27,14 @@ describe('Upcoming installments in the cancellation form', () => {
     fireEvent.change(disposition, { target: { value: 'keep' } });
     expect(screen.getByText('تُسجَّل الأقساط المُبقاة عند الإلغاء مستحقةً على المستأجر ضمن إيرادات أخرى — وليس إيراد إيجار.')).toBeTruthy();
 
-    fireEvent.change(basis, { target: { value: 'all' } });
+    fireEvent.change(basis, { target: { value: settlementBasis } });
     const keep = Array.from(disposition.options).find((o) => o.value === 'keep')!;
     expect({ shown: disposition.value, keepDisabled: keep.disabled }).toEqual({ shown: 'cancel', keepDisabled: true });
 
     fireEvent.change(screen.getByPlaceholderText('مثال: إخلاء مبكر باتفاق الطرفين'), { target: { value: 'early exit' } });
     fireEvent.click(screen.getByRole('button', { name: 'تأكيد الإلغاء' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit.mock.calls[0][0]).toMatchObject({ installmentDisposition: 'cancel', settlementBasis: 'all' });
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ installmentDisposition: 'cancel', settlementBasis });
   });
 
   it('an agreed amount still lets the installments be kept due', async () => {
