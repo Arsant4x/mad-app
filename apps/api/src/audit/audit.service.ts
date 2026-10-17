@@ -238,8 +238,8 @@ export class AuditService {
         ? {
             createdAt: {
               ...(filters.from ? { gte: new Date(filters.from) } : {}),
-              // Inclusive of the whole end day, not midnight at its start.
-              ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59.999Z`) } : {}),
+              // A date alone is inclusive of the whole end day, not midnight at its start; a date and time is that moment.
+              ...(filters.to ? { lte: new Date(filters.to.length === 10 ? `${filters.to}T23:59:59.999Z` : filters.to) } : {}),
             },
           }
         : {}),
