@@ -4,7 +4,7 @@
 // والحارسُ apps/api/src/common/shared-enums-generated.spec.ts يُسقط الحزمةَ إن اختلف عن مصدره.
 
 /** `prisma:NotificationKind` — ويقابلُه `apps/web/src/api/notifications.ts#NotificationKind`. */
-export const NOTIFICATION_KIND_VALUES = ['RENT_ESCALATION', 'WARRANTY_EXPIRING', 'NOTE_ISSUED_LATE', 'SUPPORT_REQUESTED', 'SUPPORT_ENTERED', 'SUBPROCESSOR_CONSENT', 'ZATCA_CERT_EXPIRING', 'POS_CARD_UNMATCHED', 'FORM_SIGNING_EXPIRED', 'FORM_OBJECTED', 'FORM_SUBSTITUTE_DECIDED'] as const;
+export const NOTIFICATION_KIND_VALUES = ['RENT_ESCALATION', 'WARRANTY_EXPIRING', 'NOTE_ISSUED_LATE', 'SUPPORT_REQUESTED', 'SUPPORT_ENTERED', 'SUBPROCESSOR_CONSENT', 'ZATCA_CERT_EXPIRING', 'POS_CARD_UNMATCHED', 'FORM_SIGNING_EXPIRED', 'FORM_OBJECTED', 'FORM_SUBSTITUTE_DECIDED', 'ZATCA_REPORTING_DEADLINE'] as const;
 export type NotificationKind = (typeof NOTIFICATION_KIND_VALUES)[number];
 
 /** `prisma:ZatcaStatus` — ويقابلُه `apps/web/src/api/invoices.ts#ZatcaInvoiceStatus`. */

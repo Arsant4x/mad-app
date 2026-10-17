@@ -588,6 +588,8 @@ export const MSG = {
   zatca_not_stamped: 'zatca.not_stamped',
   /** ⚖️ سقوطُ المحاولة ليس جواباً من الهيئة (`ق-٩٧١`): يُرمى فيعود الطابور، ولا يُكتب `REJECTED`. */
   zatca_attempt_failed: 'zatca.attempt_failed',
+  /** The authority gave no answer on the document; the outbox keeps resending it with no attempt limit. */
+  invoice_authority_no_answer: 'invoices.authority_no_answer',
   // chain integrity. Deletion is refused for any document that took a place
   // in the sequence; editing is refused only once the authority has accepted
   // it (or may be about to) — see InvoicesService.
@@ -2141,6 +2143,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_attempt_failed]: {
     ar: 'تعذّرت المحاولة ولم تُجب الهيئة على المستند ({reason}) — المستند كما هو، وسيُعاد الإرسال آلياً بتراجع؛ وإن استُنفدت المحاولات بقي مُعلَناً في «صادرٌ لم يصل» ويُعاد يدوياً',
     en: 'The attempt failed without an answer from the authority ({reason}) — the document is unchanged and will be resent automatically with backoff; if the attempts run out it stays declared under "issued, not delivered" and can be resent manually',
+  },
+  [MSG.invoice_authority_no_answer]: {
+    ar: 'لم تُجب الهيئة على المستند ({reason}) — المستند كما هو، وسيُعاد الإرسال آلياً مرةً كل ساعة على الأقل حتى تُجيب الهيئة',
+    en: 'The authority gave no answer on the document ({reason}) — the document is unchanged and will be resent automatically, at least once an hour, until the authority answers',
   },
   [MSG.zatca_stamp_in_progress]: { ar: 'المستند قيد الختم الآن من مسارٍ آخر — أعد المحاولة بعد لحظات', en: 'This document is being stamped by anotherprocess — retry shortly' },
   [MSG.zatca_previous_unstamped]: { ar: 'سلفُ هذا المستند في السلسلة ({no} — الموقع {icv}) لم يُختم بعد، فلا يُختم قبله — يُعاد تلقائياً', en: 'The previous document in the chain ({no} — position {icv}) is not stamped yet, so this one cannot be stamped before it — retried automatically' },

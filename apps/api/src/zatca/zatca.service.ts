@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@mad-app/db';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { issuedWallClock } from '../common/wall-clock.util';
-import { formatMessage, MSG } from '../common/i18n/messages';
+import { formatMessage, MSG, type MessageKey } from '../common/i18n/messages';
 import { computeDocumentTotals } from '../common/money/totals';
 import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -20,6 +20,7 @@ import { LINE_ORDER } from '../common/document-lines.util';
 import { decryptCustomerOtherId } from '../customers/customer-identity.util';
 import { AuthorityMessage, zatcaWarningsOf } from './authority-warnings.util';
 import { clearedInvoiceFrom } from './cleared-invoice.util';
+import type { UnansweredDelivery } from '../outbox/outbox.service';
 
 /** Only the company owner submits to the authority — clearing an invoice is a
  * legal act on the merchant's behalf, not routine data entry. */
@@ -83,8 +84,23 @@ export function authorityVerdict(status: number): 'accepted' | 'rejected' | null
  * `zatcaMessage` كي يُرى في الصفّ — وحالةُ المستند لا تُمسّ.
  */
 export class ZatcaAttemptFailedException extends ServiceUnavailableException {
-  constructor(public readonly reason: string) {
-    super(formatMessage(MSG.zatca_attempt_failed, { reason }));
+  constructor(
+    public readonly reason: string,
+    message: MessageKey = MSG.zatca_attempt_failed,
+  ) {
+    super(formatMessage(message, { reason }));
+  }
+}
+
+/**
+ * The authority gave no answer on the document: the request never got through, or the reply is not
+ * a verdict on it. The outbox keeps retrying this on its capped backoff without a terminal state.
+ */
+export class ZatcaNoAnswerException extends ZatcaAttemptFailedException implements UnansweredDelivery {
+  readonly unanswered = true as const;
+
+  constructor(reason: string) {
+    super(reason, MSG.invoice_authority_no_answer);
   }
 }
 
@@ -669,6 +685,12 @@ export class ZatcaService {
           // The authority takes the signed document base64-encoded — the stored bytes, verbatim.
           invoice: Buffer.from(stored.zatcaSignedXml, 'utf8').toString('base64'),
         }),
+      }).catch(async (e: unknown) => {
+        // The request never got an answer (refused, unreachable, timed out): not a verdict, so retried without limit.
+        const message = (e as Error).message;
+        this.logger.warn(`ZATCA submission failed for invoice ${invoiceId}: ${message}`);
+        await this.recordAttempt(companyId, invoiceId, message);
+        throw new ZatcaNoAnswerException(message);
       });
 
       // كان يُقرأ `message` وحده — وهو **ليس من حقول استجابة هاتين النقطتين**.
@@ -695,7 +717,7 @@ export class ZatcaService {
         const reason = detail && !detail.startsWith(`HTTP ${res.status}`) ? `HTTP ${res.status} — ${detail}` : (detail ?? `HTTP ${res.status}`);
         this.logger.warn(`ZATCA answered ${res.status} for invoice ${invoiceId} — not a verdict on the document, will retry: ${reason}`);
         await this.recordAttempt(companyId, invoiceId, reason);
-        throw new ZatcaAttemptFailedException(reason);
+        throw new ZatcaNoAnswerException(reason);
       }
       // ⚖️ (`ق-١٥٠٦` · R24) القياسيةُ المقبولة تعود بنسختها المجازة (`clearedInvoice`) — **وهي ما يُسلَّم للمشتري**
       //    لا نسختُنا قبل الإجازة. كانت تُهدَر مع الجسد. والقبولُ بلا نسخةٍ مقروءة يُكتب قبولاً (فالحكمُ حكمُ الهيئة)
@@ -708,8 +730,8 @@ export class ZatcaService {
       return this.statusOf(companyId, invoiceId);
     } catch (e) {
       if (e instanceof ZatcaAttemptFailedException) throw e;
-      // سقوطُ النقل — `fetch` رمى (انقطاعٌ · منفذٌ لا يصغي · مهلة): لا جوابَ فلا `REJECTED`
-      // (`ق-٩٧١`)؛ يُكتب السببُ ويُرمى فيعود الطابورُ إليه بتراجعه.
+      // Anything else that failed on our side around the request (a credential that does not decrypt, a write
+      // after the answer): never REJECTED, retried on the backoff and declared FAILED after the attempt limit.
       const message = (e as Error).message;
       this.logger.warn(`ZATCA submission failed for invoice ${invoiceId}: ${message}`);
       await this.recordAttempt(companyId, invoiceId, message);

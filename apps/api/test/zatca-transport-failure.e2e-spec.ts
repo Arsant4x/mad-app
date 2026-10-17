@@ -8,7 +8,7 @@ import { encryptSecret } from '../src/common/crypto/secret.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
-import { MAX_ATTEMPTS, OutboxService, requeueFailedWithinTx } from '../src/outbox/outbox.service';
+import { MAX_ATTEMPTS, OutboxService } from '../src/outbox/outbox.service';
 import { INVOICE_ISSUED } from '../src/shared/events/domain-events';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
@@ -24,9 +24,10 @@ jest.setTimeout(500000);
  *   ① منفذٌ لا يصغي: الإرسالُ اليدويّ يُردّ `503` بسببٍ يقول «سيُعاد»، والمستندُ **مختومٌ كما
  *      هو** (سلسلتُه ومستندُه الموقَّع) — لا `REJECTED`، ولا لحظةَ إرسال، والسببُ مكتوبٌ ليُرى.
  *   ② الطابور: المحاولةُ تُعدّ ويُعاد الصفُّ `PENDING` بتراجعٍ وسببٍ — والمستندُ كما هو.
- *   ③ الاستنفاد: `FAILED` **معلَناً** — والمستندُ مختومٌ لا مردود («فالتعذّرُ ليس جواباً»).
- *   ④ جوابُ الهيئة بالردّ (`400`): بعد إعادة `FAILED` إلى الطابور يُرسَل ويُردّ — `REJECTED`
- *      و`SENT` وإغلاق (لا إعادةَ إرسال؛ المخرجُ بدل).
+ *   ③ Past the attempt limit a transport failure is still retried, at most an hour apart, never
+ *      FAILED; the document stays stamped, not rejected.
+ *   ④ A 400 rejection on the next retry: REJECTED, the event SENT, and closed (no resubmission;
+ *      the way out is a replacement).
  *   ⑤ جوابُ القبول (`2xx`): `CLEARED`.
  *   ⑥ ما ليس جواباً على المستند وإن جاء من الخادم — `503` · `401` — يُرمى ولا يُغلق؛ والرمزُ
  *      هو الفيصل لا النصّ: الخادمُ نفسُه يجيب بعدها `400` فيُردّ.
@@ -185,17 +186,20 @@ describe('سقوطُ النقل ليس جواباً — يُرمى فيعود ا
     expect(r.zatcaSubmittedAt).toBeNull();
   }, 60000);
 
-  it('③ الاستنفاد: FAILED معلَناً — والمستندُ مختومٌ لا مردود، فالتعذّرُ ليس جواباً', async () => {
+  it('③ past the attempt limit a transport failure stays queued within the hour, and the document stays stamped, not rejected', async () => {
     const ev = await eventOf(firstId);
     await tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.outboxEvent.update({ where: { id: ev.id }, data: { attempts: MAX_ATTEMPTS - 1, availableAt: new Date(0) } }),
     );
+    const now = new Date();
     const result = await dispatch();
-    expect(result.failed).toBeGreaterThanOrEqual(1);
+    expect(result.failed).toBe(0);
+    expect(result.retried).toBeGreaterThanOrEqual(1);
 
     const after = await eventOf(firstId);
-    expect(after.status).toBe('FAILED');
+    expect(after.status).toBe('PENDING');
     expect(after.attempts).toBe(MAX_ATTEMPTS);
+    expect(after.availableAt.getTime() - now.getTime()).toBeLessThanOrEqual(3_600_000 + 60_000);
     expect(String(after.lastError)).toMatch(/fetch failed|ECONNREFUSED/i);
 
     const r = await row(firstId);
@@ -207,10 +211,10 @@ describe('سقوطُ النقل ليس جواباً — يُرمى فيعود ا
     expect(unreported.body.byStatus.REJECTED ?? 0).toBe(0);
   }, 60000);
 
-  it('④ جوابُ الهيئة بالردّ 400: بعد إعادة FAILED إلى الطابور يُرسَل ويُردّ — REJECTED وSENT وإغلاق', async () => {
+  it('④ a 400 rejection from the authority on the next retry ends it: REJECTED, the event SENT, and closed', async () => {
     authority = await startAuthorityStub('reject');
-    const requeued = await tenantPrisma.runInTenantContext(companyId, (tx) => requeueFailedWithinTx(tx, INVOICE_ISSUED));
-    expect(requeued).toBeGreaterThanOrEqual(1);
+    const queued = await eventOf(firstId);
+    await tenantPrisma.runInTenantContext(companyId, (tx) => tx.outboxEvent.update({ where: { id: queued.id }, data: { availableAt: new Date(0) } }));
     const before = await row(firstId);
 
     const result = await dispatch();
