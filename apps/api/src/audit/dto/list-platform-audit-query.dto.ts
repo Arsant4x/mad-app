@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsDateFilter } from '../../common/dto/date-filter.decorator';
 import { MAX_PAGE_SIZE } from '../../common/dto/paged-query.dto';
 
 /** GET /admin/platform-audit-log: always a page, newest first, filtered by administrator, company and date. */
@@ -28,11 +29,11 @@ export class ListPlatformAuditQueryDto {
 
   /** From this moment (a date or a date and time). */
   @IsOptional()
-  @IsISO8601()
+  @IsDateFilter()
   from?: string;
 
   /** Up to this moment; a date alone includes the whole day. */
   @IsOptional()
-  @IsISO8601()
+  @IsDateFilter()
   to?: string;
 }

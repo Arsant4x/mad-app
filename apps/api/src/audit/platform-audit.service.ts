@@ -5,6 +5,7 @@ import { Request, Response } from 'express';
 import { JwtPayload } from '../auth/types';
 import { PLATFORM_AUDIT_TARGET_KEY } from '../common/platform-admin/platform-audit-target.decorator';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dateFilterEnd } from '../common/dto/date-filter.decorator';
 import { DEFAULT_PAGE_SIZE } from '../common/dto/paged-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit.service';
@@ -108,8 +109,7 @@ export class PlatformAuditService {
         ? {
             createdAt: {
               ...(query.from ? { gte: new Date(query.from) } : {}),
-              // A date alone means the whole of that day.
-              ...(query.to ? { lte: new Date(query.to.length === 10 ? `${query.to}T23:59:59.999Z` : query.to) } : {}),
+              ...(query.to ? { lte: dateFilterEnd(query.to) } : {}),
             },
           }
         : {}),

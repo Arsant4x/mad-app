@@ -1,12 +1,7 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, IsString, Matches } from 'class-validator';
+import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsDateFilter } from '../../common/dto/date-filter.decorator';
 import { PagedQueryDto } from '../../common/dto/paged-query.dto';
-
-/**
- * A calendar date, optionally with a time and a zone. ISO 8601 alone also admits week, ordinal and basic forms
- * (`2026-W01`, `2026001`, `20260101`) that a JavaScript date cannot read.
- */
-const READABLE_ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 /**
  * `GET /audit-log` filters, with optional paging.
@@ -33,14 +28,12 @@ export class ListAuditQueryDto extends PagedQueryDto {
 
   /** From this moment (a date or a date and time). */
   @IsOptional()
-  @IsISO8601({ strict: true })
-  @Matches(READABLE_ISO_DATE)
+  @IsDateFilter()
   from?: string;
 
   /** Up to this moment; a date alone includes the whole day. */
   @IsOptional()
-  @IsISO8601({ strict: true })
-  @Matches(READABLE_ISO_DATE)
+  @IsDateFilter()
   to?: string;
 
   @IsOptional()
