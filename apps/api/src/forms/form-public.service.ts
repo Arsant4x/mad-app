@@ -167,19 +167,23 @@ export class FormPublicService {
    */
   async pollNafath(token: string, session: string | undefined, meta: RequestMeta) {
     const link = await this.resolve(token);
-    if (!link.identityTxRef) throw new ConflictException(MSG.form_signing_nafath_not_started);
-    const decision = await this.gateway.identity().status(link.identityTxRef);
+    const txRef = link.identityTxRef;
+    if (!txRef) throw new ConflictException(MSG.form_signing_nafath_not_started);
+    const decision = await this.gateway.identity().status(txRef);
     const outcome = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
       const otpStep = twoStepOf(link, instance) ? await this.otpStepDone(tx, link, session) : null;
       if (decision.decision === 'PENDING') return { state: 'PENDING' as const, session: null, instanceId: instance.id };
+      // A decided transaction answers one login: it is spent here, and a second read of it finds nothing to use.
+      const spent = await tx.formSigningLink.updateMany({ where: { id: link.id, identityTxRef: txRef }, data: { identityTxRef: null } });
+      if (spent.count !== 1) throw new ConflictException(MSG.form_signing_nafath_not_started);
       const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
       const matches = decision.decision === 'APPROVED' && !!decision.nationalId && !!party.idIndex && party.idIndex === customerOtherIdIndex(decision.nationalId, link.companyId);
       if (!matches) {
         await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'NAFATH_REJECTED', actor: LINK_ACTOR, note: decision.decision });
         return { state: 'REJECTED' as const, session: null, instanceId: instance.id };
       }
-      const opened = await this.openSession(tx, link, 'NAFATH', otpStep ? otpStep.challengeId : link.identityTxRef!);
+      const opened = await this.openSession(tx, link, 'NAFATH', otpStep ? otpStep.challengeId : txRef, txRef);
       await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'LOGIN', actor: LINK_ACTOR, note: otpStep ? 'OTP+NAFATH' : 'NAFATH' });
       return { state: 'APPROVED' as const, session: opened, instanceId: instance.id };
     });
@@ -281,9 +285,9 @@ export class FormPublicService {
             evidenceKey: stored.key,
             evidenceSha256: bytesSha256(drawing.buffer),
             signedContentHash: contentHashOf(instance),
-            // البديلُ في نموذج نفاذ دخل بالاثنين: مرجعُ رمزه على الجلسة، ومعاملةُ نفاذ على الرابط (`ق-١٦٧٧`).
+            // A substitute on a Nafath form logged in with both: the code and the Nafath transaction that opened this session.
             challengeId: fresh.sessionMethod === 'OTP' || twoStepOf(link, instance) ? fresh.sessionRef : null,
-            identityTxRef: fresh.sessionMethod === 'NAFATH' ? fresh.identityTxRef : null,
+            identityTxRef: fresh.sessionMethod === 'NAFATH' ? fresh.sessionIdentityTxRef : null,
             ip: meta.ip,
             userAgent: meta.userAgent,
           },
@@ -382,12 +386,12 @@ export class FormPublicService {
     return instance;
   }
 
-  private async openSession(tx: Tx, link: LinkRow, method: 'OTP' | 'NAFATH', ref: string) {
+  private async openSession(tx: Tx, link: LinkRow, method: 'OTP' | 'NAFATH', ref: string, identityTxRef: string | null = null) {
     const session = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + FORM_SESSION_MS);
     await tx.formSigningLink.update({
       where: { id: link.id },
-      data: { sessionHash: opaqueTokenHash(session), sessionExpiresAt: expiresAt, sessionMethod: method, sessionRef: ref },
+      data: { sessionHash: opaqueTokenHash(session), sessionExpiresAt: expiresAt, sessionMethod: method, sessionRef: ref, sessionIdentityTxRef: identityTxRef },
     });
     return { session, expiresAt: expiresAt.toISOString() };
   }

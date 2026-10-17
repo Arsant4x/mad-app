@@ -7527,6 +7527,8 @@ model FormSigningLink {
   sessionExpiresAt DateTime?
   sessionMethod    String?
   sessionRef       String?
+  /// The Nafath transaction that opened the current session, kept apart from a pending one so each approval opens one session.
+  sessionIdentityTxRef String?
   /// معاملةُ نفاذٍ جارية لهذا الرابط.
   identityTxRef    String?
   /// ⚖️ رابطٌ فُتح على جهاز الموظّف بحضور الطرف (`ق-١٦٢٠`: «ويبقى التوقيعُ على جهاز الموظّف خياراً»): الخطوتان نفسُهما، والقناةُ تُسجَّل.
