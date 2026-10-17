@@ -1,7 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
 import { InstallmentStatus, Prisma, RentAccrualKind } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
+import { PeriodClosedException } from '../fiscal/period-lock.util';
 import {
   postDeferredToOtherIncomeEntry,
   postPartySettlementEntry,
@@ -258,8 +258,8 @@ async function accrueInstallment(tx: Prisma.TransactionClient, companyId: string
       written += 1;
       if (point.kind === 'DUE') dueWritten = true;
     } catch (e) {
-      // قفلُ الفترة يُرمى قبل أي كتابة (assertPeriodOpen) — فالمعاملةُ صالحةٌ ويُعدّ القسط.
-      if (e instanceof BadRequestException) return null;
+      // The period lock throws before anything is written, so the transaction stays usable and the instalment is counted.
+      if (e instanceof PeriodClosedException) return null;
       throw e;
     }
   }
