@@ -43,7 +43,7 @@ import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { ContractFeeDto, EndContractFeeDto } from './dto/contract-fee.dto';
 import { ContractFeeResponse, CreatedContractFeeResponse } from './dto/contract-fee-responses.dto';
-import { raiseDueFeesWithinTx } from './contract-fees.util';
+import { endFeeLinesWithinTx, raiseDueFeesWithinTx, waiveFeeClaimsWithinTx } from './contract-fees.util';
 import { applyTenantCreditOnRenewalWithinTx, tenantCreditBalanceWithinTx } from './tenant-credit.util';
 import { cutContractForEarlyRenewalWithinTx } from './early-renewal-cut.util';
 import { TenantContext } from '../auth/types';
@@ -174,6 +174,8 @@ function presentFee(fee: { id: string; contractId: string; label: string; amount
     endedAt: fee.endedAt ? fee.endedAt.toISOString().slice(0, 10) : null,
   };
 }
+
+const CANCEL_FEE_WAIVE_REASON = 'أُسقطت بإلغاء العقد: قسطُها من تاريخ الإلغاء';
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
@@ -807,7 +809,7 @@ export class ContractsService {
             ? requireCashDayRate(existing.currency, dto.exchangeRate)
             : null;
 
-        const settlementAmount = await this.resolveSettlementAmount(tx, id, cancelDate, dto);
+        const settlementAmount = await this.resolveSettlementAmount(tx, accrualContract, cancelDate, dto);
         // بنود التسوية (§16): التفصيل لا يغيّر المبلغ — يشرحه. مجموعٌ لا
         // يساويه = خطأ إدخال يُرفض قبل أي أثر.
         if (dto.settlementLines?.length) {
@@ -860,11 +862,15 @@ export class ContractsService {
         }
 
         if (dto.installmentDisposition === 'cancel') {
-          await tx.installment.updateMany({
+          const voided = await tx.installment.findMany({
             where: { contractId: id, status: { in: VOIDED_ON_CANCEL }, dueDate: { gte: cancelDate } },
-            data: { status: 'CANCELLED' },
+            select: { id: true },
           });
+          await tx.installment.updateMany({ where: { id: { in: voided.map((i) => i.id) } }, data: { status: 'CANCELLED' } });
+          // Fee claims go with the installments they were raised for.
+          await waiveFeeClaimsWithinTx(tx, companyId, accrualContract, voided.map((i) => i.id), cancelDate, CANCEL_FEE_WAIVE_REASON);
         }
+        await endFeeLinesWithinTx(tx, id, lastServedDay);
         // Nothing from the cancel date on is billed again, whether cancelled or kept.
         await tx.installment.updateMany({
           where: { contractId: id, dueDate: { gte: cancelDate }, accrualCompletedAt: null },
@@ -913,19 +919,29 @@ export class ContractsService {
   /** Turns the chosen basis into a figure. Returns 0 for 'none', and for the
    * installment-derived bases when nothing is left unpaid — cancelling a fully
    * paid lease owes nothing. */
-  private async resolveSettlementAmount(tx: Prisma.TransactionClient, contractId: string, cancelDate: Date, dto: CancelContractDto): Promise<number> {
+  private async resolveSettlementAmount(tx: Prisma.TransactionClient, contract: AccrualContract, cancelDate: Date, dto: CancelContractDto): Promise<number> {
     const basis = dto.settlementBasis ?? 'none';
     if (basis === 'none') return 0;
     if (basis === 'amount') return dto.settlementAmount ?? 0;
 
     const remaining = await tx.installment.findMany({
-      where: { contractId, status: { in: ['DUE', 'LATE'] }, dueDate: { gte: cancelDate } },
+      where: { contractId: contract.id, status: { in: VOIDED_ON_CANCEL }, dueDate: { gte: cancelDate } },
       orderBy: { dueDate: 'asc' },
       ...(basis === 'installments' ? { take: dto.settlementInstallments } : {}),
-      select: { amount: true },
+      select: { amount: true, status: true, payments: { select: { netAmount: true, discount: true } } },
     });
 
-    return round2(remaining.reduce((sum, i) => sum + Number(i.amount), 0));
+    // A partly paid installment counts by the share of its amount still unpaid; paid is measured against its gross, as its status is.
+    const treatment = treatmentOf(contract);
+    return round2(
+      remaining.reduce((sum, i) => {
+        const amount = Number(i.amount);
+        if (i.status !== 'PARTIAL') return sum + amount;
+        const gross = treatment ? rentAmountsOf(amount, treatment).gross : round2(amount);
+        const settled = round2(i.payments.reduce((s, p) => s + Number(p.netAmount) + Number(p.discount), 0));
+        return gross > 0 ? sum + round2((amount * Math.max(0, gross - settled)) / gross) : sum;
+      }, 0),
+    );
   }
 
   /** قبضُ إيجار — مرّةً لكلِّ مفتاح طلب (`recordPaymentOnce` يحمل القبضَ نفسَه وإعلانَ صندوقه). */

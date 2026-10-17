@@ -1,7 +1,7 @@
 import { Prisma } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { PeriodClosedException } from '../fiscal/period-lock.util';
-import { postClaimIssueEntry } from '../journal/auto-posting.util';
+import { postClaimIssueEntry, postClaimWaiverEntry } from '../journal/auto-posting.util';
 import { chargeTaxOn } from '../journal/charge-tax.util';
 
 /**
@@ -27,6 +27,43 @@ export interface FeeSweepResult {
 export const FEE_KIND_LABEL = 'رسوم خدمة';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Ends a contract's fee lines on `lastDay`; a line that only starts after it ends where it starts, so it never charges. */
+export async function endFeeLinesWithinTx(tx: Prisma.TransactionClient, contractId: string, lastDay: Date): Promise<void> {
+  const fees = await tx.contractFee.findMany({ where: { contractId, OR: [{ endedAt: null }, { endedAt: { gt: lastDay } }] }, select: { id: true, effectiveFrom: true } });
+  for (const f of fees) await tx.contractFee.update({ where: { id: f.id }, data: { endedAt: f.effectiveFrom > lastDay ? f.effectiveFrom : lastDay } });
+}
+
+/** Waives the open fee claims raised for the given installments, each with its waiver entry dated `date`. Returns how many. */
+export async function waiveFeeClaimsWithinTx(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  contract: { id: string; unitId: string; customerId: string | null; no: string; tenant: string },
+  installmentIds: string[],
+  date: Date,
+  reason: string,
+): Promise<number> {
+  if (installmentIds.length === 0) return 0;
+  const claims = await tx.contractClaim.findMany({
+    where: { contractId: contract.id, feeId: { not: null }, installmentId: { in: installmentIds }, status: 'OPEN' },
+    select: { id: true, baseAmount: true, baseTax: true, taxTreatment: true },
+  });
+  for (const c of claims) {
+    const entry = await postClaimWaiverEntry(tx, companyId, {
+      unitId: contract.unitId,
+      customerId: contract.customerId,
+      contractNo: contract.no,
+      tenant: contract.tenant,
+      date,
+      baseAmount: Number(c.baseAmount),
+      kindLabel: FEE_KIND_LABEL,
+      treatment: c.taxTreatment,
+      baseTax: Number(c.baseTax),
+    });
+    await tx.contractClaim.update({ where: { id: c.id }, data: { status: 'WAIVED', settledAt: date, waiveReason: reason, settlementEntryId: entry?.id ?? null } });
+  }
+  return claims.length;
+}
 
 export async function raiseDueFeesWithinTx(tx: Prisma.TransactionClient, companyId: string, asOf: Date, contractId?: string): Promise<FeeSweepResult> {
   const result: FeeSweepResult = { raised: 0, blockedByPeriodLock: 0 };

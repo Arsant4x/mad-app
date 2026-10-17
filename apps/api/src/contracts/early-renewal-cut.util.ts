@@ -2,7 +2,7 @@ import { Prisma } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { deriveSettlementStatus } from '../common/settlement/settlement.util';
-import { postClaimWaiverEntry, postDeferredRecognitionEntry } from '../journal/auto-posting.util';
+import { postDeferredRecognitionEntry } from '../journal/auto-posting.util';
 import {
   ACCRUAL_CONTRACT_SELECT,
   AccrualContract,
@@ -13,7 +13,7 @@ import {
 } from '../journal/rent-accrual.util';
 import { dayNumber, periodDays, recognitionShareLabel } from '../journal/rent-recognition.util';
 import { rentAmountsOf, RentTaxTreatment } from '../journal/rent-tax-point.util';
-import { FEE_KIND_LABEL } from './contract-fees.util';
+import { endFeeLinesWithinTx, waiveFeeClaimsWithinTx } from './contract-fees.util';
 
 /** What the cut did to the original contract. */
 export interface EarlyRenewalCut {
@@ -121,10 +121,8 @@ export async function cutContractForEarlyRenewalWithinTx(
     }
   }
 
-  // Fee lines stop at the cut; a line that only starts after it ends where it starts, so it never charges.
-  const fees = await tx.contractFee.findMany({ where: { contractId, OR: [{ endedAt: null }, { endedAt: { gt: cut } }] }, select: { id: true, effectiveFrom: true } });
-  for (const f of fees) await tx.contractFee.update({ where: { id: f.id }, data: { endedAt: f.effectiveFrom > cut ? f.effectiveFrom : cut } });
-  result.waivedFeeClaims = await waiveFeeClaims(ctx, cancelledIds);
+  await endFeeLinesWithinTx(tx, contractId, cut);
+  result.waivedFeeClaims = await waiveFeeClaimsWithinTx(tx, companyId, contract, cancelledIds, postingDate, WAIVE_REASON);
 
   await tx.contract.update({ where: { id: contractId }, data: { end: cut } });
   return result;
@@ -265,32 +263,4 @@ async function recognizeUpToCut(ctx: CutContext, installmentId: string): Promise
     periodLabel: recognitionShareLabel(cut, cut),
   });
   if (entry) await tx.installment.update({ where: { id: installmentId }, data: { baseRecognized: i.baseAccruedNet } });
-}
-
-/** Waives the open fee claims raised for installments that the cut cancelled, dated on the posting date. */
-async function waiveFeeClaims(ctx: CutContext, installmentIds: string[]): Promise<number> {
-  const { tx, companyId, contract, postingDate } = ctx;
-  if (installmentIds.length === 0) return 0;
-  const claims = await tx.contractClaim.findMany({
-    where: { contractId: contract.id, feeId: { not: null }, installmentId: { in: installmentIds }, status: 'OPEN' },
-    select: { id: true, baseAmount: true, baseTax: true, taxTreatment: true },
-  });
-  for (const c of claims) {
-    const entry = await postClaimWaiverEntry(tx, companyId, {
-      unitId: contract.unitId,
-      customerId: contract.customerId,
-      contractNo: contract.no,
-      tenant: contract.tenant,
-      date: postingDate,
-      baseAmount: Number(c.baseAmount),
-      kindLabel: FEE_KIND_LABEL,
-      treatment: c.taxTreatment,
-      baseTax: Number(c.baseTax),
-    });
-    await tx.contractClaim.update({
-      where: { id: c.id },
-      data: { status: 'WAIVED', settledAt: postingDate, waiveReason: WAIVE_REASON, settlementEntryId: entry?.id ?? null },
-    });
-  }
-  return claims.length;
 }

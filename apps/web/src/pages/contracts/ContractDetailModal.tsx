@@ -236,6 +236,21 @@ function PaymentForm({
   );
 }
 
+/**
+ * What a settlement from the upcoming installments counts of one: its amount, or for a partly paid one the share of its
+ * amount still unpaid (paid is measured against its gross), as the server counts it.
+ */
+function unpaidShareOf(
+  contract: TaxedContract,
+  installment: { amount: string | number; status: InstallmentStatus; gross?: MoneyText; settled?: MoneyText; remaining?: MoneyText },
+): number {
+  const amount = Number(installment.amount);
+  if (installment.status !== 'PARTIAL') return amount;
+  const gross = installment.gross !== undefined ? num0(installment.gross) : grossNumberOf(contract, installment.amount);
+  const remaining = installment.remaining !== undefined ? num0(installment.remaining) : round2(gross - num0(installment.settled));
+  return gross > 0 ? round2((amount * Math.max(0, remaining)) / gross) : 0;
+}
+
 const SETTLEMENT_BASIS_LABEL: Record<SettlementBasis, string> = {
   get none() { return i18n.t('contracts.detail.settlement_basis.none'); },
   get amount() { return i18n.t('contracts.detail.settlement_basis.amount'); },
@@ -252,6 +267,8 @@ export function CancelForm({ contract, onCancel, onSubmit }: { contract: Contrac
   const [settlementAmount, setSettlementAmount] = useState('');
   const [settlementInstallments, setSettlementInstallments] = useState('1');
   const [lines, setLines] = useState<{ label: string; amount: string }[]>([]);
+  // No default: the server asks for it only when rent covers a period after the cancel date, and either answer can be wrong.
+  const [unearnedDisposition, setUnearnedDisposition] = useState<'' | 'refund' | 'income'>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -259,16 +276,17 @@ export function CancelForm({ contract, onCancel, onSubmit }: { contract: Contrac
    * server recomputes it from the same rows, so this is a display aid, never
    * the source of truth. */
   const unpaidFromCancelDate = contract.installments
-    .filter((i) => (i.status === 'DUE' || i.status === 'LATE') && i.dueDate >= cancelDate)
+    .filter((i) => (i.status === 'DUE' || i.status === 'LATE' || i.status === 'PARTIAL') && i.dueDate >= cancelDate)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const unpaidSum = (rows: typeof unpaidFromCancelDate) => round2(rows.reduce((sum, i) => sum + unpaidShareOf(contract, i), 0));
 
   const previewedSettlement =
     settlementBasis === 'amount'
       ? parseFloat(settlementAmount) || 0
       : settlementBasis === 'installments'
-        ? unpaidFromCancelDate.slice(0, parseInt(settlementInstallments, 10) || 0).reduce((sum, i) => sum + Number(i.amount), 0)
+        ? unpaidSum(unpaidFromCancelDate.slice(0, parseInt(settlementInstallments, 10) || 0))
         : settlementBasis === 'all'
-          ? unpaidFromCancelDate.reduce((sum, i) => sum + Number(i.amount), 0)
+          ? unpaidSum(unpaidFromCancelDate)
           : 0;
 
   // Settling from the installments charges them already, so the server refuses keeping them due as well.
@@ -294,6 +312,7 @@ export function CancelForm({ contract, onCancel, onSubmit }: { contract: Contrac
         cancelDate,
         cancelReason: cancelReason.trim(),
         installmentDisposition: disposition,
+        ...(unearnedDisposition ? { unearnedDisposition } : {}),
         ...(settlementBasis === 'none'
           ? {}
           : {
@@ -360,6 +379,15 @@ export function CancelForm({ contract, onCancel, onSubmit }: { contract: Contrac
             <p className="hint">{t('contracts.detail.cancel_form.unpaid_from_date', { n: unpaidFromCancelDate.length })}</p>
           </div>
         )}
+      </div>
+      <div className="field">
+        <label>{t('contracts.detail.cancel_form.unearned')}</label>
+        <select value={unearnedDisposition} onChange={(e) => setUnearnedDisposition(e.target.value as '' | 'refund' | 'income')}>
+          <option value="">{t('contracts.detail.cancel_form.unearned_unset')}</option>
+          <option value="refund">{t('contracts.detail.cancel_form.unearned_refund')}</option>
+          <option value="income">{t('contracts.detail.cancel_form.unearned_income')}</option>
+        </select>
+        <p className="hint">{t('contracts.detail.cancel_form.unearned_hint')}</p>
       </div>
       {settlementBasis !== 'none' && (
         // Says where the money lands, because "settlement" alone doesn't tell

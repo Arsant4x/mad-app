@@ -426,6 +426,11 @@
       "line_amount_placeholder": "Amount (negative = discount)",
       "lines_sum": "Lines total: ",
       "lines_must_equal": " — must equal {{amount}}",
+      "unearned": "Rent received or accrued for a period after the cancel date",
+      "unearned_unset": "Not chosen",
+      "unearned_refund": "Refunded to the tenant",
+      "unearned_income": "Kept as income under the contract",
+      "unearned_hint": "Asked when rent received or accrued covers a period after the cancel date: refunded to the tenant, who then owes none of it that is unpaid, or kept as other income under the contract. Nothing is chosen for you.",
       "confirm": "Confirm cancellation"
     },
     "renew": {
