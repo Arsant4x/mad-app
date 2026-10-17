@@ -162,6 +162,8 @@ describe('A cancelled contract stops billing (e2e)', () => {
     // Kept and not billed yet: due from the cancel date on and after the moment the contract was created.
     const kept = r2(created.installments.filter((i) => i.dueDate.slice(0, 10) >= iso(today) && new Date(i.dueDate).getTime() > now).reduce((s, i) => s + Number(i.amount), 0));
     expect(kept).toBeGreaterThan(0);
+    // 400 of one of them is paid in advance: billed when received, it is kept as income by the chosen destination.
+    await as(c)(http().post(`/contracts/${created.id}/payments`)).send({ date: iso(today), amount: 400, method: 'CASH', installmentId: installmentDue(created, M(2)).id }).expect(201);
 
     const atCancel = await measured(c, () => cancel(c, created.id, { cancelDate: iso(today), installmentDisposition: 'keep', unearnedDisposition: 'income' }).expect(201));
     const feeClaimsAtCancel = (await getContract(c, created.id)).claims.filter((cl) => cl.kind === 'FEE').length;
@@ -178,8 +180,8 @@ describe('A cancelled contract stops billing (e2e)', () => {
       afterCancel,
       newFeeClaims: contract.claims.filter((cl) => cl.kind === 'FEE').length - feeClaimsAtCancel,
     }).toEqual({
-      compensation: [kept],
-      receivableAtCancel: kept,
+      compensation: [r2(kept - 400)],
+      receivableAtCancel: r2(kept - 400),
       afterCancel: { 1200: 0, 2200: 0, 2400: 0, 4200: 0, 4300: 0 },
       newFeeClaims: 0,
     });
