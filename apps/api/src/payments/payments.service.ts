@@ -256,10 +256,13 @@ export class PaymentsService {
           prepaymentTax = resolveDeclaredLineTax(dto.prepaymentTax);
         }
         if (declared === 'ON_ACCOUNT') {
-          // «على الحساب» = ذمّةٌ مفوترةٌ تأخّر تخصيصُها — فلا بدّ أن تغطّيه فواتيرُ العميل المفتوحة بعد تخصيصات هذا السند.
-          const openRemaining = round2((await this.openRemainingOf(tx, dto.customerId)) - allocatedNow);
-          if (openRemaining + 0.005 < remainder) {
-            throw new BadRequestException(formatMessage(MSG.payment_on_account_uncovered, { remainder: money(remainder), open: money(Math.max(0, openRemaining)) }));
+          // On account is invoiced debt allocated later, so the customer's net receivable must cover it, in base currency.
+          // The customer row is locked first so two such receipts cannot both read the same coverage.
+          await tx.$queryRaw`SELECT "id" FROM "customers" WHERE "id" = ${dto.customerId} FOR UPDATE`;
+          const allocatedNowBase = allocations.reduce((s, a) => s + toBaseAmount(a.amount, invoices.get(a.invoiceId)?.exchangeRate ?? exchangeRate), 0);
+          const openBase = round2((await this.onAccountCoverageBaseOf(tx, dto.customerId)) - allocatedNowBase);
+          if (openBase + 0.005 < toBaseAmount(remainder, exchangeRate)) {
+            throw new BadRequestException(formatMessage(MSG.payment_on_account_uncovered, { remainder: money(remainder), open: money(Math.max(0, round2(openBase / exchangeRate))) }));
           }
         }
         // ⚖️ (`ق-١٤٩٠`) مستندُ الدفعة المقدَّمة (386) رقمٌ ضريبيّ يُحجز بعد سند القبض — فمبلغُه وحساباتُ قيده و`2450` بنوعه
@@ -331,21 +334,43 @@ export class PaymentsService {
   }
 
   /**
-   * ④A1 — متبقّي فواتير العميل المفتوحة (ما يراه موزِّعُ الدفعة في `openInvoices`): من التخصيصات لا من حقل.
-   * مستندُ الدفعة المقدَّمة ليس ذمّةً فلا يدخل، والدائنُ يخفّض لا يزيد.
+   * The customer's net invoiced receivable in base currency, which is what an on-account amount may draw on: each invoice
+   * and debit note at its own rate (total less credit notes less allocations, negative where a credit note exceeded what
+   * was unpaid), less what the customer's receipts left unallocated at their receivable rate, reversals and refunds with
+   * their sign. A prepayment document is not a receivable, so it does not enter.
    *
-   * **على مستوى المنشأة بحقّها**: الذمّةُ ذمّةُ العميل على المنشأة لا على فرع — كما يقرؤها `openInvoices` لموزِّع الدفعة،
-   * وفاتورةُ فرعٍ محجوبٍ تغطّي المقبوضَ على الحساب كما تغطّيه فاتورةُ فرع القارئ.
+   * Company wide on purpose: the debt is the customer's to the company, not to a branch.
    */
-  private async openRemainingOf(tx: Prisma.TransactionClient, customerId: string): Promise<number> {
-    const open = await tx.invoice.findMany({
-      where: { customerId, status: { not: 'PAID' }, docType: { in: [...RECEIVABLE_INVOICE_KINDS] }, ...NOT_REPLACED_REJECTED },
-      select: { id: true, docType: true, total: true, adjustments: CREDIT_NOTES_ON_DOCUMENT },
+  private async onAccountCoverageBaseOf(tx: Prisma.TransactionClient, customerId: string): Promise<number> {
+    // Only a document that is unpaid or carries a credit note can hold a non zero balance.
+    const documents = await tx.invoice.findMany({
+      where: {
+        customerId,
+        docType: { in: [...RECEIVABLE_INVOICE_KINDS] },
+        AND: [NOT_REPLACED_REJECTED, { OR: [{ status: { not: 'PAID' } }, { adjustments: { some: { docType: 'CREDIT_NOTE' } } }] }],
+      },
+      select: { id: true, total: true, exchangeRate: true, adjustments: CREDIT_NOTES_ON_DOCUMENT },
     });
-    if (open.length === 0) return 0;
-    const credited = new Map(open.map((i) => [i.id, creditedTotal(i.adjustments)]));
-    const remaining = withRemaining(open, await allocatedByDocument(invoiceTarget(tx), open.map((i) => i.id)), credited, 'CREDIT_NOTE');
-    return round2(remaining.reduce((s, d) => s + d.remaining, 0));
+    const allocated = await allocatedByDocument(invoiceTarget(tx), documents.map((d) => d.id));
+    const documentsBase = documents.reduce(
+      (s, d) => s + toBaseAmount(round2(Number(d.total) - creditedTotal(d.adjustments) - (allocated.get(d.id) ?? 0)), Number(d.exchangeRate)),
+      0,
+    );
+    const receipts = await tx.payment.findMany({
+      where: { customerId },
+      select: {
+        amount: true,
+        exchangeRate: true,
+        allocations: { select: { amount: true } },
+        refundsInvoice: { select: { exchangeRate: true } },
+        reverses: { select: { refundsInvoice: { select: { exchangeRate: true } } } },
+      },
+    });
+    const unallocatedBase = receipts.reduce((s, p) => {
+      const left = round2(Number(p.amount) - p.allocations.reduce((sum, a) => sum + Number(a.amount), 0));
+      return Math.abs(left) > 0.005 ? s + toBaseAmount(left, unallocatedReceivableRate(p)) : s;
+    }, 0);
+    return round2(documentsBase - unallocatedBase);
   }
 
   /**
