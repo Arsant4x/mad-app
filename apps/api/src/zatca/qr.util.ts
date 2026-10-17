@@ -51,10 +51,14 @@ export class ZatcaQrValueTooLongError extends Error {
   }
 }
 
-function tlv(tag: number, value: string): Buffer {
-  const encoded = Buffer.from(value, 'utf8');
+/** One TLV field from raw bytes, shared by the phase 1 and phase 2 builders so both keep the one byte length limit. */
+export function tlvBytes(tag: number, encoded: Buffer): Buffer {
   if (encoded.length > ZATCA_QR_MAX_VALUE_BYTES) throw new ZatcaQrValueTooLongError(tag, encoded.length);
   return Buffer.concat([Buffer.from([tag, encoded.length]), encoded]);
+}
+
+function tlv(tag: number, value: string): Buffer {
+  return tlvBytes(tag, Buffer.from(value, 'utf8'));
 }
 
 /**
