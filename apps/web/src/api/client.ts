@@ -99,6 +99,36 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 let refreshPromise: Promise<RefreshResult | null> | null = null;
 
+/** One name for every tab of this origin, so their refreshes queue behind each other. */
+const REFRESH_LOCK = 'mad-app:auth-refresh';
+
+function postRefresh(): Promise<RefreshResult | null> {
+  return refreshClient
+    .post<RefreshResult>('/auth/refresh')
+    .then((res) => res.data)
+    .catch(() => null);
+}
+
+/**
+ * Runs the refresh while holding a lock shared by every tab of the origin. The
+ * server ends every session when one refresh token is presented twice, and all
+ * tabs send the same cookie, so two tabs refreshing together would sign the user
+ * out everywhere. Under the lock the second tab's request leaves after the first
+ * response has rotated the cookie, so it carries the new token. Without the Web
+ * Locks API, or when the lock cannot be taken, it refreshes without one.
+ */
+function refreshAcrossTabs(): Promise<RefreshResult | null> {
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (!locks?.request) return postRefresh();
+  let ran = false;
+  return locks
+    .request(REFRESH_LOCK, () => {
+      ran = true;
+      return postRefresh();
+    })
+    .catch(() => (ran ? null : postRefresh()));
+}
+
 /**
  * The refresh token is single-use (rotated server-side on every call), so any
  * two concurrent calls here would race: the loser presents an already-revoked
@@ -106,17 +136,14 @@ let refreshPromise: Promise<RefreshResult | null> | null = null;
  * StrictMode double-mounts effects in dev, and AuthProvider's boot effect
  * calls this on mount, so without dedup every page load fires it twice and
  * one of them 401s. Sharing a single in-flight promise fixes both that and
- * the interceptor's own 401-triggered refresh happening at the same time.
+ * the interceptor's own 401-triggered refresh happening at the same time;
+ * the lock in refreshAcrossTabs does the same between tabs.
  */
 export async function refreshSession(): Promise<RefreshResult | null> {
   if (!refreshPromise) {
-    refreshPromise = refreshClient
-      .post<RefreshResult>('/auth/refresh')
-      .then((res) => res.data)
-      .catch(() => null)
-      .finally(() => {
-        refreshPromise = null;
-      });
+    refreshPromise = refreshAcrossTabs().finally(() => {
+      refreshPromise = null;
+    });
   }
   return refreshPromise;
 }
