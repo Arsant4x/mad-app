@@ -59,7 +59,7 @@
 ⚠️ **وهي تستشهد بـ`gap-analysis.md`** — وهو **مؤرشفٌ منذ 2026-08-08** في
 `docs/archive/` ورأسه يقول «لا يُعتمد عليها». بندٌ يُراجَع.
 
-## الوثائق — ٦٢
+## الوثائق — ٦٣
 
 | الملف | العنوان | التاريخ | الحالة | أسطر | تعتمد على |
 |---|---|---|---|---|---|
@@ -117,6 +117,7 @@
 | [`security-guarding-master-plan.md`](plans/security-guarding-master-plan.md) | الخطة الشاملة — نظام محاسبي لشركات الأمن والحراسة الأهلية والأنشطة المشابهة | — | مسوّدة | 982 | — |
 | [`service-center-full-spec.md`](plans/service-center-full-spec.md) | رِكز — المواصفة الكاملة: الصيانة ومراكز الخدمة | — | مسوّدة | 1819 | inventory-master-plan.md |
 | [`shared-types-plan.md`](plans/shared-types-plan.md) | خطّةُ الأنواع المشتركة — أربعُ خطواتٍ بكلفتها وما ينكسر: معرّفُ عمليةٍ واحد · مخطّطاتُ الطلب الستّة · توليدُ المئة والتسعة · الردودُ بمِسنَن (ق-١٣٧٠) | 2026-09-24 | حُكمت (٢٦١ · ق-١٣٨٢…١٣٨٦) — تُبنى بالترتيب | 168 | — |
+| [`subscriptions-plan.md`](plans/subscriptions-plan.md) | خطّة نظام الاشتراكات: الباقاتُ والأسعارُ والمددُ والتجربةُ والخصوماتُ والتجديدُ والإيقافُ وفواتيرُ الاشتراك خلف واجهة دفعٍ موحّدة (`ق-١٧٠٧`) | 2026-10-17 | مسوّدةٌ للإقرار | 357 | — |
 | [`support-full-spec.md`](plans/support-full-spec.md) | المواصفة الشاملة لنظام خدمة العملاء والدعم الفني | 2026-08-27 | مسوّدة | 759 | — |
 | [`transport-logistics-full-spec.md`](plans/transport-logistics-full-spec.md) | مواصفة كاملة — وحدة النقل والخدمات اللوجستية | — | مسوّدة | 1339 | inventory-master-plan.md |
 | [`travel-master-plan.md`](plans/travel-master-plan.md) | الخطة الرئيسية — ملف نشاط وكالات السفر والسياحة والحجوزات | 2026-08-28 | معتمدة | 1739 | hr-master-plan.md، inventory-master-plan.md |
