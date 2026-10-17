@@ -231,11 +231,11 @@ describe('ZATCA invoice type is fixed at signing (e2e)', () => {
           const read = () =>
             tx.$queryRaw<{ id: string; type: string | null; code: string | null }[]>`
               SELECT "id", "zatcaInvoiceType"::text AS "type", "zatcaTransactionCode" AS "code" FROM "invoices" WHERE "id" IN (${ids[0]}, ${ids[1]}, ${ids[2]})`;
-          // Nothing missing: the block returns before writing.
-          await tx.$executeRawUnsafe(backfill!);
-          seen.untouched = await read();
           // The backfill ran before the signed invoice guard existed, so it is replayed with the guard lifted as it was then.
           await writePastDbGuard(tx, 'invoices', async () => {
+            // Nothing missing on these rows: the block leaves them as they are.
+            await tx.$executeRawUnsafe(backfill!);
+            seen.untouched = await read();
             await tx.$executeRaw`UPDATE "invoices" SET "zatcaInvoiceType" = NULL, "zatcaTransactionCode" = NULL WHERE "id" IN (${ids[0]}, ${ids[1]}, ${ids[2]})`;
             await tx.$executeRaw`UPDATE "invoices" SET "zatcaSignedXml" = replace("zatcaSignedXml", '<cbc:InvoiceTypeCode name="0200000">', '<cbc:InvoiceTypeCode>') WHERE "id" = ${ids[2]}`;
             await tx.$executeRawUnsafe(backfill!);
