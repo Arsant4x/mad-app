@@ -22,8 +22,7 @@ export class CreateStockMovementDto extends BranchFieldDto {
   @IsNumber()
   qty!: number;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsDateString()
   date!: string;
 
   /**

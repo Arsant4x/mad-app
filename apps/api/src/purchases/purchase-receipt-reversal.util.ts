@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { postReversalEntry } from '../journal/auto-posting.util';
 import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 
@@ -77,6 +78,8 @@ export async function reverseGoodsReceipt(tx: Tx, args: ReverseGoodsReceiptArgs)
   });
   if (!receipt) throw new ConflictException(MSG.goods_receipt_not_found);
   if (receipt.voidedAt) throw new ConflictException(MSG.goods_receipt_voided);
+  // The stock leaves on the reversal date, so its period must be open even when the receipt cost nothing.
+  await assertPeriodOpen(tx, args.date);
 
   // ⚖️ `ق-١٣٤٢` حصّةُ الضريبة غيرِ القابلة للخصم التي تحملها طبقاتُ هذا الاستلام تعود إلى الوسيط **قبل** أن تخرج —
   // فتخرج البضاعةُ بتكلفتها كما استُلمت ويُعكس قيدُ الاستلام بمبلغه، ولا يبقى في `1300` ما لا طبقةَ له.
