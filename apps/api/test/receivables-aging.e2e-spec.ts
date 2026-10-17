@@ -283,5 +283,5 @@ describe('Receivables aging (e2e)', () => {
     const res = await auth(request(app.getHttpServer()).get('/reports/receivables-aging/export')).expect(200);
     expect(res.text).toContain(`"'=HYPERLINK(""x"") ${suffix}"`);
     expect(res.text).not.toContain(`"=HYPERLINK(""x"") ${suffix}"`);
-  }, 90000);
+  });
 });
