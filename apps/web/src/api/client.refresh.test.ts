@@ -63,19 +63,20 @@ type LockCallback<T> = (lock: { name: string } | null) => Promise<T> | T;
 /** An exclusive lock manager shared by every tab of the origin, granting requests in order (with ifAvailable as in the browser). */
 function sharedLocks() {
   const tails = new Map<string, Promise<unknown>>();
-  const held = new Set<string>();
+  // Requests granted or waiting per name, counted when requested since the browser decides in request order.
+  const taken = new Map<string, number>();
   return {
     request<T>(name: string, optionsOrCallback: { ifAvailable?: boolean } | LockCallback<T>, maybeCallback?: LockCallback<T>): Promise<T> {
       const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback;
       const callback = (typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback) as LockCallback<T>;
-      if (options.ifAvailable && held.has(name)) return Promise.resolve().then(() => callback(null));
+      if (options.ifAvailable && (taken.get(name) ?? 0) > 0) return Promise.resolve().then(() => callback(null));
+      taken.set(name, (taken.get(name) ?? 0) + 1);
       const previous = tails.get(name) ?? Promise.resolve();
       const run = previous.then(async () => {
-        held.add(name);
         try {
           return await callback({ name });
         } finally {
-          held.delete(name);
+          taken.set(name, (taken.get(name) ?? 1) - 1);
         }
       });
       tails.set(name, run.catch(() => undefined));
