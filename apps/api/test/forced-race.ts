@@ -9,7 +9,12 @@ import request from 'supertest';
  * مستخرَجٌ من `once-only-cash-out.e2e-spec.ts` (توجيه ٢٧٤ الكتلة ٥أ) ومعمَّمٌ على الجدول: هناك صفُّ حسابٍ وحده، وهنا صفُّ
  * المستند نفسِه أو ما يكتبه الطلبُ بعد فحصه. والجداولُ مسمّاةٌ في نوعٍ مغلق، فلا يدخل الاستعلامَ اسمٌ لم يُكتب هنا.
  */
-export type RaceTable = 'accounts' | 'payments' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'units';
+export type RaceTable = 'accounts' | 'payments' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'units' | 'leave_requests';
+
+/** One row, or several rows of the same table held by one transaction (each request then stops behind its own row). */
+export type RaceRows = string | readonly string[];
+
+const rowIds = (rows: RaceRows): string[] => (typeof rows === 'string' ? [rows] : [...rows]);
 
 export type LockState = 'held' | 'free';
 
@@ -53,7 +58,8 @@ export function raceHarness(companyId: () => string, holdClient: PrismaClient, p
   const table = (t: RaceTable) => Prisma.raw(`"${t}"`);
 
   /** قافلٌ في سياق المنشأة: يقفل الصفّ ويمسكه حتى يُطلَق، ويُعيد معرّفَ عمليته وعددَ ما قفل. */
-  function holdRow(t: RaceTable, id: string): Holder {
+  function holdRow(t: RaceTable, id: RaceRows): Holder {
+    const ids = rowIds(id);
     let release: () => void = () => undefined;
     const released = new Promise<void>((done) => {
       release = () => done();
@@ -67,7 +73,7 @@ export function raceHarness(companyId: () => string, holdClient: PrismaClient, p
     const finished = holdClient.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId()}, true)`;
-        const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM ${table(t)} WHERE "id" = ${id} FOR UPDATE`;
+        const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM ${table(t)} WHERE "id" IN (${Prisma.join(ids)}) FOR UPDATE`;
         const [{ pid }] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
         taken({ pid, locked: rows.length });
         await released;
@@ -110,13 +116,14 @@ export function raceHarness(companyId: () => string, holdClient: PrismaClient, p
    * حالُ قفل الصفّ من اتصالٍ ثالث: `FOR UPDATE NOWAIT` يُرفض بـ`55P03` ما دام مقفولاً. **والحرُّ لا يُعلَن إلا وقد رُئي الصفّ**:
    * صفٌّ يحجبه العزلُ يعود فارغاً بلا رفض، فلو قُرئ ذلك حرّيةً لشهد المسبارُ بالحرّية على أيّ قفل.
    */
-  async function rowLockState(t: RaceTable, id: string): Promise<LockState> {
+  async function rowLockState(t: RaceTable, id: RaceRows): Promise<LockState> {
+    const ids = rowIds(id);
     try {
       const rows = await probe.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId()}, true)`;
-        return tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM ${table(t)} WHERE "id" = ${id} FOR UPDATE NOWAIT`;
+        return tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM ${table(t)} WHERE "id" IN (${Prisma.join(ids)}) FOR UPDATE NOWAIT`;
       });
-      if (rows.length !== 1) throw new Error(`مسبارُ NOWAIT لم يرَ الصفّ ${id} في ${t} (${rows.length} صفّ)`);
+      if (rows.length !== ids.length) throw new Error(`NOWAIT probe saw ${rows.length} of ${ids.length} rows (${ids.join(', ')}) in ${t}`);
       return 'free';
     } catch (e) {
       if (lockNotAvailable(e)) return 'held';
@@ -128,7 +135,7 @@ export function raceHarness(companyId: () => string, holdClient: PrismaClient, p
    * يقفل الصفّ، ويتحقّق أن القفل قائمٌ لحظةَ الإطلاق، ويُطلق الطلبَ الأوّل ثم الثاني، وينتظر أن يقف الاثنان خلف القفل، ثم
    * يُطلقه ويُعيد ما رُئي. (`.then` يرسل الطلبَ فوراً: `supertest` لا يرسل حتى يُنتظَر.)
    */
-  async function raceBehindLock(t: RaceTable, id: string, fire: () => request.Test): Promise<RaceResult> {
+  async function raceBehindLock(t: RaceTable, id: RaceRows, fire: () => request.Test): Promise<RaceResult> {
     const holder = holdRow(t, id);
     const inflight: Promise<request.Response>[] = [];
     let locked = 0;

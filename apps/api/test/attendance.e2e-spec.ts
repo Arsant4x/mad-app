@@ -22,7 +22,8 @@ describe('Attendance (e2e)', () => {
   let employeeId: string;
   let recordId: string;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const DAY = '2089-03-10';
+  // A past day: attendance is recorded for a day that has happened.
+  const DAY = '2025-03-10';
 
   const authA = (r: request.Test) => r.set('Authorization', `Bearer ${tokenA}`);
   const authB = (r: request.Test) => r.set('Authorization', `Bearer ${tokenB}`);
@@ -71,12 +72,12 @@ describe('Attendance (e2e)', () => {
     const sheet = await authA(request(app.getHttpServer()).get(`/attendance?date=${DAY}`)).expect(200);
     expect((sheet.body as { id: string }[]).some((r) => r.id === recordId)).toBe(true);
 
-    const other = await authA(request(app.getHttpServer()).get('/attendance?date=2089-03-11')).expect(200);
+    const other = await authA(request(app.getHttpServer()).get('/attendance?date=2025-03-11')).expect(200);
     expect((other.body as { id: string }[]).some((r) => r.id === recordId)).toBe(false);
   }, 40000);
 
   it('rejects a malformed clock time outright', async () => {
-    await authA(request(app.getHttpServer()).post('/attendance')).send({ employeeId, date: '2089-03-12', checkIn: '25:99' }).expect(400);
+    await authA(request(app.getHttpServer()).post('/attendance')).send({ employeeId, date: '2025-03-12', checkIn: '25:99' }).expect(400);
   }, 40000);
 
   it('never shows one company another\'s sheet', async () => {

@@ -1,13 +1,50 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { branchFilter } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
+import { zoneOffsetMin } from '../common/wall-clock.util';
 import { RecordAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
 import { ListAttendanceQueryDto } from './dto/list-attendance-query.dto';
 
 const RECORD_INCLUDE = { employee: { select: { id: true, fullName: true } } } as const;
+
+/** How far a recorded time may run ahead of the server clock, for a device clock that is a little fast. */
+const ATTENDANCE_CLOCK_TOLERANCE_MIN = 5;
+
+const minutesOf = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+/**
+ * The times of one day row as they will stand after the write. A check out earlier than the check in is refused, and
+ * so is a day or a written time that has not come yet on the company's own clock, beyond the tolerance. The day is
+ * the stored `@db.Date` read in UTC, and its wall-clock times are the company's local times.
+ */
+async function assertAttendanceTimes(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  date: Date,
+  row: { checkIn?: string | null; checkOut?: string | null },
+  written: readonly (string | null | undefined)[],
+): Promise<void> {
+  const { checkIn, checkOut } = row;
+  if (checkIn && checkOut && minutesOf(checkOut) < minutesOf(checkIn)) {
+    throw new BadRequestException(formatMessage(MSG.attendance_checkout_before_checkin, { checkIn, checkOut }));
+  }
+
+  const { timeZone } = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { timeZone: true } });
+  const now = new Date();
+  const latest = now.getTime() + ATTENDANCE_CLOCK_TOLERANCE_MIN * 60_000;
+  const offsetMin = zoneOffsetMin(now, timeZone);
+  const day = date.toISOString().slice(0, 10);
+  const dayStart = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const instantOf = (hhmm: string) => dayStart + (minutesOf(hhmm) - offsetMin) * 60_000;
+
+  if (instantOf('00:00') > latest) throw new BadRequestException(formatMessage(MSG.attendance_date_in_future, { date: day }));
+  for (const time of written) {
+    if (time && instantOf(time) > latest) throw new BadRequestException(formatMessage(MSG.attendance_time_in_future, { date: day, time }));
+  }
+}
 
 /**
  * الحضور والانصراف — SPEC 9.4, the second HR pillar after leaves.
@@ -53,6 +90,7 @@ export class AttendanceService {
 
       const existing = await tx.attendanceRecord.findFirst({ where: { employeeId: dto.employeeId, date: new Date(dto.date) } });
       if (existing) throw new ConflictException(MSG.attendance_already_recorded);
+      await assertAttendanceTimes(tx, companyId, new Date(dto.date), { checkIn: dto.checkIn }, [dto.checkIn]);
 
       return tx.attendanceRecord.create({
         data: {
@@ -81,7 +119,11 @@ export class AttendanceService {
   update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateAttendanceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // الفرعُ قبل التعديل (`ق-١٤٤٠`): حضورُ موظّفِ فرعٍ آخر غيرُ موجودٍ للفاعل — `404` لا `403`.
-      await this.findVisible(tx, allowedBranchIds, id);
+      const existing = await this.findVisible(tx, allowedBranchIds, id);
+      if (dto.checkIn !== undefined || dto.checkOut !== undefined) {
+        const row = { checkIn: dto.checkIn ?? existing.checkIn, checkOut: dto.checkOut ?? existing.checkOut };
+        await assertAttendanceTimes(tx, companyId, existing.date, row, [dto.checkIn, dto.checkOut]);
+      }
       return tx.attendanceRecord.update({
         where: { id },
         data: {
