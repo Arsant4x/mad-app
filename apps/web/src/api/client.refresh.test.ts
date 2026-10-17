@@ -58,13 +58,26 @@ async function openTab(): Promise<typeof import('./client')> {
   return import('./client');
 }
 
-/** An exclusive lock manager shared by every tab of the origin, granting requests in order. */
+type LockCallback<T> = (lock: { name: string } | null) => Promise<T> | T;
+
+/** An exclusive lock manager shared by every tab of the origin, granting requests in order (with ifAvailable as in the browser). */
 function sharedLocks() {
   const tails = new Map<string, Promise<unknown>>();
+  const held = new Set<string>();
   return {
-    request<T>(name: string, callback: () => Promise<T> | T): Promise<T> {
+    request<T>(name: string, optionsOrCallback: { ifAvailable?: boolean } | LockCallback<T>, maybeCallback?: LockCallback<T>): Promise<T> {
+      const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback;
+      const callback = (typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback) as LockCallback<T>;
+      if (options.ifAvailable && held.has(name)) return Promise.resolve().then(() => callback(null));
       const previous = tails.get(name) ?? Promise.resolve();
-      const run = previous.then(() => callback());
+      const run = previous.then(async () => {
+        held.add(name);
+        try {
+          return await callback({ name });
+        } finally {
+          held.delete(name);
+        }
+      });
       tails.set(name, run.catch(() => undefined));
       return run;
     },
