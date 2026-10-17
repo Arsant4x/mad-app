@@ -7,7 +7,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { invoiceTypeFor } from './hash-chain.util';
+import { documentInvoiceType } from './hash-chain.util';
 import { hoursSince, REPORTING_WARNING_MS, reportingClockStart, reportingDedupeKey, reportingStage } from './reporting-deadline.util';
 
 /** Documents the authority has not answered yet. */
@@ -71,6 +71,7 @@ export class ReportingDeadlineService {
           no: true,
           createdAt: true,
           issuedAt: true,
+          zatcaInvoiceType: true,
           customer: { select: { kind: true, vatNumber: true, country: true } },
           lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } },
         },
@@ -78,7 +79,7 @@ export class ReportingDeadlineService {
 
       const due = candidates.flatMap((doc) => {
         // A standard document is cleared before it is handed over; the 24 hour clock is the reporting path's.
-        if (invoiceTypeFor(doc.customer, doc.lines) !== 'simplified') return [];
+        if (documentInvoiceType(doc) !== 'simplified') return [];
         const start = reportingClockStart(doc);
         const stage = reportingStage(start, now);
         return stage === 'none' ? [] : [{ doc, stage, start, key: reportingDedupeKey(stage, doc.id) }];
