@@ -96,6 +96,18 @@ describe('On-account receipt coverage (e2e)', () => {
     await onAccount(customerId, 375).expect(201);
   });
 
+  it('a receipt in the invoice currency covers at face value, so a rate gap is not refused as a prepayment', async () => {
+    const customerId = await newCustomer('same-currency');
+    await makeInvoice(customerId, 100, 'USD', 3.7);
+
+    const send = (amount: number) =>
+      auth(http().post('/payments')).send({ customerId, branchId, date: today(), amount, method: 'CASH', currency: 'USD', exchangeRate: 3.8, unallocated: 'ON_ACCOUNT' });
+    const over = await send(100.01);
+    expect(over.status).toBe(400);
+    expect(String(over.body.message)).toContain(': 100.00)');
+    await send(100).expect(201);
+  });
+
   it('two on-account receipts at once against one open invoice: exactly one is written', async () => {
     const customerId = await newCustomer('race');
     await makeInvoice(customerId, 1000);
