@@ -89,16 +89,23 @@ export class AttendanceService {
       if (existing) throw new ConflictException(MSG.attendance_already_recorded);
       await assertAttendanceTimes(tx, companyId, new Date(dto.date), { checkIn: dto.checkIn }, [dto.checkIn]);
 
-      return tx.attendanceRecord.create({
-        data: {
-          employeeId: dto.employeeId,
-          date: new Date(dto.date),
-          status: dto.status ?? 'PRESENT',
-          checkIn: dto.checkIn,
-          notes: dto.notes,
-        } as unknown as Prisma.AttendanceRecordUncheckedCreateInput,
-        include: RECORD_INCLUDE,
-      });
+      try {
+        return await tx.attendanceRecord.create({
+          data: {
+            employeeId: dto.employeeId,
+            date: new Date(dto.date),
+            status: dto.status ?? 'PRESENT',
+            checkIn: dto.checkIn,
+            notes: dto.notes,
+          } as unknown as Prisma.AttendanceRecordUncheckedCreateInput,
+          include: RECORD_INCLUDE,
+        });
+      } catch (e) {
+        // A concurrent record for the same employee and day passed the check above first; besides the generated id,
+        // one row per employee and day is the only unique key this insert can meet.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException(MSG.attendance_already_recorded);
+        throw e;
+      }
     });
   }
 
