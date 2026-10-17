@@ -953,6 +953,7 @@ model ApiKey {
   @@map("api_keys")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+  @@index([companyId], map: "api_keys_companyId_idx")
 }
 
 /// **قياسُ استعمال التكاملات** (`ق-١٢٩١` · ي/㉑A1) — صفٌّ لكلِّ (منشأة · نوع · شهر).
@@ -3283,6 +3284,7 @@ model JournalEntry {
 
   @@unique([companyId, no])
   @@index([openingForAccountId])
+  @@index([closingForFiscalYearId], map: "journal_entries_closingForFiscalYearId_idx")
   @@map("journal_entries")
   inventoryWriteOff_journalEntryId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_journalEntryId_tenant")
   stockMovement_journalEntryId_tenant StockMovement[] @relation("StockMovement_journalEntryId_tenant")
@@ -7621,6 +7623,7 @@ model VerificationChallenge {
   createdAt  DateTime  @default(now())
 
   @@unique([companyId, id])
-  @@index([companyId, purpose, subjectKey, createdAt])
+  // Postgres cut the migration's index name at 63 characters; this is the stored name.
+  @@index([companyId, purpose, subjectKey, createdAt], map: "verification_challenges_companyId_purpose_subjectKey_createdAt_")
   @@map("verification_challenges")
 }
