@@ -1,7 +1,10 @@
 import { readFileSync } from 'fs';
 import { join, relative } from 'path';
 import * as ts from 'typescript';
-import { sourceFiles } from './source-scan.util';
+import { readsDeclaredStrings, sourceFiles } from './source-scan.util';
+
+// The code is read as a syntax tree, which never matches inside a comment or a string; the patterns read schema.prisma as data.
+readsDeclaredStrings();
 
 /**
  * A posting, document, movement or due-date cutoff takes the company's day (companyToday in company-day.util.ts),
