@@ -40,6 +40,7 @@ export const MSG = {
   decision_already_open: 'platform.decision_already_open',
   decision_not_found: 'platform.decision_not_found',
   decision_not_pending: 'platform.decision_not_pending',
+  decision_no_longer_approved: 'platform.decision_no_longer_approved',
   decision_same_hand: 'platform.decision_same_hand',
   decision_required: 'platform.decision_required',
   decision_sub_end_required: 'platform.decision_sub_end_required',
@@ -857,6 +858,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.decision_already_open]: { ar: 'يوجد قرار قائم على هذا الهدف بالفعل ({status})', en: 'A decision on this target is already open ({status})' },
   [MSG.decision_not_found]: { ar: 'القرار غير موجود', en: 'Decision not found' },
   [MSG.decision_not_pending]: { ar: 'القرار لم يعد معلّقاً ({status})', en: 'The decision is no longer pending ({status})' },
+  [MSG.decision_no_longer_approved]: { ar: 'القرار لم يعد مُقرّاً ({status})، فلا يُطبَّق مرّة أخرى', en: 'The decision is no longer approved ({status}), so it cannot be applied again' },
   [MSG.decision_same_hand]: {
     ar: 'من طلب القرار لا يُقرّه — الفعل الحرج بيدين لا بيد',
     en: 'Whoever requested the decision cannot approve it — a critical action takes two hands',

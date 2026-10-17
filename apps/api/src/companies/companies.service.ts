@@ -165,30 +165,33 @@ export class CompaniesService {
    * لا لتغيير سلوكه — والمنطقُ منقولٌ كما هو.
    */
   async updateSubscription(id: string, dto: UpdateCompanySubscriptionDto, executedById: string) {
-    const existing = await this.prisma.company.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException(MSG.company_not_found);
+    // The decision is spent in the same transaction as the change, so a failed update leaves it approved.
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.company.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.company_not_found);
 
-    // A manual subscription change is money, so it spends a decision another administrator
-    // approved for this very end date, and the decision records who applied it.
-    await this.decisions.consume('SUBSCRIPTION_CHANGE', id, executedById, { subEnd: dto.subEnd ? new Date(dto.subEnd) : null });
+      // A manual subscription change is money, so it spends a decision another administrator
+      // approved for this very end date, and the decision records who applied it.
+      await this.decisions.consumeWithinTx(tx, 'SUBSCRIPTION_CHANGE', id, executedById, { subEnd: dto.subEnd ? new Date(dto.subEnd) : null });
 
-    const newSubEnd = dto.subEnd ? new Date(dto.subEnd) : existing.subEnd;
-    // Editing subEnd forward is this app's only "renew" lever (matches the
-    // mockup — no separate activate/unfreeze button): if the new end date is
-    // in the future, treat it as a manual reactivation rather than leaving a
-    // frozen/stopped company stuck (evaluateCompanyStatus only ever moves
-    // ACTIVE -> FROZEN -> STOPPED forward, it never un-freezes on its own).
-    // ⛔ والمغلقُ لا يعود بالدفع ولا بتمديد الاشتراك (`ق-٥٤٧`) — يعود بطلبٍ وقرارٍ مسجَّل وحده.
-    const reactivate = dto.subEnd && existing.status !== 'ACTIVE' && existing.status !== 'CLOSED' && newSubEnd! > new Date();
+      const newSubEnd = dto.subEnd ? new Date(dto.subEnd) : existing.subEnd;
+      // Editing subEnd forward is this app's only "renew" lever (matches the
+      // mockup — no separate activate/unfreeze button): if the new end date is
+      // in the future, treat it as a manual reactivation rather than leaving a
+      // frozen/stopped company stuck (evaluateCompanyStatus only ever moves
+      // ACTIVE -> FROZEN -> STOPPED forward, it never un-freezes on its own).
+      // A closed company does not come back by payment or a longer subscription, only by a recorded reopening.
+      const reactivate = dto.subEnd && existing.status !== 'ACTIVE' && existing.status !== 'CLOSED' && newSubEnd! > new Date();
 
-    return this.prisma.company.update({
-      where: { id },
-      data: {
-        // subStart is not part of this route: it stays the activation day. Renewal moves subEnd.
-        subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
-        ...(reactivate ? { status: 'ACTIVE', frozenAt: null } : {}),
-      },
-      include: COMPANY_INCLUDE,
+      return tx.company.update({
+        where: { id },
+        data: {
+          // subStart is not part of this route: it stays the activation day. Renewal moves subEnd.
+          subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
+          ...(reactivate ? { status: 'ACTIVE', frozenAt: null } : {}),
+        },
+        include: COMPANY_INCLUDE,
+      });
     });
   }
 
