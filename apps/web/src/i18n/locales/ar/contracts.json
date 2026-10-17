@@ -491,6 +491,7 @@
     "col_method": "الطريقة",
     "no_payments": "لا توجد دفعات مسجَّلة بعد",
     "credit_deduction": "خصمٌ من رصيد المستأجر",
+    "deposit_deduction": "خصمٌ من التأمين",
     "close": "إغلاق",
     "renew_contract": "تجديد العقد",
     "cancel_contract": "إلغاء العقد"

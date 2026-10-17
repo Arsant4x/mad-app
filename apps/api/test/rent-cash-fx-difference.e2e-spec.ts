@@ -219,15 +219,17 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
       { kind: 'UNPAID_RENT', amount: 200, reason: 'إيجار شهرٍ لم يُدفع' },
       { kind: 'DAMAGE', amount: 100, reason: 'كسر باب المطبخ' },
     ];
+    // Settled on the first installment's due date, so the unpaid rent taken from the deposit is rent that is owed.
+    const settledAt = iso(futureStart);
     // ⛔ الردُّ 1000 − 300 = 700 نقدٌ يخرج — بلا سعرِ يومٍ `400` مسمّى، والوديعةُ محتجَزةٌ كما هي.
-    const refused = await auth(http().post(`/contracts/${contract.id}/deposits/${deposit.id}/settle`)).send({ settledAt: today, deductions }).expect(400);
+    const refused = await auth(http().post(`/contracts/${contract.id}/deposits/${deposit.id}/settle`)).send({ settledAt, deductions }).expect(400);
     expect(refused.body.message).toBe(rateRequired(FX));
     const held = (await readContract(contract.id)).deposits.find((d) => d.id === deposit.id)!;
     expect(held.status).toBe('HELD');
     expect(held.settlementEntryId).toBeNull();
 
     const settled = (
-      await auth(http().post(`/contracts/${contract.id}/deposits/${deposit.id}/settle`)).send({ settledAt: today, deductions, exchangeRate: 3.8 }).expect(201)
+      await auth(http().post(`/contracts/${contract.id}/deposits/${deposit.id}/settle`)).send({ settledAt, deductions, exchangeRate: 3.8 }).expect(201)
     ).body.deposits.find((d: Deposit) => d.id === deposit.id) as Deposit;
     expect(settled.status).toBe('SETTLED');
     expect(Number(settled.refundAmount)).toBe(700);
@@ -286,7 +288,8 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
     const settled = (
       await auth(http().post(`/contracts/${contract.id}/deposits/${deposit.id}/settle`))
         .send({
-          settledAt: today,
+          // On the first installment's due date, so the unpaid rent taken from the deposit is rent that is owed.
+          settledAt: iso(futureStart),
           exchangeRate: 1.5,
           deductions: [
             { kind: 'UNPAID_RENT', amount: 0.01, reason: 'إيجار' },

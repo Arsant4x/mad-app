@@ -40,6 +40,7 @@ const INSTALLMENT_SELECT = {
     select: {
       id: true,
       creditFromContractId: true,
+      depositId: true,
       date: true,
       amount: true,
       netAmount: true,
@@ -225,6 +226,7 @@ async function movePaymentsToCredit(ctx: CutContext, i: CutInstallment, amount: 
           contractId: contract.id,
           installmentId: null,
           creditFromContractId: p.creditFromContractId,
+          depositId: p.depositId,
           date: p.date,
           amount: take,
           discount: 0,

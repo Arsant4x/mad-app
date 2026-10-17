@@ -433,6 +433,8 @@ export const MSG = {
   deposit_not_found: 'deposits.not_found',
   deposit_already_settled: 'deposits.already_settled',
   deductions_exceed_deposit: 'deposits.deductions_exceed',
+  deposit_unpaid_rent_exceeds_due: 'deposits.unpaid_rent_exceeds_due',
+  deposit_unpaid_rent_not_receivable: 'deposits.unpaid_rent_not_receivable',
   /** ⚖️ معاملةُ المطالبة والخصم الضريبية (الأسئلة ٥١ و٤١٣ و٤١٤ · ق-١٦٠٠). */
   charge_on_behalf_evidence_required: 'charges.on_behalf_evidence_required',
   deduction_other_treatment_required: 'deposits.other_treatment_required',
@@ -1732,6 +1734,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.deductions_exceed_deposit]: {
     ar: 'مجموع الخصومات يتجاوز مبلغ التأمين ({held})',
     en: 'Deductions exceed the deposit amount ({held})',
+  },
+  [MSG.deposit_unpaid_rent_exceeds_due]: {
+    ar: 'الإيجار المتأخر المخصوم من التأمين أكثر مما على المستأجر في هذا العقد ({due}): يُخصم منه ما حلّ من الإيجار ولم يُسدَّد، والمطالبات المفتوحة، وتسوية الإلغاء',
+    en: 'The unpaid rent taken from the deposit is more than the tenant owes on this contract ({due}): it covers rent that has fallen due and is unpaid, open claims, and the cancellation settlement',
+  },
+  [MSG.deposit_unpaid_rent_not_receivable]: {
+    ar: 'إيجار هذا العقد ليس ديناً للمنشأة على المستأجر (مؤجّره المالك، أو تصنيفه الضريبي لم يُعلَن بعد)، فلا يُخصم من التأمين إيجاراً متأخراً',
+    en: 'Rent on this contract is not owed to the company (the owner leases the unit out, or its tax classification is not declared yet), so it cannot be taken from the deposit as unpaid rent',
   },
   [MSG.charge_on_behalf_evidence_required]: {
     ar: 'المبلغُ المدفوعُ نيابةً عن المستأجر يُكتب معه ما يثبت شروطَ النيابة (أن يكون المستأجرُ متلقّي الخدمة كعدّادٍ باسمه، وأن تُفصل التكلفةُ في المستندات) — وإلا فهو خدمةٌ خاضعة',

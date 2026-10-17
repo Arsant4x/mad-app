@@ -53,6 +53,8 @@ export interface RentPayment {
   journalEntryId: string | null;
   /** ⚖️ خصمٌ من رصيد المستأجر في العقد الأصل لا قبضُ نقد (توجيه ٢٧٨ · ق-١٦٢٩) — فارغٌ لكلِّ قبض. */
   creditFromContractId?: string | null;
+  /** The deposit whose unpaid rent deduction paid this installment, without cash; null for every other payment. */
+  depositId?: string | null;
 }
 
 export interface Contract {
