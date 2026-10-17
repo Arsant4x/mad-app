@@ -1,10 +1,9 @@
 import { ForbiddenException } from '@nestjs/common';
 import { formatMessage, MSG } from '../i18n/messages';
 
-/** These carry a machine-readable `code` alongside the message because the web
- * client branches on it (the frozen/stopped screens in AppShell), so the code
- * must stay stable and language-independent while `message` is localized by
- * HttpExceptionFilter. */
+/** These carry a stable, language-independent `code` beside the message, which
+ * HttpExceptionFilter localizes, so a client can branch on the cause. The web
+ * shows the frozen and stopped screens from the session's `status`, not this code. */
 /** The message names only a cause the caller knows: a lapsed subscription, no subscription ever, or
  * the employee's own account being turned off. */
 export type AccountFrozenMessage = typeof MSG.account_frozen | typeof MSG.account_frozen_no_subscription | typeof MSG.account_user_inactive;

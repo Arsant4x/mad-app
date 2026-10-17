@@ -46,8 +46,6 @@
   "nav_company_profile": "بيانات المنشأة",
   "nav_company_users": "حسابات الموظفين",
   "logout": "تسجيل الخروج",
-  "account_frozen_title": "الحساب مجمّد",
-  "account_frozen_body": "انتهى اشتراكك. تواصل مع الجهة المشغّلة لتجديد الاشتراك.",
   "account_stopped_title": "الحساب متوقف",
   "language_toggle": "English",
   "err_account_delete": "تعذّر حذف الحساب",
