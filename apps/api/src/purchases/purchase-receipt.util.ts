@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { resolveReceiptBatch } from '../common/batches/stock-batch.util';
 import { MSG } from '../common/i18n/messages';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
@@ -79,6 +80,8 @@ export async function resolveReceiptWarehouse(tx: Tx, explicit: string | null | 
 export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ layers: number }> {
   const stocked = args.lines.filter((l) => l.productId !== null);
   if (stocked.length === 0) return { layers: 0 };
+  // A zero cost receipt posts no entry, yet it still puts stock into the receipt's period.
+  await assertPeriodOpen(tx, args.date);
   const warehouseId = args.warehouseId;
 
   for (const line of stocked) {

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo } from '../common/money/rounding';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { allocationOf, raiseLayerCost, type CostShareNode } from './layer-cost-allocation.util';
 
 /**
@@ -103,6 +104,8 @@ export async function applySupplierNoteToStock(tx: Tx, args: SupplierNoteStockAr
     const remaining = Number(layer.qtyRemaining);
 
     if (args.side === 'credit' && line.goodsReturned) {
+      // Returned goods leave on the note date, so its period must be open even when they cost nothing.
+      await assertPeriodOpen(tx, args.date);
       // إعادةُ بضاعةٍ إلى المورّد: خروجٌ من الطبقة نفسِها بكتابةٍ مشروطة — الموضعُ الرابع من `ق-٨١٤` —
       // فما ليس على الرفّ لا يخرج، ولو تقادمت القراءة.
       const { count } = await tx.inventoryLayer.updateMany({
