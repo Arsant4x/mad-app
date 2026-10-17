@@ -12,7 +12,7 @@ import { ACCRUAL_CONTRACT_SELECT, accrueForPaymentWithinTx, treatmentOf } from '
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
-// Six isolated companies, each with one contract swept to its end; not measured yet, so a wide budget.
+// Seven isolated companies, each with one contract swept to its end; not measured yet, so a wide budget.
 jest.setTimeout(300000);
 
 /**
@@ -35,6 +35,7 @@ interface E2eInstallment {
   dueDate: string;
   amount: string;
   status: string;
+  accrualCompletedAt: string | null;
 }
 interface E2eContract {
   id: string;
@@ -127,8 +128,9 @@ describe('A cancelled contract stops billing (e2e)', () => {
     const afterCancel = await measured(c, () => sweepTo(c, M(12)));
     const contract = await getContract(c, created.id);
 
-    expect({ status: installmentDue(contract, M(1)).status, afterCancel }).toEqual({
+    expect({ status: installmentDue(contract, M(1)).status, closed: installmentDue(contract, M(1)).accrualCompletedAt !== null, afterCancel }).toEqual({
       status: 'CANCELLED',
+      closed: true,
       afterCancel: { 1200: 0, 2200: 0, 2400: 0, 4200: 0, 4300: 0 },
     });
     // It cannot be collected either, so nothing may stay owed on it.
@@ -181,6 +183,18 @@ describe('A cancelled contract stops billing (e2e)', () => {
       afterCancel: { 1200: 0, 2200: 0, 2400: 0, 4200: 0, 4300: 0 },
       newFeeClaims: 0,
     });
+  });
+
+  it('the sweeps leave a cancelled contract alone where an earlier cancellation left kept installments open', async () => {
+    const c = await freshCompany();
+    const created = await makeContract(c, { value: 6000, start: iso(M(-1)), end: iso(dayBefore(M(5))), fees: [{ label: 'parking', amount: 100 }] });
+    await cancel(c, created.id, { cancelDate: iso(today), installmentDisposition: 'keep', unearnedDisposition: 'income' }).expect(201);
+    // As a cancellation recorded before kept installments were closed left them.
+    await tenantPrisma.runInTenantContext(c.companyId, (tx) => tx.installment.updateMany({ where: { contractId: created.id, dueDate: { gte: M(1) } }, data: { accrualCompletedAt: null } }));
+
+    const afterCancel = await measured(c, () => sweepTo(c, M(6)));
+
+    expect(afterCancel).toEqual({ 1200: 0, 2200: 0, 2400: 0, 4200: 0, 4300: 0 });
   });
 
   it('keeping the installments due with a settlement worked out from them is refused', async () => {
