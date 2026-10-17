@@ -104,14 +104,17 @@ function exactDecimal(value: number): { units: bigint; places: number } {
   return { units: negative ? -units : units, places: Math.max(places, 0) };
 }
 
-/** a × b ÷ 10^shift on the exact decimals, then rounded once by the policy: no binary product in between. */
-function roundExactProduct(a: number, b: number, shift: number, context: RoundingContext): number {
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return roundTo(a * b, context);
-  const x = exactDecimal(a);
-  const y = exactDecimal(b);
+/** The product of the factors ÷ 10^shift on the exact decimals, then rounded once by the policy: no binary product in between. */
+function roundExactProduct(factors: readonly number[], shift: number, context: RoundingContext): number {
+  if (!factors.every(Number.isFinite)) return roundTo(factors.reduce((p, f) => p * f, 1), context);
   const scale = SCALE[context];
-  const product = x.units * y.units;
-  const places = x.places + y.places + shift;
+  let product = 1n;
+  let places = shift;
+  for (const factor of factors) {
+    const x = exactDecimal(factor);
+    product *= x.units;
+    places += x.places;
+  }
   const magnitude = product < 0n ? -product : product;
   let rounded: bigint;
   if (places <= scale) {
@@ -130,7 +133,12 @@ function roundExactProduct(a: number, b: number, shift: number, context: Roundin
  * an exact half: 0.375 × 0.60 is 0.225 but multiplies to 0.22499999999999998, which rounded down to 0.22.
  */
 export function roundProduct(a: number, b: number, context: RoundingContext): number {
-  return roundExactProduct(a, b, 0, context);
+  return roundExactProduct([a, b], 0, context);
+}
+
+/** The product of several factors (quantity × price × exchange rate) rounded once by the policy, on the decimal values. */
+export function roundProductOf(factors: readonly number[], context: RoundingContext): number {
+  return roundExactProduct(factors, 0, context);
 }
 
 /**
@@ -138,7 +146,7 @@ export function roundProduct(a: number, b: number, context: RoundingContext): nu
  * gives 15.05, where 100.30 × 0.15 in binary is 15.0449999… and gave 15.04.
  */
 export function roundPercentOf(amount: number, percent: number, context: RoundingContext): number {
-  return roundExactProduct(amount, percent, 2, context);
+  return roundExactProduct([amount, percent], 2, context);
 }
 
 /**

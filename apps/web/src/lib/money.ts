@@ -40,16 +40,13 @@ function exactDecimal(value: number): { units: bigint; places: number } {
   return { units: negative ? -units : units, places: Math.max(places, 0) };
 }
 
-/**
- * percent% of amount rounded once on the exact decimal, the server's roundPercentOf
- * (apps/api/src/common/money/rounding.ts): 100.30 at 15% is 15.045 and gives 15.05, not the binary 15.04.
- */
-export function roundPercentOf(amount: number, percent: number, scale = 2): number {
-  if (!Number.isFinite(amount) || !Number.isFinite(percent)) return roundMoney((amount * percent) / 100, scale);
-  const x = exactDecimal(amount);
-  const y = exactDecimal(percent);
+/** a × b ÷ 10^shift on the exact decimals, rounded once: the server's roundExactProduct. */
+function roundExactProduct(a: number, b: number, shift: number, scale: number): number {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return roundMoney((a * b) / 10 ** shift, scale);
+  const x = exactDecimal(a);
+  const y = exactDecimal(b);
   const product = x.units * y.units;
-  const places = x.places + y.places + 2;
+  const places = x.places + y.places + shift;
   const magnitude = product < 0n ? -product : product;
   let rounded: bigint;
   if (places <= scale) {
@@ -61,6 +58,60 @@ export function roundPercentOf(amount: number, percent: number, scale = 2): numb
   }
   if (rounded === 0n) return 0;
   return Number(`${product < 0n ? '-' : ''}${rounded}e-${scale}`);
+}
+
+/** a × b rounded once on the exact decimal, the server's roundProduct: 0.375 × 0.6 gives 0.23, not the binary 0.22. */
+export function roundProduct(a: number, b: number, scale = 2): number {
+  return roundExactProduct(a, b, 0, scale);
+}
+
+/**
+ * percent% of amount rounded once on the exact decimal, the server's roundPercentOf
+ * (apps/api/src/common/money/rounding.ts): 100.30 at 15% is 15.045 and gives 15.05, not the binary 15.04.
+ */
+export function roundPercentOf(amount: number, percent: number, scale = 2): number {
+  return roundExactProduct(amount, percent, 2, scale);
+}
+
+export interface DocumentLine {
+  quantity: number;
+  unitPrice: number;
+  discount?: number | null;
+  taxRate: number;
+  taxCategory?: string | null;
+  taxExemptionReasonCode?: string | null;
+  taxExemptionReason?: string | null;
+}
+
+/**
+ * A document's totals as the server stores them, the web copy of computeDocumentTotals
+ * (apps/api/src/common/money/totals.ts): each line net rounded, and the tax per category, rate and reason
+ * on the sum of its nets, never the sum of the line taxes.
+ */
+export function documentTotals(lines: readonly DocumentLine[]): { subtotal: number; tax: number; total: number } {
+  let subtotal = 0;
+  const buckets = new Map<string, { rate: number; taxable: number }>();
+  for (const line of lines) {
+    const net = round2(roundProduct(line.quantity, line.unitPrice) - round2(Number(line.discount ?? 0)));
+    subtotal = round2(subtotal + net);
+    const declared = line.taxCategory;
+    const category =
+      declared === 'S' || declared === 'LEGACY_STANDARD'
+        ? 'S'
+        : declared === 'Z' || declared === 'E' || declared === 'O' || declared === 'LEGACY_ZERO'
+          ? declared
+          : line.taxRate > 0
+            ? 'S'
+            : 'Z';
+    const reasonCode = category === 'S' || category === 'LEGACY_ZERO' ? null : (line.taxExemptionReasonCode ?? null);
+    const reasonText = category === 'O' ? (line.taxExemptionReason ?? null) : null;
+    const key = `${category}|${line.taxRate}|${reasonCode ?? ''}|${reasonText ?? ''}`;
+    const bucket = buckets.get(key) ?? { rate: line.taxRate, taxable: 0 };
+    bucket.taxable = round2(bucket.taxable + net);
+    buckets.set(key, bucket);
+  }
+  const tax = [...buckets.values()].reduce((sum, b) => round2(sum + roundPercentOf(b.taxable, b.rate)), 0);
+  return { subtotal, tax, total: round2(subtotal + tax) };
 }
 
 /**

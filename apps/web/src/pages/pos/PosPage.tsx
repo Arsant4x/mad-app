@@ -49,7 +49,7 @@ import { ZatcaQr } from '../../components/ZatcaQr';
 import { buildPhase1Qr } from '../../lib/zatcaQr';
 import { wallClockOf } from '../../lib/wallClock';
 import { fmt } from '../../lib/format';
-import { num0, round2, type QtyText } from '../../lib/money';
+import { documentTotals, num0, round2, roundProduct, type QtyText } from '../../lib/money';
 import { formatDateTime } from '../../i18n/format';
 
 interface CartLine {
@@ -216,17 +216,27 @@ export function PosPage() {
     return products.filter((p) => p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q) || (p.barcode ?? '').includes(q));
   }, [products, query]);
 
-  const totals = useMemo(() => {
-    // Net after the line discount (BT-131); VAT is computed from it.
-    const net = (l: CartLine) => Math.max(0, Number(l.product.price) * l.quantity - (l.discount || 0));
-    const subtotal = cart.reduce((s, l) => s + net(l), 0);
-    // VAT comes from each item's category, not one rate for the cart, so a
-    // zero-rated item carries no VAT. The server derives the same rate and
-    // returns the authoritative totals; the offline receipt code is built from
-    // this figure, so it must match what the server will compute.
-    const tax = cart.reduce((s, l) => s + net(l) * (rateForCategory(l.product.taxCategory) / 100), 0);
-    return { subtotal, tax, total: subtotal + tax };
-  }, [cart]);
+  const totals = useMemo(
+    () =>
+      // The server's totals function: the line net after its discount (BT-131), and VAT per category and rate on
+      // the sum of the nets. The offline receipt code and the split are built from these, so they match the server.
+      documentTotals(
+        cart.map((l) => {
+          const unitPrice = Number(l.product.price);
+          return {
+            quantity: l.quantity,
+            unitPrice,
+            // A discount above the line shows a zero net; the server refuses it.
+            discount: Math.min(l.discount || 0, roundProduct(l.quantity, unitPrice)),
+            taxRate: rateForCategory(l.product.taxCategory),
+            taxCategory: l.product.taxCategory,
+            taxExemptionReasonCode: l.product.taxExemptionReasonCode,
+            taxExemptionReason: l.product.taxExemptionReason,
+          };
+        }),
+      ),
+    [cart],
+  );
 
   function setDiscount(id: string, discount: number) {
     setCart((prev) => prev.map((l) => (l.product.id === id ? { ...l, discount } : l)));
