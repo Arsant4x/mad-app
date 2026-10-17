@@ -46,8 +46,6 @@
   "nav_company_profile": "Company Profile",
   "nav_company_users": "Employee Accounts",
   "logout": "Log out",
-  "account_frozen_title": "Account frozen",
-  "account_frozen_body": "Your subscription has ended. Contact the platform operator to renew.",
   "account_stopped_title": "Account stopped",
   "language_toggle": "العربية",
   "err_account_delete": "Could not delete the account",

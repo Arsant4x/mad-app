@@ -7,8 +7,8 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { createCompanyAccount } from '../companies/create-company-account';
-import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
-import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
+import { evaluateCompanyStatus, neverSubscribed } from '../common/tenant/company-status.util';
+import { AccountFrozenException, AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload, MFA_ENROLMENT_SCOPE } from './types';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { CredentialChangeService } from '../common/credentials/credential-change.service';
@@ -99,7 +99,7 @@ interface IdentityWithProfiles {
         name: string;
         status: AccountStatus;
         companyId: string;
-        company: { status: AccountStatus; permissionTemplate: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown } };
+        company: { status: AccountStatus; frozenAt: Date | null; subStart: Date | null; subEnd: Date | null; permissionTemplate: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown } };
         permissionTemplate: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown };
       }
     | null;
@@ -315,7 +315,13 @@ export class AuthService {
       };
     } else if (identity.actorType === 'COMPANY_USER' && identity.companyUser) {
       const companyUser = identity.companyUser;
-      if (companyUser.status !== 'ACTIVE' || companyUser.company.status !== 'ACTIVE') {
+      if (companyUser.status !== 'ACTIVE') throw new AccountStoppedException();
+      if (companyUser.company.status !== 'ACTIVE') {
+        // Name the state the company is really in: a stored FROZEN past its grace period is STOPPED.
+        const companyState = evaluateCompanyStatus(companyUser.company);
+        if (companyState.status === 'FROZEN') {
+          throw new AccountFrozenException(neverSubscribed(companyUser.company) ? MSG.account_frozen_no_subscription : MSG.account_frozen);
+        }
         throw new AccountStoppedException();
       }
       payload = { sub: identity.id, actorType: 'COMPANY_USER', companyId: companyUser.companyId, profileId: companyUser.id, username: identity.username };
