@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { dateFilterEnd } from '../common/dto/date-filter.decorator';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { ListAuditQueryDto } from './dto/list-audit-query.dto';
 
@@ -238,8 +239,7 @@ export class AuditService {
         ? {
             createdAt: {
               ...(filters.from ? { gte: new Date(filters.from) } : {}),
-              // A date alone is inclusive of the whole end day, not midnight at its start; a date and time is that moment.
-              ...(filters.to ? { lte: new Date(filters.to.length === 10 ? `${filters.to}T23:59:59.999Z` : filters.to) } : {}),
+              ...(filters.to ? { lte: dateFilterEnd(filters.to) } : {}),
             },
           }
         : {}),
