@@ -45,7 +45,7 @@ describe('phase 2 QR amounts follow the document currency figures of the signed 
     await auth(request(app.getHttpServer()).patch('/company-profile')).send({ legalName: 'شركة العملة التجارية', vatNumber: '300000000000003' }).expect(200);
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `Simplified buyer ${Date.now()}` }).expect(201)).body.id;
     await seedProductionCredential(tenantPrisma, company.companyId);
-  }, 90000);
+  });
 
   afterAll(async () => {
     if (company) {
@@ -55,7 +55,7 @@ describe('phase 2 QR amounts follow the document currency figures of the signed 
     }
     await authority?.close();
     await app?.close();
-  }, 60000);
+  });
 
   it('a USD invoice: tag 4 is TaxInclusiveAmount and tag 5 is BT-110 in USD, not the SAR tax total', async () => {
     const invoice = await auth(request(app.getHttpServer()).post('/invoices'))
