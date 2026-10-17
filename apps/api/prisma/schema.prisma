@@ -539,7 +539,9 @@ model Company {
   /// — يُكتب عند الميلاد من سجلّ الأقاليم؛ والقائمُ عُبّئ «السعودية» **معلَناً** في الهجرة لأن المنصّة لم تخدم غيرها.
   /// ⛔ ولا يُعدَّل بعد الميلاد (لا مسارَ له) — المنصّاتُ متعدّدةُ الدول تُقفله عند الإنشاء (المسح `25` أ).
   country  String
-  /// المنطقةُ الزمنية — IANA (`ق-١٣٦٨`). يُكتب ويُعلَن ولا يُقرأ بعد: المهامُّ المجدولة السبع ما زالت على منطقةٍ ثابتة (دَينُ المِسنَن).
+  /// IANA time zone, written at birth from the region registry. It sets the company's day (companyToday in
+  /// common/company-day.util.ts) for postings, documents, sweeps, statuses and the fiscal year; the scheduled jobs still
+  /// run on one fixed zone (SCHEDULE_TIME_ZONE).
   timeZone String
   /// لغةُ العرض ومحلّيتُه — BCP 47 (`ق-١٣٦٨`). يُكتب ويُعلَن ولا يُقرأ بعد (الواجهةُ على محلّيةٍ ثابتة — دَينُ المِسنَن).
   locale   String
