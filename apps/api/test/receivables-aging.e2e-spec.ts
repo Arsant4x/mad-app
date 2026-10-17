@@ -274,4 +274,14 @@ describe('Receivables aging (e2e)', () => {
     expect(res.text).toContain('العميل');
     expect(res.text).toContain('أكثر من 90');
   }, 90000);
+
+  it('exports a customer name that looks like a formula as text', async () => {
+    const name = `=HYPERLINK("x") ${suffix}`;
+    const formulaCustomerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name }).expect(201)).body.id;
+    await makeInvoice(50, -5, { customerId: formulaCustomerId });
+
+    const res = await auth(request(app.getHttpServer()).get('/reports/receivables-aging/export')).expect(200);
+    expect(res.text).toContain(`"'=HYPERLINK(""x"") ${suffix}"`);
+    expect(res.text).not.toContain(`"=HYPERLINK(""x"") ${suffix}"`);
+  });
 });

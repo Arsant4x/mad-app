@@ -9,9 +9,15 @@ export interface CsvColumn<T> {
   value: (row: T) => string | number | null | undefined;
 }
 
+// Spreadsheets run a text cell starting with one of these as a formula, so such cells get a leading quote.
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+// Amounts arrive as two decimal text and must stay numeric, negatives included.
+const NUMBER_TEXT = /^-?\d+(\.\d+)?$/;
+
 function escapeCell(v: string | number | null | undefined): string {
   if (v === null || v === undefined) return '';
-  const s = String(v);
+  let s = String(v);
+  if (typeof v === 'string' && FORMULA_LEAD.test(s) && !NUMBER_TEXT.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 
