@@ -104,7 +104,7 @@ describe('Form signing login: one session per Nafath approval, six codes per for
     templateId = copy.body.id;
     meterItem = (copy.body.items as { id: string }[])[0].id;
     await http().post(`/form-templates/${templateId}/publish`).set('Authorization', bearer(a.token)).expect(201);
-  }, 120000);
+  });
 
   afterAll(async () => {
     await app.close();
