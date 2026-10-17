@@ -49,6 +49,7 @@
     "notes": "Notes",
     "allocate_title": "Allocate the voucher to open invoices",
     "auto_allocate": "Auto allocate (oldest first)",
+    "other_currency_excluded": "Open invoices not shown here because they are in a currency other than {{currency}}, the voucher currency: {{n}}",
     "col_invoice": "Invoice",
     "col_total": "Total",
     "col_remaining": "Remaining",

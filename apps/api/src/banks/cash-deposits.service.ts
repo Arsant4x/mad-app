@@ -21,8 +21,8 @@ import { readLedger } from '../reports/ledger.util';
  * بعد؛ **والتأكيدُ** من التسوية البنكية (`⑦A1`): سطرُ كشفٍ بالمبلغ نفسِه يُرحَّل بطرفٍ هو `1190` (`مدين البنك / دائن
  * 1190`) فيصفّر الطريقَ ويُقفل المستندَ `CONFIRMED`. **والإلغاءُ** عكسٌ لا محو، وقبل التأكيد وحدَه.
  *
- * ⚠️ حدودٌ معلَنة: الإيداعُ لا يتجاوز رصيدَ الدرج بالدفتر (يُقاس لحظتَه) · مبلغٌ واحد لكلِّ مستند (لا تجميعُ إيداعاتٍ
- * في سطرِ كشفٍ واحد) · رقمُ `1190` مشتقٌّ من موضعه بين الأدراج (`1010–1099`) والذمم (`1200`) — «أو ما يُقرَّر».
+ * Limits: a deposit cannot exceed the drawer's ledger balance at that moment; one amount per document (no grouping of
+ * deposits in one statement line); `1190` sits inside the first bank band, which reserves it (`accounts/code-bands.ts`).
  */
 type Tx = Prisma.TransactionClient;
 

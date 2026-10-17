@@ -229,7 +229,7 @@ export class ObligationsService {
       const [invoices, rent, firstInvoice] = await Promise.all([
         tx.invoice.findMany({
           where: { issueDate: { gte: previous.from, lte: previous.to }, ...NOT_REPLACED_REJECTED },
-          select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+          select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
         }),
         this.rentSection(tx, previous.from, previous.to),
         tx.invoice.findFirst({ orderBy: { issueDate: 'asc' }, select: { issueDate: true } }),
@@ -508,6 +508,30 @@ export class ObligationsService {
     return { documentsCount, untrackedCount, baseAmount };
   }
 
+  /**
+   * Network settlement commissions whose VAT the ledger debits to input VAT, shaped as mixed purchase inputs:
+   * a settlement counts on its own date, and a voided one counts again with a negative sign on its void entry date.
+   * Company wide by design: the return is filed for the company under its one VAT number, so every branch's settlements count.
+   */
+  private async networkFeeInputs(tx: Prisma.TransactionClient, from: Date, to: Date) {
+    const select = { feeAmount: true, feeVatAmount: true } as const;
+    const [posted, voided] = await Promise.all([
+      tx.networkSettlement.findMany({ where: { date: { gte: from, lte: to }, feeVatAmount: { gt: 0 } }, select }),
+      tx.networkSettlement.findMany({ where: { status: 'VOID', feeVatAmount: { gt: 0 }, voidJournalEntry: { is: { date: { gte: from, lte: to } } } }, select }),
+    ]);
+    const asInput = (s: { feeAmount: Prisma.Decimal; feeVatAmount: Prisma.Decimal }, voidSign: number) => ({
+      subtotal: s.feeAmount,
+      taxAmount: s.feeVatAmount,
+      exempt: false,
+      excludeFromVat: false,
+      docType: 'PURCHASE' as const,
+      inputVatUse: 'MIXED' as const,
+      nonDeductibleTracked: false,
+      voidSign,
+    });
+    return [...posted.map((s) => asInput(s, 1)), ...voided.map((s) => asInput(s, -1))];
+  }
+
   private async finishClosing(tx: Prisma.TransactionClient, id: string, applied: { documentsCount: number; untrackedCount: number; baseAmount: number }) {
     const row = await tx.vatReturnClosing.update({
       where: { id },
@@ -536,7 +560,7 @@ export class ObligationsService {
     const [invoices, purchases, rent] = await Promise.all([
       tx.invoice.findMany({
         where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED },
-        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
       }),
       tx.purchase.findMany({
         where: { date: { gte: from, lte: to }, excludeFromVat: false, exempt: false, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] } },
@@ -550,7 +574,11 @@ export class ObligationsService {
     const actualRatio = proportionalRatio(yearTaxable, yearExempt);
     if (actualRatio === null) return null;
 
-    const yearApportionedBase = round2(purchases.reduce((s, p) => s + adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * Number(p.taxAmount), 0));
+    const networkFees = await this.networkFeeInputs(tx, from, to);
+    const yearApportionedBase = round2(
+      purchases.reduce((s, p) => s + adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * Number(p.taxAmount), 0) +
+        networkFees.reduce((s, f) => s + f.voidSign * Number(f.taxAmount), 0),
+    );
     const settled = annualSettlement(appliedRatio, actualRatio, yearApportionedBase);
     return {
       year,
@@ -601,7 +629,7 @@ export class ObligationsService {
     const [invoices, rentRows] = await Promise.all([
       tx.invoice.findMany({
         where: { issueDate: { gte: window.from, lte: window.to }, ...NOT_REPLACED_REJECTED },
-        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
       }),
       tx.rentAccrual.findMany({ where: { date: { gte: window.from, lte: window.to }, managed: false, taxable: true }, select: { amountNet: true, exchangeRate: true } }),
     ]);
@@ -634,7 +662,7 @@ export class ObligationsService {
           select: {
             docType: true,
             exchangeRate: true,
-            lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
+            lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
           },
         }),
         tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: purchaseSelect }),
@@ -649,7 +677,7 @@ export class ObligationsService {
             net: true,
             vat: true,
             prepaymentInvoice: {
-              select: { exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+              select: { exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, discount: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
             },
           },
         }),
@@ -691,7 +719,9 @@ export class ObligationsService {
       const declarablePurchases = purchases.filter((p) => !p.excludeFromVat);
       const excludedPurchases = purchases.filter((p) => p.excludeFromVat);
 
-      const taxablePurchases = declarablePurchases.filter((p) => !p.exempt);
+      // The acquirer's commission VAT is posted to input VAT, so it enters box 7 as a general overhead input.
+      const networkFees = await this.networkFeeInputs(tx, from, to);
+      const taxablePurchases = [...declarablePurchases.filter((p) => !p.exempt), ...networkFees];
       const exemptPurchases = declarablePurchases.filter((p) => p.exempt);
       const purchasesStandard = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
       const purchasesStandardVat = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0));
@@ -1130,6 +1160,8 @@ export class ObligationsService {
 interface DeclarationLine {
   quantity: Prisma.Decimal | number;
   unitPrice: Prisma.Decimal | number;
+  /** Line discount as an amount; the line net is quantity x price minus it, as in the ledger. */
+  discount: Prisma.Decimal | number;
   taxRate: Prisma.Decimal | number;
   taxCategory: string;
   taxExemptionReasonCode: string | null;
@@ -1170,6 +1202,7 @@ export function salesBoxesFromLines(invoices: readonly { sign: number; exchangeR
     const lines = inv.lines.map((l) => ({
       quantity: Number(l.quantity),
       unitPrice: Number(l.unitPrice),
+      discount: Number(l.discount),
       taxRate: Number(l.taxRate),
       taxCategory: l.taxCategory,
       taxExemptionReasonCode: l.taxExemptionReasonCode,

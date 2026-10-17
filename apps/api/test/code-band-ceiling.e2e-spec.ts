@@ -56,8 +56,8 @@ describe('سقفُ نطاق رموز الحسابات (e2e)', () => {
     const body = (await auth(http().get('/banks/code-band')).expect(200)).body as BandStatus;
 
     expect(body.key).toBe('bank');
-    // ١٠٠ (1100–1199) + ٣٩٩ (1601–1999) — والنطاقُ الثاني هو حكمُ ق-٢٩٥.
-    expect(body.capacity).toBe(499);
+    // 100 (1100 to 1199) less the reserved cash in transit code 1190, plus 399 (1601 to 1999).
+    expect(body.capacity).toBe(498);
     expect(body.warnThreshold).toBe(10);
     expect(body.remaining).toBeGreaterThanOrEqual(0);
     expect(body.warn).toBe(body.remaining <= body.warnThreshold);

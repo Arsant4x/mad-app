@@ -101,12 +101,23 @@ describe('[SPEC 6.2] ⑥A3 — المرحَّلُ والتصحيحات (e2e)', (
     expect((await read(Q2)).corrections.total).toBe('-15.00');
   });
 
-  it('⑤ 🔴 نقصٌ يبلغ خمسةَ آلافٍ يُرفض برسالةٍ تقول ما يُفعَل — ولا يُبتلع في الإقرار', async () => {
+  it('⑤ an understatement of 15,000 SAR is refused with the notice message, one below it enters the return', async () => {
     const body = { ...Q2, correctedYear: 2026, correctedPeriodType: 'QUARTERLY', correctedPeriodNo: 1, reason: 'فرقٌ كبير' };
-    const res = await auth(http().post('/obligations/vat-declaration/corrections')).send({ ...body, amount: 5000 }).expect(400);
+    const res = await auth(http().post('/obligations/vat-declaration/corrections')).send({ ...body, amount: 15000 }).expect(400);
     expect(JSON.stringify(res.body)).toContain('عشرين يوماً');
-    // ودون الحدّ يُقبل — فالحدُّ هو الفاصل لا الرفضُ المطلق.
+    expect(JSON.stringify(res.body)).toContain('15000');
+    // Below the limit the amount is accepted: the limit separates, it does not refuse everything.
     await auth(http().post('/obligations/vat-declaration/corrections')).send({ ...body, amount: 4999.99 }).expect(201);
+  });
+
+  it('⑤b an understatement of 10,000 SAR is accepted and appears in the corrections of the return', async () => {
+    const body = { ...Q2, correctedYear: 2026, correctedPeriodType: 'QUARTERLY', correctedPeriodNo: 1, amount: 10000, reason: 'نقصٌ اكتُشف' };
+    const created = await auth(http().post('/obligations/vat-declaration/corrections')).send(body).expect(201);
+    const q2 = await read(Q2);
+    const row = q2.corrections.rows.find((r: { id: string }) => r.id === created.body.id);
+    expect(row?.amount).toBe('10000.00');
+    expect(row).toMatchObject({ correctedYear: 2026, correctedPeriodType: 'QUARTERLY', correctedPeriodNo: 1 });
+    await auth(http().delete(`/obligations/vat-declaration/corrections/${created.body.id}`)).expect(200);
   });
 
   it('⑥ ولا يُصحَّح إقرارٌ بنفسه ولا بما بعده، ولا يُسحب تصحيحٌ من إقرارٍ قُدِّم', async () => {

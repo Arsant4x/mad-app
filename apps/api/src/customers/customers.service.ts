@@ -10,6 +10,7 @@ import { money } from '../common/money/text';
 import { dayEndOf } from '../common/wall-clock.util';
 import { customerExposure, exposureOf } from '../reports/receivables-exposure.util';
 import { assertCustomerNotInTrash } from './customer-trash.util';
+import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 import { TenantContext } from '../auth/types';
 import { RecordMarketingConsentDto } from './dto/record-marketing-consent.dto';
 import { MarketingChannel, marketingState, mayReceiveMarketing } from './marketing-consent.util';
@@ -94,15 +95,22 @@ export class CustomersService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const customer = await tx.customer.findUnique({ where: { id }, select: { id: true } });
       if (!customer) throw new NotFoundException(MSG.customer_not_found);
-      // ④A1: مستندُ الدفعة المقدَّمة ليس مفوتَراً (لا توريدَ بعد) ولا مقبوضاً على فاتورة — يُعرض رقماً رابعاً حتى يُطبَّق.
-      const invoices = await tx.invoice.findMany({ where: { customerId: id, docType: { not: 'PREPAYMENT' } }, select: { id: true, docType: true, total: true } });
-      const billed = invoices.reduce((s, i) => s + (i.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(i.total), 0);
-      const allocated = await tx.paymentAllocation.aggregate({ where: { invoiceId: { in: invoices.map((i) => i.id) } }, _sum: { amount: true } });
+      // A prepayment document is neither billed nor collected on an invoice; it is shown as a fourth figure until applied.
+      // A rejected invoice that has a replacement is left out and the replacement counted, as in the exposure source,
+      // and every figure is in the company currency like "outstanding".
+      const invoices = await tx.invoice.findMany({
+        where: { customerId: id, docType: { not: 'PREPAYMENT' }, ...NOT_REPLACED_REJECTED },
+        select: { id: true, docType: true, baseTotal: true, exchangeRate: true },
+      });
+      const billed = invoices.reduce((s, i) => s + (i.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(i.baseTotal), 0);
+      const rateOf = new Map(invoices.map((i) => [i.id, Number(i.exchangeRate)]));
+      const allocated = await tx.paymentAllocation.groupBy({ by: ['invoiceId'], where: { invoiceId: { in: invoices.map((i) => i.id) } }, _sum: { amount: true } });
+      const collected = allocated.reduce((s, a) => s + Number(a._sum.amount ?? 0) * (rateOf.get(a.invoiceId) ?? 1), 0);
       const prepaid = await tx.invoice.aggregate({ where: { customerId: id, docType: 'PREPAYMENT', appliedAsPrepayment: { none: {} } }, _sum: { total: true } });
       return {
         customerId: id,
         billed: money(billed),
-        collected: money(Number(allocated._sum.amount ?? 0)),
+        collected: money(collected),
         outstanding: money(await exposureOf(tx, id, dayEndOf(new Date()))),
         /** دفعاتٌ مقدَّمة (386) لم تُطبَّق بعد على فاتورة توريد — التزامٌ للعميل لا ذمّةٌ عليه. */
         prepaid: money(Number(prepaid._sum.total ?? 0)),

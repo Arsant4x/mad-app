@@ -25,7 +25,8 @@ describe('نطاقاتُ الترقيم وسقفُها (ق-٢٩٥)', () => {
 
   it('⭐ والباقي يُقاس بأعلى ما صدر لا بعدد الأحياء — وهي العلّة كلُّها', () => {
     // فجوةٌ من ٤٩ خانة بين 1100 و1150 **لا تُحسب**: المولّد لا يعود إليها.
-    expect(bandRemaining(['1100', '1150'], BANK_BANDS)).toBe(1199 - 1150 + 399);
+    // The reserved cash in transit code 1190 above 1150 is not a free slot either.
+    expect(bandRemaining(['1100', '1150'], BANK_BANDS)).toBe(1199 - 1150 - 1 + 399);
     // نطاقٌ نفد ⟵ ما بقي هو النطاق الثاني كاملاً.
     expect(bandRemaining(range(1100, 1199), BANK_BANDS)).toBe(399);
     // ولا شيء صدر ⟵ السعةُ كاملة.
@@ -70,6 +71,18 @@ describe('نطاقاتُ الترقيم وسقفُها (ق-٢٩٥)', () => {
     expect(status.remaining).toBe(0);
     expect(status.next).toBeNull();
     expect(status.warn).toBe(true);
+  });
+
+  it('the cash in transit code 1190 is reserved: banks never get it and it is not counted as used', () => {
+    expect(nextCodeInBands(['1100', '1101', '1190'], BANK_BANDS)).toBe(1102);
+    expect(bandRemaining(['1100', '1101', '1190'], BANK_BANDS)).toBe(bandRemaining(['1100', '1101'], BANK_BANDS));
+    // Banks that reached 1189 skip the reserved code instead of taking it.
+    expect(nextCodeInBands(range(1100, 1189), BANK_BANDS)).toBe(1191);
+    expect(nextCodeInBands([...range(1100, 1189), '1190'], BANK_BANDS)).toBe(1191);
+    // A reserved slot is never issued, so it is neither capacity nor remaining.
+    expect(bandRemaining([], BANK_BANDS)).toBe(bandCapacity(BANK_BANDS));
+    expect(bandCapacity(BANK_BANDS)).toBe(100 + 399 - 1);
+    expect(bandRemaining(range(1100, 1189), BANK_BANDS)).toBe(9 + 399);
   });
 
   it('ومفتاحٌ غير مسجَّل يسقط صراحةً — لا إنذارَ صامت', () => {

@@ -272,7 +272,8 @@ export function HrPage() {
                   <td className="num">{rec.checkIn ?? '—'}</td>
                   <td className="num">{rec.checkOut ?? '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {rec.status === 'PRESENT' && !rec.checkOut && (
+                    {/* The current clock time belongs to today only; a past day would get the wrong time. */}
+                    {attDate === today() && rec.status === 'PRESENT' && !rec.checkOut && (
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => checkOutNow(rec)}>{t('hr.attendance.check_out_now')}</button>
                     )}{' '}
                     <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(async () => { await deleteAttendance(rec.id); await reloadAttendance(); }, t('hr.err_delete'))}>{t('hr.common.delete')}</button>

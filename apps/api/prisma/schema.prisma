@@ -5787,6 +5787,8 @@ model RentAccrual {
 
   /// الإقرارُ يقرأ ربعَ سنةٍ بتاريخ نقطة الضريبة.
   @@index([companyId, date])
+  /// One DUE row per installment is also enforced by the partial unique index "rent_accruals_one_due_point" in migration
+  /// 20261017201500_rent_accrual_one_due_point (rows created from that migration on), which Prisma cannot express.
   @@index([installmentId])
   @@index([contractId])
   @@map("rent_accruals")

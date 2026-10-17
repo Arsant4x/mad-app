@@ -745,6 +745,7 @@ export const MSG = {
   fiscal_year_has_closed_period: 'fiscal.year_has_closed_period',
   fiscal_year_close_needs_closed_periods: 'fiscal.year_close_needs_closed_periods',
   fiscal_year_already_closed: 'fiscal.year_already_closed',
+  fiscal_year_later_year_closed: 'fiscal.year_later_year_closed',
   fiscal_year_nothing_to_close: 'fiscal.year_nothing_to_close',
   fiscal_start_month_after_posting: 'fiscal.start_month_after_posting',
   account_system_protected: 'account.system_protected',
@@ -2443,6 +2444,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.fiscal_year_already_closed]: {
     ar: 'السنة المالية مقفلة بقيد إقفال قائم — أعد فتح فترة منها ليُعكس القيد أولاً',
     en: 'This fiscal year already has a closing entry — reopen one of its periods to reverse it first',
+  },
+  [MSG.fiscal_year_later_year_closed]: {
+    ar: 'لا تُقفل هذه السنة المالية والسنة اللاحقة {year} مقفلة، فإقفالها نقل نتيجة هذه السنة إلى الأرباح المبقاة. أعد فتح فترة من {year} ليُعكس إقفالها، ثم أقفل السنتين بالترتيب',
+    en: "This fiscal year cannot be closed while the later year {year} is closed, as its closing already carried this year's result into retained earnings. Reopen a period of {year} to reverse its closing, then close the years in order",
   },
   [MSG.fiscal_year_nothing_to_close]: {
     ar: 'لا حركة إيراد ولا مصروف حتى نهاية السنة — لا شيء يُقفل',

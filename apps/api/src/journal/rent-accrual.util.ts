@@ -226,7 +226,25 @@ function pendingPointsOf(i: AccrualInstallment, contract: AccrualContract, treat
 }
 
 /**
+ * Locks the installment row and reads it again, so two transactions that read it earlier cannot both bill the same tax
+ * point. NO KEY UPDATE: rows that only reference the installment (receipts, accrual rows) are not held up by it.
+ */
+async function lockedInstallment(tx: Prisma.TransactionClient, id: string): Promise<AccrualInstallment> {
+  await tx.$queryRaw`SELECT "id" FROM "contract_installments" WHERE "id" = ${id} FOR NO KEY UPDATE`;
+  return tx.installment.findUniqueOrThrow({ where: { id }, select: ACCRUAL_INSTALLMENT_SELECT });
+}
+
+/**
+ * Locks every installment of a contract in due order, the order the sweep takes them in, so a transaction that bills
+ * several of them and the sweep never wait on each other.
+ */
+export async function lockContractInstallmentsWithinTx(tx: Prisma.TransactionClient, contractId: string): Promise<void> {
+  await tx.$queryRaw`SELECT "id" FROM "contract_installments" WHERE "contractId" = ${contractId} ORDER BY "dueDate", "id" FOR NO KEY UPDATE`;
+}
+
+/**
  * يكتب النقاطَ الباقيةَ لقسطٍ واحد؛ يعيد عددَ ما كُتب، أو `null` إن حجبته فترةٌ مقفلة.
+ * The installment is read under its lock (`lockedInstallment`).
  *
  * **ويختم القسطَ حين لا نقطةَ بعده**: كُتب باقيه عند الاستحقاق، أو غطّت المقدَّماتُ إجماليَّه —
  * فلا يعود الكنسُ يفحصه (`accrualCompletedAt`).
@@ -272,12 +290,13 @@ export async function accrueDueWithinTx(tx: Prisma.TransactionClient, companyId:
       contract: { status: { notIn: ['DRAFT', 'CANCELLED'] }, lessor: { not: 'OWNER' }, ...(contractId ? { id: contractId } : {}) },
       OR: [{ dueDate: { lte: asOf } }, { payments: { some: {} } }],
     },
-    select: { ...ACCRUAL_INSTALLMENT_SELECT, contract: { select: ACCRUAL_CONTRACT_SELECT } },
-    orderBy: { dueDate: 'asc' },
+    select: { id: true, contract: { select: ACCRUAL_CONTRACT_SELECT } },
+    // The lock order of lockContractInstallmentsWithinTx.
+    orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
   });
 
   const treatments = new Map<string, RentTaxTreatment | null>();
-  for (const { contract, ...i } of installments) {
+  for (const { contract, id } of installments) {
     if (!treatments.has(contract.id)) treatments.set(contract.id, treatmentOf(contract));
     const treatment = treatments.get(contract.id)!;
     if (!treatment) {
@@ -285,6 +304,9 @@ export async function accrueDueWithinTx(tx: Prisma.TransactionClient, companyId:
       result.skippedUnclassified += 1;
       continue;
     }
+    // Read again under the lock: a receipt or a cancellation may have billed or closed it since the query above.
+    const i = await lockedInstallment(tx, id);
+    if (i.accrualCompletedAt || i.status === 'CANCELLED' || i.accrualBasis !== 'ACCRUAL') continue;
     const written = await accrueInstallment(tx, companyId, contract, treatment, i, asOf);
     if (written === null) result.blockedByPeriodLock += 1;
     else result.accrued += written;
@@ -317,7 +339,7 @@ export async function accrueForPaymentWithinTx(
     return true;
   }
 
-  const i = await tx.installment.findUniqueOrThrow({ where: { id: payment.installmentId }, select: ACCRUAL_INSTALLMENT_SELECT });
+  const i = await lockedInstallment(tx, payment.installmentId);
   if (i.accrualBasis !== 'ACCRUAL') return true;
 
   const written = await accrueInstallment(tx, companyId, contract, treatment, i, asOf);

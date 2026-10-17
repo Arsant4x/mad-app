@@ -170,6 +170,9 @@ export class LeavesService {
       const leaveType = await tx.leaveType.findUnique({ where: { id: dto.leaveTypeId }, select: { id: true, name: true, annualDays: true } });
       if (!leaveType) throw new NotFoundException(MSG.leave_type_not_found);
 
+      // Lock the employee row, as decide does, so two requests filed at once check overlap one after the other.
+      await tx.$queryRaw`SELECT "id" FROM "employees" WHERE "id" = ${dto.employeeId} FOR UPDATE`;
+
       // Can't be on two leaves at once: any pending-or-approved request whose
       // span touches this one is a conflict. A rejected one never blocks.
       const overlap = await tx.leaveRequest.findFirst({

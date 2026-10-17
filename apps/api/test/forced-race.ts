@@ -9,7 +9,7 @@ import request from 'supertest';
  * مستخرَجٌ من `once-only-cash-out.e2e-spec.ts` (توجيه ٢٧٤ الكتلة ٥أ) ومعمَّمٌ على الجدول: هناك صفُّ حسابٍ وحده، وهنا صفُّ
  * المستند نفسِه أو ما يكتبه الطلبُ بعد فحصه. والجداولُ مسمّاةٌ في نوعٍ مغلق، فلا يدخل الاستعلامَ اسمٌ لم يُكتب هنا.
  */
-export type RaceTable = 'accounts' | 'customers' | 'payments' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'units' | 'leave_requests';
+export type RaceTable = 'accounts' | 'payments' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'units' | 'leave_requests' | 'customers' | 'employees';
 
 /** One row, or several rows of the same table held by one transaction (each request then stops behind its own row). */
 export type RaceRows = string | readonly string[];

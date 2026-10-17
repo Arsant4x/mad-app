@@ -9,6 +9,7 @@ import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 import { lineTaxDraftError, lineTaxPayload, TAX_CATEGORY_OPTIONS, type DeclarableTaxCategory, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
+import { useCurrency } from '../../components/currency/CurrencyContext';
 import i18n from '../../i18n';
 
 /**
@@ -57,6 +58,12 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
     listOpenInvoices(customerId).then(setOpen);
   }, [customerId]);
 
+  // The voucher is in the base currency (this modal has no currency picker), and the server refuses
+  // allocating it to an invoice in another currency, so only base currency invoices are offered.
+  const baseCurrency = useCurrency()?.code;
+  const allocatable = useMemo(() => (baseCurrency ? open.filter((inv) => inv.currency === baseCurrency) : []), [open, baseCurrency]);
+  const excludedCount = baseCurrency ? open.length - allocatable.length : 0;
+
   const allocatedSum = useMemo(() => Object.values(alloc).reduce((s, v) => s + (parseFloat(v) || 0), 0), [alloc]);
   const paymentAmount = parseFloat(amount) || 0;
   const unallocated = round2(paymentAmount - allocatedSum);
@@ -65,7 +72,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   function autoAllocate() {
     let left = paymentAmount;
     const next: Record<string, string> = {};
-    for (const inv of open) {
+    for (const inv of allocatable) {
       if (left <= 0) break;
       // The remaining amount arrives as text; read it as a number before comparing.
       const take = Math.min(left, num0(inv.remaining));
@@ -235,6 +242,11 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
                 {t('payments.modal.auto_allocate')}
               </button>
             </div>
+            {excludedCount > 0 && (
+              <p className="hint" data-testid="other-currency-excluded">
+                {t('payments.modal.other_currency_excluded', { n: excludedCount, currency: baseCurrency })}
+              </p>
+            )}
             <table>
               <thead>
                 <tr>
@@ -246,14 +258,14 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
                 </tr>
               </thead>
               <tbody>
-                {open.length === 0 && (
+                {allocatable.length === 0 && excludedCount === 0 && (
                   <tr>
                     <td colSpan={5}>
                       <div className="empty-state">{t('payments.modal.no_open')}</div>
                     </td>
                   </tr>
                 )}
-                {open.map((inv) => (
+                {allocatable.map((inv) => (
                   <tr key={inv.id}>
                     <td className="num">{inv.no}</td>
                     <td className="num">{dfmt(inv.issueDate)}</td>
