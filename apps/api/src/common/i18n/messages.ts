@@ -307,6 +307,7 @@ export const MSG = {
   contract_owner_vat_required: 'contracts.owner_vat_required',
   contract_owner_commission_rate_missing: 'contracts.owner_commission_rate_missing',
   contract_lessor_locked_after_posting: 'contracts.lessor_locked_after_posting',
+  contract_tax_treatment_locked_after_posting: 'contracts.tax_treatment_locked_after_posting',
   contract_owner_commission_exceeds_collection: 'contracts.owner_commission_exceeds_collection',
   /** ⚖️ العقدُ المختلط (السؤال ٤١٢ · ق-١٦٠٠). */
   contract_mixed_share_required: 'contracts.mixed_share_required',
@@ -1439,6 +1440,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.contract_lessor_locked_after_posting]: {
     ar: 'لا يُغيَّر المؤجّرُ بعد قبضٍ أو استحقاق — رُحِّل الإيجارُ على المؤجّر المعلَن، وتحويلُه إعادةُ كتابةٍ لما رُحِّل؛ والمخرجُ إنهاءُ العقد وعقدٌ جديد',
     en: 'The lessor cannot change after a collection or accrual — rent was posted for the declared lessor; end the contract and create a new one instead',
+  },
+  [MSG.contract_tax_treatment_locked_after_posting]: {
+    ar: 'لا تُغيَّر المعاملةُ الضريبية للعقد (التصنيف وشمول القيمة للضريبة ونسبة المعفى للمختلط) بعد قبضٍ أو استحقاق — رُحِّل الإيجارُ ودخل الإقرارَ بها، وتغييرُها يفرّق الدفترَ عن الإقرار؛ والمخرجُ إنهاءُ العقد وعقدٌ جديد',
+    en: "The contract's tax treatment (classification, VAT inclusion and mixed exempt share) cannot change after a collection or accrual — rent was posted and declared under it, and changing it would set the ledger apart from the VAT return; end the contract and create a new one instead",
   },
   [MSG.contract_owner_commission_exceeds_collection]: {
     ar: 'العمولةُ وضريبتُها تتجاوزان المقبوض — راجع «نسبة عمولة التشغيل» في بطاقة العقار',

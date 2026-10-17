@@ -46,7 +46,7 @@ export class UpdateContractDto {
   @IsIn(CONTRACT_VAT_INCLUSIONS)
   vatInclusion?: (typeof CONTRACT_VAT_INCLUSIONS)[number];
 
-  /** ⚖️ نسبةُ المختلط وأساسُها (السؤال ٤١٢ · `ق-١٦٠٠`): تُعلَن مع «مختلط» وتُمحى مع غيره — وتسري على ما يُستحقّ بعدها كالتصنيف. */
+  /** The mixed exempt share and its basis: declared with MIXED, cleared with any other, and fixed like the classification once rent was posted. */
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(EXEMPT_SHARE_MIN)
